@@ -16,6 +16,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+PLAYERCOLS = COLUMNS.PLAYER
+
 
 def build_player_df(
     matches_df: pd.DataFrame,
@@ -88,7 +90,7 @@ def build_team_enemy_xref(
             ].rename(
                 columns={
                     COLUMNS.MATCHES.ALPHA_TEAM_ID: COLUMNS.GROUPS.GROUP_ID,
-                    COLUMNS.MATCHES.BRAVO_TEAM_ID: COLUMNS.PLAYER.ENEMY_GROUP_ID,
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID: PLAYERCOLS.ENEMY_GROUP_ID,
                 }
             ),
             matches_df[
@@ -100,14 +102,14 @@ def build_team_enemy_xref(
             ].rename(
                 columns={
                     COLUMNS.MATCHES.BRAVO_TEAM_ID: COLUMNS.GROUPS.GROUP_ID,
-                    COLUMNS.MATCHES.ALPHA_TEAM_ID: COLUMNS.PLAYER.ENEMY_GROUP_ID,
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID: PLAYERCOLS.ENEMY_GROUP_ID,
                 }
             ),
         ],
         axis=0,
         ignore_index=True,
     ).set_index([COLUMNS.MATCHES.MATCH_ID, COLUMNS.GROUPS.GROUP_ID])[
-        COLUMNS.PLAYER.ENEMY_GROUP_ID
+        PLAYERCOLS.ENEMY_GROUP_ID
     ]
 
 
@@ -129,27 +131,26 @@ def correct_sp(
         A Series with the corrected 'sp' values, indexed as 'after_sp'.
     """
     sorted_scores = player_df.copy().sort_values(
-        [COLUMNS.PLAYER.USER_ID, COLUMNS.PLAYER.CREATED_AT_DT], ascending=True
+        [PLAYERCOLS.USER_ID, PLAYERCOLS.CREATED_AT_DT], ascending=True
     )
     sorted_scores["changed"] = (
-        sorted_scores[COLUMNS.PLAYER.SP]
-        != sorted_scores[COLUMNS.PLAYER.SP].shift()
+        sorted_scores[PLAYERCOLS.SP] != sorted_scores[PLAYERCOLS.SP].shift()
     )
     sorted_scores.iloc[0, -1] = False
-    sorted_scores["sp_id"] = sorted_scores.groupby(COLUMNS.PLAYER.USER_ID)[
+    sorted_scores["sp_id"] = sorted_scores.groupby(PLAYERCOLS.USER_ID)[
         "changed"
     ].cumsum()
-    sorted_scores[COLUMNS.PLAYER.SP_DIFF] = sorted_scores[
-        COLUMNS.PLAYER.SP_DIFF
+    sorted_scores[PLAYERCOLS.SP_DIFF] = sorted_scores[
+        PLAYERCOLS.SP_DIFF
     ].fillna(0)
     return (
-        sorted_scores[COLUMNS.PLAYER.SP]
+        sorted_scores[PLAYERCOLS.SP]
         .add(
-            sorted_scores.groupby([COLUMNS.PLAYER.USER_ID, "sp_id"])[
-                COLUMNS.PLAYER.SP_DIFF
+            sorted_scores.groupby([PLAYERCOLS.USER_ID, "sp_id"])[
+                PLAYERCOLS.SP_DIFF
             ].cumsum()
         )
-        .rename(COLUMNS.PLAYER.AFTER_SP)
+        .rename(PLAYERCOLS.AFTER_SP)
         .sort_index()
     )
 
@@ -212,14 +213,15 @@ def base_merges(
             on=[COLUMNS.MATCHES.MATCH_ID, COLUMNS.GROUPS.GROUP_ID],
         )
         .assign(
-            is_winner=lambda df: df[COLUMNS.GROUPS.TEAM] == df[COLUMNS.MATCHES.WINNER],
+            is_winner=lambda df: df[COLUMNS.GROUPS.TEAM]
+            == df[COLUMNS.MATCHES.WINNER],
         )
     )
     time_cols = [COLUMNS.MATCHES.CREATED_AT, COLUMNS.MATCHES.REPORTED_AT]
     for col in time_cols:
         player_df[f"{col}_dt"] = pd.to_datetime(player_df[col], unit="s")
 
-    player_df[COLUMNS.PLAYER.AFTER_SP] = correct_sp(player_df)
+    player_df[PLAYERCOLS.AFTER_SP] = correct_sp(player_df)
     return player_df
 
 
@@ -242,10 +244,10 @@ def generate_latest_df(
     """
     no_cancelled = player_df.copy().query("winner != 'cancelled'")
 
-    max_reported_at = no_cancelled.groupby("user_id")[
-        "reported_at_dt"
+    max_reported_at = no_cancelled.groupby(PLAYERCOLS.USER_ID)[
+        PLAYERCOLS.REPORTED_AT_DT
     ].transform("max")
-    latest_mask = no_cancelled["reported_at_dt"] == max_reported_at
+    latest_mask = no_cancelled[PLAYERCOLS.REPORTED_AT_DT] == max_reported_at
     return (
         no_cancelled[latest_mask]
         .copy()
@@ -272,10 +274,12 @@ def fit_lognorm(
         distribution.
     """
     # Lognorm fit
-    shape, loc, scale = lognorm.fit(player_latest_df["after_sp"].dropna())
+    shape, loc, scale = lognorm.fit(
+        player_latest_df[PLAYERCOLS.AFTER_SP].dropna()
+    )
     logging.info(f"Lognorm fit: shape={shape}, loc={loc}, scale={scale}")
     ks_stat, p_value = kstest(
-        player_latest_df["after_sp"].dropna(),
+        player_latest_df[PLAYERCOLS.AFTER_SP].dropna(),
         "lognorm",
         args=(shape, loc, scale),
     )
@@ -309,14 +313,14 @@ def calculate_logz_values(
     pd.DataFrame
         The player DataFrame with added 'logz' columns for 'sp' and 'after_sp'.
     """
-    for col in ["sp", "after_sp"]:
+    for col in [PLAYERCOLS.SP, PLAYERCOLS.AFTER_SP]:
         player_df[f"{col}_logz"] = (
             player_df[col].pipe(np.log).sub(np.log(scale)).div(shape)
         )
 
-    player_df["sp_diff_logz"] = player_df["after_sp_logz"].sub(
-        player_df["sp_logz"]
-    )
+    player_df[PLAYERCOLS.SP_DIFF_LOGZ] = player_df[
+        PLAYERCOLS.AFTER_SP_LOGZ
+    ].sub(player_df[PLAYERCOLS.SP_LOGZ])
     return player_df
 
 
@@ -339,19 +343,24 @@ def calculate_teammate_enemy_values(
         values.
     """
     group_sp_logz = (
-        player_df.groupby(["group_id", "match_id"])
+        player_df.groupby(
+            [
+                PLAYERCOLS.GROUP_ID,
+                PLAYERCOLS.MATCH_ID,
+            ]
+        )
         .agg(
             {
-                "sp_logz": ["sum", "std"],
-                "sp_diff_logz": ["sum", "std"],
+                PLAYERCOLS.SP_LOGZ: ["sum", "std"],
+                PLAYERCOLS.SP_DIFF_LOGZ: ["sum", "std"],
             }
         )
         .set_axis(
             [
-                "sp_logz_sum",
-                "sp_logz_std",
-                "sp_diff_logz_sum",
-                "sp_diff_logz_std",
+                PLAYERCOLS.SP_LOGZ_SUM,
+                PLAYERCOLS.SP_LOGZ_STD,
+                PLAYERCOLS.SP_DIFF_LOGZ_SUM,
+                PLAYERCOLS.SP_DIFF_LOGZ_STD,
             ],
             axis=1,
         )
@@ -360,26 +369,34 @@ def calculate_teammate_enemy_values(
     player_df = player_df.merge(
         group_sp_logz,
         how="left",
-        on=["group_id", "match_id"],
+        on=[PLAYERCOLS.GROUP_ID, PLAYERCOLS.MATCH_ID],
     ).merge(
         group_sp_logz.rename(
             columns={
-                "sp_logz_sum": "enemy_sp_logz_sum",
-                "sp_logz_std": "enemy_sp_logz_std",
-                "sp_diff_logz_sum": "enemy_sp_diff_logz_sum",
-                "sp_diff_logz_std": "enemy_sp_diff_logz_std",
+                PLAYERCOLS.SP_LOGZ_SUM: PLAYERCOLS.ENEMY_SP_LOGZ_SUM,
+                PLAYERCOLS.SP_LOGZ_STD: PLAYERCOLS.ENEMY_SP_LOGZ_STD,
+                PLAYERCOLS.SP_DIFF_LOGZ_SUM: PLAYERCOLS.ENEMY_SP_DIFF_LOGZ_SUM,
+                PLAYERCOLS.SP_DIFF_LOGZ_STD: PLAYERCOLS.ENEMY_SP_DIFF_LOGZ_STD,
             }
         ),
         how="left",
-        left_on=["enemy_group_id", "match_id"],
-        right_on=["group_id", "match_id"],
+        left_on=[PLAYERCOLS.ENEMY_GROUP_ID, PLAYERCOLS.MATCH_ID],
+        right_on=[PLAYERCOLS.GROUP_ID, PLAYERCOLS.MATCH_ID],
     )
-    teammate_sp_logz = player_df["sp_logz_sum"].sub(player_df["sp_logz"]).div(3)
-    enemy_sp_logz = player_df["enemy_sp_logz_sum"].div(4)
-    player_df["teammate_sp_logz_diff"] = player_df["sp_logz"].sub(
-        teammate_sp_logz
+    teammate_sp_logz = (
+        player_df[PLAYERCOLS.SP_LOGZ_SUM]
+        .sub(player_df[PLAYERCOLS.SP_LOGZ])
+        .div(3)
     )
-    player_df["enemy_sp_logz_diff"] = player_df["sp_logz"].sub(enemy_sp_logz)
+    enemy_sp_logz = player_df[PLAYERCOLS.ENEMY_SP_LOGZ_SUM].div(4)
+
+    player_df[PLAYERCOLS.TEAMMATE_SP_LOGZ_DIFF] = player_df[
+        PLAYERCOLS.SP_LOGZ
+    ].sub(teammate_sp_logz)
+    player_df[PLAYERCOLS.ENEMY_SP_LOGZ_DIFF] = player_df[
+        PLAYERCOLS.SP_LOGZ
+    ].sub(enemy_sp_logz)
+
     return player_df
 
 
@@ -403,36 +420,36 @@ def calculate_rolling_data(
     """
     for window in ROLLING_TIME_WINDOWS:
         rolling_data = (
-            player_df.sort_values("created_at_dt")
-            .groupby("user_id")
-            .rolling(window, on="created_at_dt")["is_winner"]
+            player_df.sort_values(PLAYERCOLS.CREATED_AT_DT)
+            .groupby(PLAYERCOLS.USER_ID)
+            .rolling(window, on=PLAYERCOLS.CREATED_AT_DT)[PLAYERCOLS.IS_WINNER]
             .agg(["count", "sum"])
             .set_axis([f"count_{window}", f"won_matches_{window}"], axis=1)
         )
         player_df = player_df.merge(
             rolling_data,
             how="left",
-            on=["user_id", "created_at_dt"],
+            on=[PLAYERCOLS.USER_ID, PLAYERCOLS.CREATED_AT_DT],
         )
 
     for window in ROLLING_MATCH_WINDOWS:
         for column in [
-            "after_sp",
-            "after_sp_logz",
-            "teammate_sp_logz_diff",
-            "enemy_sp_logz_diff",
+            PLAYERCOLS.AFTER_SP,
+            PLAYERCOLS.AFTER_SP_LOGZ,
+            PLAYERCOLS.TEAMMATE_SP_LOGZ_DIFF,
+            PLAYERCOLS.ENEMY_SP_LOGZ_DIFF,
         ]:
             rolling_data = (
-                player_df.sort_values("created_at_dt")
-                .groupby("user_id")
-                .rolling(window, on="created_at_dt")[column]
+                player_df.sort_values(PLAYERCOLS.CREATED_AT_DT)
+                .groupby(PLAYERCOLS.USER_ID)
+                .rolling(window, on=PLAYERCOLS.CREATED_AT_DT)[column]
                 .std()
                 .rename(f"{column}_std_{window}")
             )
             player_df = player_df.merge(
                 rolling_data,
                 how="left",
-                on=["user_id", "created_at_dt"],
+                on=[PLAYERCOLS.USER_ID, PLAYERCOLS.CREATED_AT_DT],
             )
         player_df[f"has_calculated_{window}"] = player_df[
             f"after_sp_std_{window}"
@@ -445,10 +462,10 @@ def calculate_cumulative_data(
 ) -> pd.DataFrame:
     cumulative_matches = (
         player_df.query("winner != 'cancelled'")
-        .sort_values("created_at_dt")
-        .groupby("user_id")
+        .sort_values(PLAYERCOLS.CREATED_AT_DT)
+        .groupby(PLAYERCOLS.USER_ID)
         .cumcount()
-        .rename("cumulative_matches")
+        .rename(PLAYERCOLS.CUM_MATCHES)
     )
 
     return player_df.merge(
