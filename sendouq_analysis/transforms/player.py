@@ -1,10 +1,14 @@
 import logging
 
-from sendouq_analysis.constants import ROLLING_TIME_WINDOWS, ROLLING_MATCH_WINDOWS
-
 import numpy as np
 import pandas as pd
 from scipy.stats import kstest, lognorm
+
+from sendouq_analysis.constants import (
+    COLUMNS,
+    ROLLING_MATCH_WINDOWS,
+    ROLLING_TIME_WINDOWS,
+)
 
 # Set up logging
 logging.basicConfig(
@@ -75,22 +79,34 @@ def build_team_enemy_xref(
     """
     return pd.concat(
         [
-            matches_df[["match_id", "alpha_team_id", "bravo_team_id"]].rename(
+            matches_df[
+                [
+                    COLUMNS.MATCHES.MATCH_ID,
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID,
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID,
+                ]
+            ].rename(
                 columns={
-                    "alpha_team_id": "group_id",
-                    "bravo_team_id": "enemy_group_id",
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID: "group_id",
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID: "enemy_group_id",
                 }
             ),
-            matches_df[["match_id", "bravo_team_id", "alpha_team_id"]].rename(
+            matches_df[
+                [
+                    COLUMNS.MATCHES.MATCH_ID,
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID,
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID,
+                ]
+            ].rename(
                 columns={
-                    "bravo_team_id": "group_id",
-                    "alpha_team_id": "enemy_group_id",
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID: "group_id",
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID: "enemy_group_id",
                 }
             ),
         ],
         axis=0,
         ignore_index=True,
-    ).set_index(["match_id", "group_id"])["enemy_group_id"]
+    ).set_index([COLUMNS.MATCHES.MATCH_ID, "group_id"])["enemy_group_id"]
 
 
 def correct_sp(
@@ -366,17 +382,22 @@ def calculate_rolling_data(
             player_df.sort_values("created_at_dt")
             .groupby("user_id")
             .rolling(window, on="created_at_dt")["is_winner"]
-            .agg(["count", "mean"])
-            .set_axis([f"count_{window}", f"winrate_{window}"], axis=1)
+            .agg(["count", "sum"])
+            .set_axis([f"count_{window}", f"won_matches_{window}"], axis=1)
         )
         player_df = player_df.merge(
             rolling_data,
             how="left",
             on=["user_id", "created_at_dt"],
         )
-    
+
     for window in ROLLING_MATCH_WINDOWS:
-        for column in ["after_sp", "after_sp_logz"]:
+        for column in [
+            "after_sp",
+            "after_sp_logz",
+            "teammate_sp_logz_diff",
+            "enemy_sp_logz_diff",
+        ]:
             rolling_data = (
                 player_df.sort_values("created_at_dt")
                 .groupby("user_id")
@@ -389,4 +410,23 @@ def calculate_rolling_data(
                 how="left",
                 on=["user_id", "created_at_dt"],
             )
+        player_df[f"has_calculated_{window}"] = player_df[
+            f"after_sp_std_{window}"
+        ].notna()
     return player_df
+
+
+def calculate_cumulative_data(
+    player_df: pd.DataFrame,
+) -> pd.DataFrame:
+    cumulative_matches = (
+        player_df.query("winner != 'cancelled'")
+        .sort_values("created_at_dt")
+        .groupby("user_id")
+        .cumcount()
+        .rename("cumulative_matches")
+    )
+
+    return player_df.merge(
+        cumulative_matches, left_index=True, right_index=True, how="left"
+    )
