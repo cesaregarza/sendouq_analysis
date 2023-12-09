@@ -127,20 +127,27 @@ def correct_sp(
         A Series with the corrected 'sp' values, indexed as 'after_sp'.
     """
     sorted_scores = player_df.copy().sort_values(
-        ["user_id", "created_at_dt"], ascending=True
+        [COLUMNS.PLAYER.USER_ID, COLUMNS.PLAYER.CREATED_AT_DT], ascending=True
     )
     sorted_scores["changed"] = (
-        sorted_scores["sp"] != sorted_scores["sp"].shift()
+        sorted_scores[COLUMNS.PLAYER.SP]
+        != sorted_scores[COLUMNS.PLAYER.SP].shift()
     )
     sorted_scores.iloc[0, -1] = False
-    sorted_scores["sp_id"] = sorted_scores.groupby("user_id")[
+    sorted_scores["sp_id"] = sorted_scores.groupby(COLUMNS.PLAYER.USER_ID)[
         "changed"
     ].cumsum()
-    sorted_scores["sp_diff"] = sorted_scores["sp_diff"].fillna(0)
+    sorted_scores[COLUMNS.PLAYER.SP_DIFF] = sorted_scores[
+        COLUMNS.PLAYER.SP_DIFF
+    ].fillna(0)
     return (
-        sorted_scores["sp"]
-        .add(sorted_scores.groupby(["user_id", "sp_id"])["sp_diff"].cumsum())
-        .rename("after_sp")
+        sorted_scores[COLUMNS.PLAYER.SP]
+        .add(
+            sorted_scores.groupby([COLUMNS.PLAYER.USER_ID, "sp_id"])[
+                COLUMNS.PLAYER.SP_DIFF
+            ].cumsum()
+        )
+        .rename(COLUMNS.PLAYER.AFTER_SP)
         .sort_index()
     )
 
