@@ -1,0 +1,8 @@
+MATCH_ID = "match_id"
+ALPHA_TEAM_ID = "alpha_team_id"
+BRAVO_TEAM_ID = "bravo_team_id"
+CREATED_AT = "created_at"
+REPORTED_AT = "reported_at"
+REPORTED_BY_USER_ID = "reported_by_user_id"
+WINNER_ID = "winner_id"
+WINNER = "winner"
