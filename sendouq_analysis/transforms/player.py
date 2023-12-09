@@ -87,8 +87,8 @@ def build_team_enemy_xref(
                 ]
             ].rename(
                 columns={
-                    COLUMNS.MATCHES.ALPHA_TEAM_ID: "group_id",
-                    COLUMNS.MATCHES.BRAVO_TEAM_ID: "enemy_group_id",
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID: COLUMNS.GROUPS.GROUP_ID,
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID: COLUMNS.PLAYER.ENEMY_GROUP_ID,
                 }
             ),
             matches_df[
@@ -99,14 +99,16 @@ def build_team_enemy_xref(
                 ]
             ].rename(
                 columns={
-                    COLUMNS.MATCHES.BRAVO_TEAM_ID: "group_id",
-                    COLUMNS.MATCHES.ALPHA_TEAM_ID: "enemy_group_id",
+                    COLUMNS.MATCHES.BRAVO_TEAM_ID: COLUMNS.GROUPS.GROUP_ID,
+                    COLUMNS.MATCHES.ALPHA_TEAM_ID: COLUMNS.PLAYER.ENEMY_GROUP_ID,
                 }
             ),
         ],
         axis=0,
         ignore_index=True,
-    ).set_index([COLUMNS.MATCHES.MATCH_ID, "group_id"])["enemy_group_id"]
+    ).set_index([COLUMNS.MATCHES.MATCH_ID, COLUMNS.GROUPS.GROUP_ID])[
+        COLUMNS.PLAYER.ENEMY_GROUP_ID
+    ]
 
 
 def correct_sp(
@@ -180,29 +182,44 @@ def base_merges(
     player_df = (
         user_memento_df.copy()
         .merge(
-            matches_df[["match_id", "created_at", "reported_at", "winner"]],
+            matches_df[
+                [
+                    COLUMNS.MATCHES.MATCH_ID,
+                    COLUMNS.MATCHES.CREATED_AT,
+                    COLUMNS.MATCHES.REPORTED_AT,
+                    COLUMNS.MATCHES.WINNER,
+                ]
+            ],
             how="left",
-            on="match_id",
+            on=COLUMNS.MATCHES.MATCH_ID,
         )
         .merge(
-            groups_df[["user_id", "group_id", "discord_name", "team"]],
+            groups_df[
+                [
+                    COLUMNS.GROUPS.USER_ID,
+                    COLUMNS.GROUPS.GROUP_ID,
+                    COLUMNS.GROUPS.DISCORD_NAME,
+                    COLUMNS.GROUPS.IN_GAME_NAME,
+                    COLUMNS.GROUPS.TEAM,
+                ]
+            ],
             how="left",
-            on=["user_id", "group_id"],
+            on=[COLUMNS.GROUPS.USER_ID, COLUMNS.GROUPS.GROUP_ID],
         )
         .merge(
             team_enemy_xref,
             how="left",
-            on=["match_id", "group_id"],
+            on=[COLUMNS.MATCHES.MATCH_ID, COLUMNS.GROUPS.GROUP_ID],
         )
         .assign(
-            is_winner=lambda df: df["team"] == df["winner"],
+            is_winner=lambda df: df[COLUMNS.GROUPS.TEAM] == df[COLUMNS.MATCHES.WINNER],
         )
     )
-    time_cols = ["created_at", "reported_at"]
+    time_cols = [COLUMNS.MATCHES.CREATED_AT, COLUMNS.MATCHES.REPORTED_AT]
     for col in time_cols:
         player_df[f"{col}_dt"] = pd.to_datetime(player_df[col], unit="s")
 
-    player_df["after_sp"] = correct_sp(player_df)
+    player_df[COLUMNS.PLAYER.AFTER_SP] = correct_sp(player_df)
     return player_df
 
 
