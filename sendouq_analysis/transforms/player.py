@@ -59,6 +59,7 @@ def build_player_df(
     )
     player_df = calculate_teammate_enemy_values(player_df)
     player_df = calculate_rolling_data(player_df)
+    player_df = calculate_cumulative_data(player_df)
     return player_df
 
 
@@ -431,6 +432,9 @@ def calculate_rolling_data(
             how="left",
             on=[PLAYERCOLS.USER_ID, PLAYERCOLS.CREATED_AT_DT],
         )
+        player_df[f"won_matches_prior_{window}"] = (
+            player_df[f"won_matches_{window}"] - player_df[PLAYERCOLS.IS_WINNER]
+        )
 
     for window in ROLLING_MATCH_WINDOWS:
         for column in [
@@ -468,6 +472,10 @@ def calculate_cumulative_data(
         .rename(PLAYERCOLS.CUM_MATCHES)
     )
 
-    return player_df.merge(
+    player_df = player_df.merge(
         cumulative_matches, left_index=True, right_index=True, how="left"
     )
+    player_df[PLAYERCOLS.CUM_MATCHES] = player_df[
+        PLAYERCOLS.CUM_MATCHES
+    ].fillna(0)
+    return player_df
