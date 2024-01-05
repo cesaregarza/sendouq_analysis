@@ -37,11 +37,26 @@ TEAMMATE_SP_LOGZ_DIFF = "teammate_sp_logz_diff"
 ENEMY_SP_LOGZ_DIFF = "enemy_sp_logz_diff"
 COUNT_7D = "count_7D"
 WON_MATCHES_7D = "won_matches_7D"
+WON_MATCHES_PRIOR_7D = "won_matches_prior_7D"
 COUNT_24H = "count_24H"
 WON_MATCHES_24H = "won_matches_24H"
+WON_MATCHES_PRIOR_24H = "won_matches_prior_24H"
 AFTER_SP_STD_7 = "after_sp_std_7"
 AFTER_SP_LOGZ_STD_7 = "after_sp_logz_std_7"
 TEAMMATE_SP_LOGZ_DIFF_STD_7 = "teammate_sp_logz_diff_std_7"
 ENEMY_SP_LOGZ_DIFF_STD_7 = "enemy_sp_logz_diff_std_7"
 HAS_CALCULATED_7 = "has_calculated_7"
 CUM_MATCHES = "cumulative_matches"
+
+NORMAL_FEATURES = [
+    AFTER_SP_LOGZ,
+    TEAMMATE_SP_LOGZ_DIFF,
+    ENEMY_SP_LOGZ_DIFF,
+]
+EXP_FEATURES = [
+    CUM_MATCHES,
+    WON_MATCHES_PRIOR_7D,
+    WON_MATCHES_PRIOR_24H,
+    COUNT_7D,
+    COUNT_24H,
+]
