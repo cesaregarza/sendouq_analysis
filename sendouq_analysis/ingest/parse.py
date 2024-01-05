@@ -42,7 +42,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
     )
     users_df[um.USER_ID] = users_df[um.USER_ID].astype(int)
 
-    if "map_preferences" not in memento:
+    user_ids = users_df[um.USER_ID].unique()
+
+    if "mapPreferences" not in memento:
         return groups_df, users_df
 
     # Parse map preferences
@@ -51,8 +53,22 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
         map_info = pd.json_normalize(details).rename(columns=camel_to_snake)
         map_info["map_id"] = map_id
         map_info[um.USER_ID] = map_info[um.USER_ID].astype(int)
+        # Add missing users
+        missing_users = set(user_ids) - set(map_info[um.USER_ID])
+        if missing_users:
+            missing_df = pd.DataFrame(
+                [
+                    {
+                        um.USER_ID: user,
+                        "map_id": map_id,
+                        "preference": PREFERENCES.IMPLICIT_INDIFFERENT,
+                    }
+                    for user in missing_users
+                ]
+            )
+            map_info = pd.concat([map_info, missing_df])
         map_data.append(map_info)
-    
+
     map_df = pd.concat(map_data).fillna(PREFERENCES.EXPLICIT_INDIFFERENT)
     map_df[um.USER_ID] = map_df[um.USER_ID].astype(int)
 
