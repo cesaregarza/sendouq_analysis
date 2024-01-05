@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import pandas as pd
 
-from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.constants import PREFERENCES
+from sendouq_analysis.constants.columns import MAP_LIST, MATCHES
+from sendouq_analysis.constants.columns import user_memento as um
+from sendouq_analysis.constants.json_keys import MATCH
 from sendouq_analysis.utils import camel_to_snake
 
 
@@ -73,3 +77,95 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
     map_df[um.USER_ID] = map_df[um.USER_ID].astype(int)
 
     return groups_df, users_df, map_df
+
+
+def parse_match_json(
+    match_json: dict,
+) -> tuple[
+    pd.Series,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame | None,
+]:
+    """Parses a match JSON to return the match data, the group data, the user
+    data and the map preferences data.
+
+    Args:
+        match_json (dict): The match JSON
+
+    Returns:
+        tuple:
+            - pd.Series: The match data
+            - pd.DataFrame: The group data
+            - pd.DataFrame: The user data
+            - pd.DataFrame: The map data
+            - pd.DataFrame | None: The map preferences data, if present
+    """
+    id = match_json[MATCH.ID]
+    alpha_team_id = match_json[MATCH.ALPHA_GROUP_ID]
+    bravo_team_id = match_json[MATCH.BRAVO_GROUP_ID]
+    created_at = match_json[MATCH.CREATED_AT]
+    reported_at = match_json[MATCH.REPORTED_AT]
+    reported_by = match_json[MATCH.REPORTED_BY]
+    try:
+        mementos = parse_memento(match_json[MATCH.MEMENTO])
+        if len(mementos) == 2:
+            group_memento, user_memento = mementos
+            map_memento = None
+        else:
+            group_memento, user_memento, map_memento = mementos
+    except (KeyError, TypeError):
+        group_memento = pd.DataFrame()
+        user_memento = pd.DataFrame()
+        map_memento = None
+
+    map_df = pd.DataFrame(match_json[MATCH.MAP_LIST])
+
+    match_df = pd.Series(
+        {
+            MATCHES.MATCH_ID: id,
+            MATCHES.ALPHA_TEAM_ID: alpha_team_id,
+            MATCHES.BRAVO_TEAM_ID: bravo_team_id,
+            MATCHES.CREATED_AT: created_at,
+            MATCHES.REPORTED_AT: reported_at,
+            MATCHES.REPORTED_BY_USER_ID: reported_by,
+        }
+    )
+    group_memento[MATCHES.MATCH_ID] = id
+    user_memento[MATCHES.MATCH_ID] = id
+    map_df[MATCHES.MATCH_ID] = id
+
+    winner = calculate_winner(map_df)
+    match_df[MATCHES.WINNER_ID] = winner
+    if winner == "cancelled":
+        match_df[MATCHES.WINNER] = "cancelled"
+    elif int(winner) == alpha_team_id:
+        match_df[MATCHES.WINNER] = "alpha"
+    elif int(winner) == bravo_team_id:
+        match_df[MATCHES.WINNER] = "bravo"
+
+    return match_df, group_memento, user_memento, map_df, map_memento
+
+
+def calculate_winner(map_list: pd.DataFrame) -> str:
+    """
+    Calculates the winner based on the provided map list.
+
+    Args:
+        map_list (pd.DataFrame): The DataFrame containing the map list.
+
+    Returns:
+        str: The ID of the winner as a string. If the match was cancelled, the
+            string "cancelled" is returned.
+    """
+    try:
+        return (
+            map_list.groupby(MAP_LIST.WINNER_GROUP_ID)[MAP_LIST.ID]
+            .count()
+            .idxmax()
+            .astype(int)
+            .astype(str)
+        )
+    except ValueError:
+        return "cancelled"
