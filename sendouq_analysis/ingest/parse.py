@@ -51,9 +51,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
         map_info = pd.json_normalize(details).rename(columns=camel_to_snake)
         map_info["map_id"] = map_id
         map_info[um.USER_ID] = map_info[um.USER_ID].astype(int)
-        map_data.append(map_info.fillna(PREFERENCES.EXPLICIT_INDIFFERENT))
+        map_data.append(map_info)
     
-    map_df = pd.concat(map_data)
+    map_df = pd.concat(map_data).fillna(PREFERENCES.EXPLICIT_INDIFFERENT)
     map_df[um.USER_ID] = map_df[um.USER_ID].astype(int)
 
     return groups_df, users_df, map_df
