@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sendouq_analysis.constants import PREFERENCES
+from sendouq_analysis.constants import DATA, PREFERENCES
 from sendouq_analysis.constants.columns import MAP_LIST, MATCHES
 from sendouq_analysis.constants.columns import user_memento as um
-from sendouq_analysis.constants.json_keys import MATCH
+from sendouq_analysis.constants.json_keys import MATCH, MEMENTO
 from sendouq_analysis.utils import camel_to_snake
 
 
@@ -25,9 +25,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
             - pd.DataFrame: The map preferences data, if present
     """
     groups_data = []
-    for group_id, details in memento["groups"].items():
+    for group_id, details in memento[MEMENTO.GROUPS].items():
         group_info = details.copy()
-        group_info["groupId"] = group_id
+        group_info[MEMENTO.GROUP_ID] = group_id
         groups_data.append(group_info)
 
     groups_df = pd.json_normalize(groups_data, sep="_").rename(
@@ -36,9 +36,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
 
     # Parse users
     users_data = []
-    for user_id, details in memento["users"].items():
+    for user_id, details in memento[MEMENTO.USERS].items():
         user_info = details.copy()
-        user_info["userId"] = user_id
+        user_info[MEMENTO.USER_ID] = user_id
         users_data.append(user_info)
 
     users_df = pd.json_normalize(users_data, sep="_").rename(
@@ -48,14 +48,14 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
 
     user_ids = users_df[um.USER_ID].unique()
 
-    if "mapPreferences" not in memento:
+    if MEMENTO.MAP_PREFERENCES not in memento:
         return groups_df, users_df
 
     # Parse map preferences
     map_data = []
-    for map_id, details in enumerate(memento["mapPreferences"]):
+    for map_id, details in enumerate(memento[MEMENTO.MAP_PREFERENCES]):
         map_info = pd.json_normalize(details).rename(columns=camel_to_snake)
-        map_info["map_id"] = map_id
+        map_info[um.MAP_ID] = map_id
         map_info[um.USER_ID] = map_info[um.USER_ID].astype(int)
         # Add missing users
         missing_users = set(user_ids) - set(map_info[um.USER_ID])
@@ -64,7 +64,7 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
                 [
                     {
                         um.USER_ID: user,
-                        "map_id": map_id,
+                        um.MAP_ID: map_id,
                         "preference": PREFERENCES.IMPLICIT_INDIFFERENT,
                     }
                     for user in missing_users
@@ -138,12 +138,12 @@ def parse_match_json(
 
     winner = calculate_winner(map_df)
     match_df[MATCHES.WINNER_ID] = winner
-    if winner == "cancelled":
-        match_df[MATCHES.WINNER] = "cancelled"
+    if winner == DATA.CANCELLED:
+        match_df[MATCHES.WINNER] = DATA.CANCELLED
     elif int(winner) == alpha_team_id:
-        match_df[MATCHES.WINNER] = "alpha"
+        match_df[MATCHES.WINNER] = DATA.ALPHA
     elif int(winner) == bravo_team_id:
-        match_df[MATCHES.WINNER] = "bravo"
+        match_df[MATCHES.WINNER] = DATA.BRAVO
 
     return match_df, group_memento, user_memento, map_df, map_memento
 
@@ -168,4 +168,4 @@ def calculate_winner(map_list: pd.DataFrame) -> str:
             .astype(str)
         )
     except ValueError:
-        return "cancelled"
+        return DATA.CANCELLED
