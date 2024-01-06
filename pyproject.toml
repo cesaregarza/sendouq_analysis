@@ -24,6 +24,7 @@ black = "^23.11.0"
 isort = "^5.12.0"
 ipykernel = "^6.27.1"
 genson = "^1.2.2"
+tqdm = "^4.66.1"
 
 [build-system]
 requires = ["poetry-core"]

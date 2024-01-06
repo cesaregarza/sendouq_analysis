@@ -318,4 +318,10 @@ def parse(
     """
     data = [list(parse_json(json)) for json in jsons]
     data = list(zip(*data))  # Transpose the list of lists
-    return tuple(pd.concat(d, ignore_index=True) for d in data)
+    # return tuple(pd.concat(d, ignore_index=True) for d in data)
+    return tuple(
+        pd.concat(d, ignore_index=True)
+        if i != 0
+        else pd.concat(d, axis=1, ignore_index=True).T
+        for i, d in enumerate(data)
+    )
