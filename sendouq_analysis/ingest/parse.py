@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sendouq_analysis.constants import DATA, PREFERENCES, JSON_KEYS
-from sendouq_analysis.constants.columns import MAP_LIST, MATCHES, GROUPS
+from sendouq_analysis.constants import DATA, JSON_KEYS, PREFERENCES
+from sendouq_analysis.constants.columns import GROUPS, MAP_LIST, MATCHES
 from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.utils import camel_to_snake
 
@@ -52,9 +52,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
 
     # Parse map preferences
     map_data = []
-    for map_id, details in enumerate(memento[JSON_KEYS.MAP_PREFERENCES]):
+    for map_index, details in enumerate(memento[JSON_KEYS.MAP_PREFERENCES]):
         map_info = pd.json_normalize(details).rename(columns=camel_to_snake)
-        map_info[um.MAP_ID] = map_id
+        map_info[um.MAP_INDEX] = map_index
         map_info[um.USER_ID] = map_info[um.USER_ID].astype(int)
         # Add missing users
         missing_users = set(user_ids) - set(map_info[um.USER_ID])
@@ -63,7 +63,7 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
                 [
                     {
                         um.USER_ID: user,
-                        um.MAP_ID: map_id,
+                        um.MAP_INDEX: map_index,
                         "preference": PREFERENCES.IMPLICIT_INDIFFERENT,
                     }
                     for user in missing_users
@@ -119,7 +119,9 @@ def parse_match_json(
         user_memento = pd.DataFrame()
         map_memento = None
 
-    map_df = pd.DataFrame(match_json[JSON_KEYS.MAP_LIST])
+    map_df = pd.DataFrame(match_json[JSON_KEYS.MAP_LIST]).rename(
+        columns=camel_to_snake
+    )
 
     match_df = pd.Series(
         {
@@ -176,7 +178,7 @@ def parse_group_members(group_data: dict) -> pd.DataFrame:
 
     for member in group_data[JSON_KEYS.MEMBERS]:
         member_data: dict = member.copy()
-        
+
         member_data.pop(JSON_KEYS.DISCORD_AVATAR, None)
         member_data.pop(JSON_KEYS.WEAPONS, None)
         member_data.pop(JSON_KEYS.SKILL, None)
@@ -196,3 +198,50 @@ def parse_groups(full_json: dict) -> pd.DataFrame:
     return pd.concat([alpha, bravo])
 
 
+def parse_json(
+    full_json: dict,
+) -> tuple[
+    pd.Series,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame | None,
+]:
+    """Parses a full JSON from the API to return the match data, the group
+    data, the user data and the map preferences data.
+
+    Args:
+        full_json (dict): The full JSON from the API
+
+    Returns:
+        tuple:
+            - pd.Series: The match data
+            - pd.DataFrame: The group memento data
+            - pd.DataFrame: The user memento data
+            - pd.DataFrame: The map data
+            - pd.DataFrame: The group data
+            - pd.DataFrame | None: The map preferences data, if present
+    """
+    (
+        match_df,
+        group_memento,
+        user_memento,
+        map_df,
+        map_memento,
+    ) = parse_match_json(full_json[JSON_KEYS.MATCH])
+    group_df = (
+        parse_groups(full_json)
+        .rename(columns=camel_to_snake)
+        .rename(columns={JSON_KEYS.ID: GROUPS.USER_ID})
+    )
+    try:
+        user_memento = user_memento.merge(
+            group_df[[GROUPS.GROUP_ID, GROUPS.USER_ID]],
+            on=GROUPS.USER_ID,
+            how="left",
+        )
+    except KeyError:
+        user_memento = None
+
+    return match_df, group_memento, user_memento, map_df, group_df, map_memento
