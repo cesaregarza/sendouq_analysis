@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 
 from sendouq_analysis.constants import DATA, JSON_KEYS, PREFERENCES
-from sendouq_analysis.constants.columns import GROUPS, MAP_LIST, MATCHES
+from sendouq_analysis.constants.columns import (
+    GROUPS,
+    MAP_LIST,
+    MATCHES,
+    WEAPONS,
+)
 from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.utils import camel_to_snake
 
@@ -207,6 +212,7 @@ def parse_json(
     pd.DataFrame,
     pd.DataFrame,
     pd.DataFrame | None,
+    pd.DataFrame | None,
 ]:
     """Parses a full JSON from the API to return the match data, the group
     data, the user data and the map preferences data.
@@ -222,6 +228,7 @@ def parse_json(
             - pd.DataFrame: The map data
             - pd.DataFrame: The group data
             - pd.DataFrame | None: The map preferences data, if present
+            - pd.DataFrame | None: The weapons data, if present
     """
     (
         match_df,
@@ -244,4 +251,20 @@ def parse_json(
     except KeyError:
         user_memento = None
 
-    return match_df, group_memento, user_memento, map_df, group_df, map_memento
+    try:
+        weapons_df = pd.DataFrame(
+            full_json[JSON_KEYS.RAW_REPORTED_WEAPONS]
+        ).rename(columns=camel_to_snake)
+        weapons_df[WEAPONS.MATCH_ID] = full_json[JSON_KEYS.MATCH][JSON_KEYS.ID]
+    except KeyError:
+        weapons_df = None
+
+    return (
+        match_df,
+        group_memento,
+        user_memento,
+        map_df,
+        group_df,
+        map_memento,
+        weapons_df,
+    )
