@@ -178,6 +178,15 @@ def calculate_winner(map_list: pd.DataFrame) -> str:
 
 
 def parse_group_members(group_data: dict) -> pd.DataFrame:
+    """
+    Parse the group members data and return it as a pandas DataFrame.
+
+    Args:
+        group_data (dict): The group data containing information about the group members.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the parsed group members data.
+    """
     group_id = group_data[JSON_KEYS.ID]
     members_list = []
 
@@ -196,6 +205,16 @@ def parse_group_members(group_data: dict) -> pd.DataFrame:
 
 
 def parse_groups(full_json: dict) -> pd.DataFrame:
+    """
+    Parse the group members from the given JSON and return a DataFrame
+    containing the parsed data.
+
+    Args:
+        full_json (dict): The JSON containing the group data.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the parsed group members.
+    """
     alpha = parse_group_members(full_json[JSON_KEYS.GROUP_ALPHA])
     bravo = parse_group_members(full_json[JSON_KEYS.GROUP_BRAVO])
     alpha[GROUPS.TEAM] = DATA.ALPHA
