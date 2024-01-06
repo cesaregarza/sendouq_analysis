@@ -287,3 +287,35 @@ def parse_json(
         map_memento,
         weapons_df,
     )
+
+
+def parse(
+    jsons: list[dict],
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame | None,
+    pd.DataFrame | None,
+]:
+    """Parses a list of JSONs from the API to return the match data, the group
+    data, the user data and the map preferences data.
+
+    Args:
+        jsons (list[dict]): The list of JSONs from the API
+
+    Returns:
+        tuple:
+            - pd.DataFrame: The match data
+            - pd.DataFrame: The group memento data
+            - pd.DataFrame: The user memento data
+            - pd.DataFrame: The map data
+            - pd.DataFrame: The group data
+            - pd.DataFrame | None: The map preferences data, if present
+            - pd.DataFrame | None: The weapons data, if present
+    """
+    data = [list(parse_json(json)) for json in jsons]
+    data = list(zip(*data))  # Transpose the list of lists
+    return tuple(pd.concat(d, ignore_index=True) for d in data)
