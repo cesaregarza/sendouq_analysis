@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from sendouq_analysis.constants import DATA, JSON_KEYS, PREFERENCES
@@ -11,6 +13,14 @@ from sendouq_analysis.constants.columns import (
 )
 from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.utils import camel_to_snake
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
@@ -28,6 +38,7 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
             - pd.DataFrame: The user data
             - pd.DataFrame: The map preferences data, if present
     """
+    logger.info("Parsing memento")
     groups_data = []
     for group_id, details in memento[JSON_KEYS.GROUPS].items():
         group_info = details.copy()
@@ -106,6 +117,7 @@ def parse_match_json(
             - pd.DataFrame: The map data
             - pd.DataFrame | None: The map preferences data, if present
     """
+    logger.info("Parsing match JSON")
     id = match_json[JSON_KEYS.ID]
     alpha_team_id = match_json[JSON_KEYS.ALPHA_GROUP_ID]
     bravo_team_id = match_json[JSON_KEYS.BRAVO_GROUP_ID]
@@ -165,6 +177,7 @@ def calculate_winner(map_list: pd.DataFrame) -> str:
         str: The ID of the winner as a string. If the match was cancelled, the
             string "cancelled" is returned.
     """
+    logger.info("Calculating winner")
     try:
         return (
             map_list.groupby(MAP_LIST.WINNER_GROUP_ID)[MAP_LIST.ID]
@@ -187,6 +200,7 @@ def parse_group_members(group_data: dict) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the parsed group members data.
     """
+    logger.info("Parsing group members")
     group_id = group_data[JSON_KEYS.ID]
     members_list = []
 
@@ -215,6 +229,7 @@ def parse_groups(full_json: dict) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the parsed group members.
     """
+    logger.info("Parsing groups")
     alpha = parse_group_members(full_json[JSON_KEYS.GROUP_ALPHA])
     bravo = parse_group_members(full_json[JSON_KEYS.GROUP_BRAVO])
     alpha[GROUPS.TEAM] = DATA.ALPHA
@@ -249,6 +264,8 @@ def parse_json(
             - pd.DataFrame | None: The map preferences data, if present
             - pd.DataFrame | None: The weapons data, if present
     """
+    id = full_json[JSON_KEYS.MATCH][JSON_KEYS.ID]
+    logger.info("Parsing JSON, id: %s", id)
     (
         match_df,
         group_memento,
@@ -274,7 +291,7 @@ def parse_json(
         weapons_df = pd.DataFrame(
             full_json[JSON_KEYS.RAW_REPORTED_WEAPONS]
         ).rename(columns=camel_to_snake)
-        weapons_df[WEAPONS.MATCH_ID] = full_json[JSON_KEYS.MATCH][JSON_KEYS.ID]
+        weapons_df[WEAPONS.MATCH_ID] = id
     except KeyError:
         weapons_df = None
 
@@ -316,6 +333,7 @@ def parse(
             - pd.DataFrame | None: The map preferences data, if present
             - pd.DataFrame | None: The weapons data, if present
     """
+    logger.info("Parsing JSONs")
     data = [list(parse_json(json)) for json in jsons]
     data = list(zip(*data))  # Transpose the list of lists
     # return tuple(pd.concat(d, ignore_index=True) for d in data)
