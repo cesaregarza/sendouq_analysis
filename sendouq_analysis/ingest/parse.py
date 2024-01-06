@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sendouq_analysis.constants import DATA, PREFERENCES
-from sendouq_analysis.constants.columns import MAP_LIST, MATCHES
+from sendouq_analysis.constants import DATA, PREFERENCES, JSON_KEYS
+from sendouq_analysis.constants.columns import MAP_LIST, MATCHES, GROUPS
 from sendouq_analysis.constants.columns import user_memento as um
-from sendouq_analysis.constants.json_keys import MATCH, MEMENTO
 from sendouq_analysis.utils import camel_to_snake
 
 
@@ -25,9 +24,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
             - pd.DataFrame: The map preferences data, if present
     """
     groups_data = []
-    for group_id, details in memento[MEMENTO.GROUPS].items():
+    for group_id, details in memento[JSON_KEYS.GROUPS].items():
         group_info = details.copy()
-        group_info[MEMENTO.GROUP_ID] = group_id
+        group_info[JSON_KEYS.GROUP_ID] = group_id
         groups_data.append(group_info)
 
     groups_df = pd.json_normalize(groups_data, sep="_").rename(
@@ -36,9 +35,9 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
 
     # Parse users
     users_data = []
-    for user_id, details in memento[MEMENTO.USERS].items():
+    for user_id, details in memento[JSON_KEYS.USERS].items():
         user_info = details.copy()
-        user_info[MEMENTO.USER_ID] = user_id
+        user_info[JSON_KEYS.USER_ID] = user_id
         users_data.append(user_info)
 
     users_df = pd.json_normalize(users_data, sep="_").rename(
@@ -48,12 +47,12 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
 
     user_ids = users_df[um.USER_ID].unique()
 
-    if MEMENTO.MAP_PREFERENCES not in memento:
+    if JSON_KEYS.MAP_PREFERENCES not in memento:
         return groups_df, users_df
 
     # Parse map preferences
     map_data = []
-    for map_id, details in enumerate(memento[MEMENTO.MAP_PREFERENCES]):
+    for map_id, details in enumerate(memento[JSON_KEYS.MAP_PREFERENCES]):
         map_info = pd.json_normalize(details).rename(columns=camel_to_snake)
         map_info[um.MAP_ID] = map_id
         map_info[um.USER_ID] = map_info[um.USER_ID].astype(int)
@@ -102,14 +101,14 @@ def parse_match_json(
             - pd.DataFrame: The map data
             - pd.DataFrame | None: The map preferences data, if present
     """
-    id = match_json[MATCH.ID]
-    alpha_team_id = match_json[MATCH.ALPHA_GROUP_ID]
-    bravo_team_id = match_json[MATCH.BRAVO_GROUP_ID]
-    created_at = match_json[MATCH.CREATED_AT]
-    reported_at = match_json[MATCH.REPORTED_AT]
-    reported_by = match_json[MATCH.REPORTED_BY]
+    id = match_json[JSON_KEYS.ID]
+    alpha_team_id = match_json[JSON_KEYS.ALPHA_GROUP_ID]
+    bravo_team_id = match_json[JSON_KEYS.BRAVO_GROUP_ID]
+    created_at = match_json[JSON_KEYS.CREATED_AT]
+    reported_at = match_json[JSON_KEYS.REPORTED_AT]
+    reported_by = match_json[JSON_KEYS.REPORTED_BY]
     try:
-        mementos = parse_memento(match_json[MATCH.MEMENTO])
+        mementos = parse_memento(match_json[JSON_KEYS.MEMENTO])
         if len(mementos) == 2:
             group_memento, user_memento = mementos
             map_memento = None
@@ -120,7 +119,7 @@ def parse_match_json(
         user_memento = pd.DataFrame()
         map_memento = None
 
-    map_df = pd.DataFrame(match_json[MATCH.MAP_LIST])
+    map_df = pd.DataFrame(match_json[JSON_KEYS.MAP_LIST])
 
     match_df = pd.Series(
         {
@@ -169,3 +168,31 @@ def calculate_winner(map_list: pd.DataFrame) -> str:
         )
     except ValueError:
         return DATA.CANCELLED
+
+
+def parse_group_members(group_data: dict) -> pd.DataFrame:
+    group_id = group_data[JSON_KEYS.ID]
+    members_list = []
+
+    for member in group_data[JSON_KEYS.MEMBERS]:
+        member_data: dict = member.copy()
+        
+        member_data.pop(JSON_KEYS.DISCORD_AVATAR, None)
+        member_data.pop(JSON_KEYS.WEAPONS, None)
+        member_data.pop(JSON_KEYS.SKILL, None)
+        member_data.pop(JSON_KEYS.SKILL_DIFFERENCE, None)
+
+        member_data[JSON_KEYS.GROUP_ID] = group_id
+        members_list.append(member_data)
+
+    return pd.DataFrame(members_list)
+
+
+def parse_groups(full_json: dict) -> pd.DataFrame:
+    alpha = parse_group_members(full_json[JSON_KEYS.GROUP_ALPHA])
+    bravo = parse_group_members(full_json[JSON_KEYS.GROUP_BRAVO])
+    alpha[GROUPS.TEAM] = DATA.ALPHA
+    bravo[GROUPS.TEAM] = DATA.BRAVO
+    return pd.concat([alpha, bravo])
+
+

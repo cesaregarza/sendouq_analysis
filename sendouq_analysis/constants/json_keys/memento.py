@@ -1,5 +1,0 @@
-GROUPS = "groups"
-GROUP_ID = "groupId"
-USERS = "users"
-USER_ID = "userId"
-MAP_PREFERENCES = "mapPreferences"
