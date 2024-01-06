@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 
 import pandas as pd
 import tqdm
@@ -16,6 +17,8 @@ from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.utils import camel_to_snake
 
 logger = logging.getLogger(__name__)
+
+warnings.filterwarnings("ignore", module="pandas")
 
 
 def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
