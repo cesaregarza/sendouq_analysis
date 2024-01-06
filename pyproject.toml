@@ -17,6 +17,7 @@ plotly = "^5.18.0"
 nbformat = "^5.9.2"
 statsmodels = "^0.14.0"
 requests = "^2.31.0"
+tqdm = "^4.66.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -24,7 +25,6 @@ black = "^23.11.0"
 isort = "^5.12.0"
 ipykernel = "^6.27.1"
 genson = "^1.2.2"
-tqdm = "^4.66.1"
 
 [build-system]
 requires = ["poetry-core"]

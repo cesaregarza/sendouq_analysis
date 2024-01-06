@@ -10,13 +10,6 @@ from sendouq_analysis.constants import (
     ROLLING_TIME_WINDOWS,
 )
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
 PLAYERCOLS = COLUMNS.PLAYER
 
 

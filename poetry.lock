@@ -289,7 +289,7 @@ colorama = {version = "*", markers = "platform_system == \"Windows\""}
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
-category = "dev"
+category = "main"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 files = [
@@ -1957,7 +1957,7 @@ files = [
 name = "tqdm"
 version = "4.66.1"
 description = "Fast, Extensible Progress Meter"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
@@ -2046,4 +2046,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "03fa8a9ba88b362630aa4dc711a57d1d6440872ee6fa2590dfa4c61b31985330"
+content-hash = "1cda4f524014aa0f2391aaf70b0ccdf7af9a668efaca6fa8c73f3507293a8b11"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 import pandas as pd
+import tqdm
 
 from sendouq_analysis.constants import DATA, JSON_KEYS, PREFERENCES
 from sendouq_analysis.constants.columns import (
@@ -14,12 +15,6 @@ from sendouq_analysis.constants.columns import (
 from sendouq_analysis.constants.columns import user_memento as um
 from sendouq_analysis.utils import camel_to_snake
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -308,6 +303,8 @@ def parse_json(
 
 def parse(
     jsons: list[dict],
+    *,
+    disable_tqdm: bool = False,
 ) -> tuple[
     pd.DataFrame,
     pd.DataFrame,
@@ -322,6 +319,7 @@ def parse(
 
     Args:
         jsons (list[dict]): The list of JSONs from the API
+        disable_tqdm (bool): Whether to disable the tqdm progress bar
 
     Returns:
         tuple:
@@ -334,9 +332,14 @@ def parse(
             - pd.DataFrame | None: The weapons data, if present
     """
     logger.info("Parsing JSONs")
-    data = [list(parse_json(json)) for json in jsons]
+    data = [
+        list(parse_json(json))
+        for json in tqdm.tqdm(jsons, disable=disable_tqdm)
+    ]
+    logger.info("Transposing data")
     data = list(zip(*data))  # Transpose the list of lists
     # return tuple(pd.concat(d, ignore_index=True) for d in data)
+    logger.info("Concatenating data")
     return tuple(
         pd.concat(d, ignore_index=True)
         if i != 0
