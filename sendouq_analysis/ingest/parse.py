@@ -18,6 +18,7 @@ from sendouq_analysis.utils import camel_to_snake
 
 logger = logging.getLogger(__name__)
 
+warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", module="pandas")
 
 
