@@ -18,9 +18,8 @@ def build_player_df(
     user_memento_df: pd.DataFrame,
     groups_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Construct a DataFrame containing player data by merging match, user memento,
-    and group data.
+    """Construct a DataFrame containing player data by merging match, user
+    memento, and group data.
 
     Parameters
     ----------
@@ -60,9 +59,8 @@ def build_player_df(
 def build_team_enemy_xref(
     matches_df: pd.DataFrame,
 ) -> pd.Series:
-    """
-    Create a cross-reference Series mapping match and group IDs to enemy group
-    IDs.
+    """Create a cross-reference Series mapping match and group IDs to enemy
+    group IDs.
 
     Parameters
     ----------
@@ -111,9 +109,8 @@ def build_team_enemy_xref(
 def correct_sp(
     player_df: pd.DataFrame,
 ) -> pd.Series:
-    """
-    Correct the 'sp' values in the player DataFrame by considering the changes
-    and differences over time.
+    """Correct the 'sp' values in the player DataFrame by considering the
+    changes and differences over time.
 
     Parameters
     ----------
@@ -155,8 +152,7 @@ def base_merges(
     user_memento_df: pd.DataFrame,
     groups_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Perform base merges of match, user memento, and group data to form a
+    """Perform base merges of match, user memento, and group data to form a
     preliminary player DataFrame.
 
     Parameters
@@ -223,9 +219,8 @@ def base_merges(
 def generate_latest_df(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Generate a DataFrame containing the latest player data, excluding cancelled
-    matches.
+    """Generate a DataFrame containing the latest player data, excluding
+    cancelled matches.
 
     Parameters
     ----------
@@ -253,8 +248,7 @@ def generate_latest_df(
 def fit_lognorm(
     player_latest_df: pd.DataFrame,
 ) -> tuple[float, float, float]:
-    """
-    Fit a log-normal distribution to the 'after_sp' column of the player
+    """Fit a log-normal distribution to the 'after_sp' column of the player
     DataFrame and perform a KS test.
 
     Parameters
@@ -288,8 +282,7 @@ def calculate_logz_values(
     loc: float,
     scale: float,
 ) -> pd.DataFrame:
-    """
-    Calculate the log-z values for 'sp' and 'after_sp' columns in the player
+    """Calculate the log-z values for 'sp' and 'after_sp' columns in the player
     DataFrame.
 
     Parameters
@@ -322,8 +315,8 @@ def calculate_logz_values(
 def calculate_teammate_enemy_values(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Calculate teammate and enemy log-z values for each player in the DataFrame.
+    """Calculate teammate and enemy log-z values for each player in the
+    DataFrame.
 
     Parameters
     ----------
@@ -398,8 +391,7 @@ def calculate_teammate_enemy_values(
 def calculate_rolling_data(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Calculate rolling statistics for player win rates over specified time
+    """Calculate rolling statistics for player win rates over specified time
     windows.
 
     Parameters
@@ -458,6 +450,18 @@ def calculate_rolling_data(
 def calculate_cumulative_data(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Calculate cumulative statistics. Currently only calculates cumulative
+    matches for each player in each match.
+
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data with
+            `winner`, `created_at_dt`, and `user_id` columns.
+
+
+    Returns:
+        pd.DataFrame: The player DataFrame with added cumulative statistics for
+            matches.
+    """
     cumulative_matches = (
         player_df.query("winner != 'cancelled'")
         .sort_values(PLAYERCOLS.CREATED_AT_DT)
@@ -469,7 +473,7 @@ def calculate_cumulative_data(
     player_df = player_df.merge(
         cumulative_matches, left_index=True, right_index=True, how="left"
     )
-    player_df[PLAYERCOLS.CUM_MATCHES] = player_df[
-        PLAYERCOLS.CUM_MATCHES
-    ].fillna(0)
+    player_df[PLAYERCOLS.CUM_MATCHES] = (
+        player_df[PLAYERCOLS.CUM_MATCHES].fillna(0).astype(int)
+    )
     return player_df
