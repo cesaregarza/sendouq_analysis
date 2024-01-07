@@ -4,7 +4,11 @@ version = "0.1.0"
 description = ""
 authors = ["Cesar E Garza <cesar@cegarza.com>"]
 readme = "README.md"
-packages = [{include = "sendouq_analysis", from = "src"}]
+packages = [
+    {include = "sendouq_analysis", from = "src"},
+    {include = "sendouq_dashboard", from = "src"}
+]
+
 
 [tool.poetry.dependencies]
 python = "^3.10"
