@@ -5,6 +5,7 @@ from sendouq_analysis.ingest import (
     parse_all,
     scrape_matches,
     write_tables,
+    create_engine,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,10 @@ def update_database() -> None:
     matches = scrape_matches(latest_match)
     logger.info("Parsing all %s matches", len(matches))
     parsed_matches = parse_all(matches)
+    logger.info("Creating an engine to connect to the database")
+    engine = create_engine()
     logger.info("Writing all data to database")
-    write_tables(*parsed_matches)
+    write_tables(*parsed_matches, engine)
     logger.info("Finished scraping and parsing process")
 
 

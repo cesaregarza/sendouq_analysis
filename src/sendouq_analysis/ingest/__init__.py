@@ -3,6 +3,7 @@ from sendouq_analysis.ingest.read_write import (
     load_latest_match_number,
     load_tables,
     write_tables,
+    create_engine,
 )
 from sendouq_analysis.ingest.scrape import (
     scrape_matches,
