@@ -305,7 +305,7 @@ def parse_json(
     )
 
 
-def parse(
+def parse_all(
     jsons: list[dict],
     *,
     disable_tqdm: bool = False,
