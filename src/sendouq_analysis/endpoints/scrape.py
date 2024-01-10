@@ -1,11 +1,11 @@
 import logging
 
 from sendouq_analysis.ingest import (
+    create_engine,
     load_latest_match_number,
     parse_all,
     scrape_matches,
     write_tables,
-    create_engine,
 )
 
 logger = logging.getLogger(__name__)
