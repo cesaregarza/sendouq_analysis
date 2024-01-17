@@ -1,3 +1,4 @@
+# MAKE SURE TO RUN THIS FROM THE ROOT DIRECTORY
 ###############################
 #         Base Image          #
 ###############################
@@ -15,6 +16,7 @@ ENV PATH="$PATH:$POETRY_HOME/bin"
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
+    cron \
     curl \
     gcc \
     make \
@@ -39,12 +41,39 @@ RUN poetry install --no-root
 FROM dependencies AS build
 
 ARG BUILD_VERSION
+ARG POSTGRES_USER
+ARG POSTGRES_PASSWORD
+ARG POSTGRES_HOST
+ARG POSTGRES_PORT
+ARG POSTGRES_DB
+
+# Copy the scrape.crontab file and rename it to just crontab
+# COPY scrape.crontab /etc/crontabs/crontab
+# RUN chmod 0644 /etc/crontabs/crontab
+# RUN crontab /etc/crontabs/crontab
+# RUN touch /var/log/cron.log
+COPY dockerfiles/scrape.crontab /etc/cron.d/crontab
+RUN chmod 0644 /etc/cron.d/crontab
+RUN touch /var/log/cron.log
+RUN crontab /etc/cron.d/crontab
 
 COPY . /app/
 
+# Set environment variables
+ENV POSTGRES_USER=$POSTGRES_USER \
+    POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+    POSTGRES_HOST=$POSTGRES_HOST \
+    POSTGRES_PORT=$POSTGRES_PORT \
+    POSTGRES_DB=$POSTGRES_DB
+
 # Build the application
 RUN poetry version $BUILD_VERSION && \
-    poetry build
+    poetry build && \
+    poetry install && \
+    poetry update
+
+# CMD ["cron", "-f", "-L", "2"]
+ENTRYPOINT ["poetry", "run", "scrape"]
 
 # ###############################
 # #         Test  Image         #

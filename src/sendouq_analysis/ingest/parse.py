@@ -344,9 +344,17 @@ def parse_all(
     data = list(zip(*data))  # Transpose the list of lists
     # return tuple(pd.concat(d, ignore_index=True) for d in data)
     logger.info("Concatenating data")
-    return tuple(
-        pd.concat(d, ignore_index=True)
-        if i != 0
-        else pd.concat(d, axis=1, ignore_index=True).T
-        for i, d in enumerate(data)
-    )
+    # print each
+    out = []
+    for i, d in enumerate(data):
+        [print(x.columns) if i != 0 else print(x.name) for x in d]
+        if i == 0:
+            concat = pd.concat(d, ignore_index=True)
+        else:
+            try:
+                concat = pd.concat(d, axis=1, ignore_index=True).T
+                print(concat.columns)
+            except ValueError:
+                concat = pd.DataFrame()
+        out.append(concat)
+    return tuple(out)

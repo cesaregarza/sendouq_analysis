@@ -36,6 +36,7 @@ def scrape_matches(
     start_id: int,
     end_id: int | Literal[False] = False,
     debounce_amt: float = 0.0,
+    chunk_size: int = 100,
 ) -> list[dict]:
     """Scrapes a range of matches from sendou.ink
 
@@ -57,6 +58,7 @@ def scrape_matches(
 
     try:
         for match_id in range(start_id, end_id + 1):
+            print(f"Scraping match id: {match_id}")
             match_json = scrape_match(match_id)
             if match_json["match"]["reportedAt"] is None:
                 logger.info(
@@ -65,6 +67,11 @@ def scrape_matches(
                 )
                 break
             matches.append(match_json)
+            if len(matches) % chunk_size == 0:
+                logger.info("Scraped %s matches", len(matches))
+                print(f"Scraped {len(matches)} matches")
+                return matches
+
             if debounce_amt > 0.0:
                 time.sleep(debounce_amt)
     except json.JSONDecodeError:

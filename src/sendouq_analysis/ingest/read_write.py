@@ -1,13 +1,17 @@
+import logging
 import os
 
 import pandas as pd
 import sqlalchemy as db
+from sqlalchemy.exc import ProgrammingError
 
 from sendouq_analysis.constants import ENV_VARS, TABLE_NAMES
 
 DATABASE_URL_FORMAT = (
     "postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 )
+
+logger = logging.getLogger(__name__)
 
 
 def create_engine() -> db.engine.Engine:
@@ -41,8 +45,12 @@ def load_latest_match_number(engine: db.engine.Engine) -> int:
     Returns:
         int: The latest match number
     """
-    query = f"SELECT MAX(match_number) FROM {TABLE_NAMES.MATCHES}"
-    return pd.read_sql(query, engine).iloc[0, 0]
+    query = f"SELECT MAX(match_number) FROM {TABLE_NAMES.MATCH}"
+    try:
+        return pd.read_sql(query, engine).iloc[0, 0]
+    # If the table is empty or does not exist, return 1
+    except (TypeError, IndexError, ProgrammingError):
+        return 1
 
 
 def load_tables() -> (
@@ -96,17 +104,16 @@ def write_tables(
         weapons_df (pd.DataFrame): The weapons data
         engine (db.engine.Engine): Engine for the database
     """
-    match_df.to_sql(
-        TABLE_NAMES.MATCHES, engine, if_exists="append", index=False
-    )
+    logger.warning("Writing tables to database")
+    match_df.to_sql(TABLE_NAMES.MATCH, engine, if_exists="append", index=False)
     group_memento_df.to_sql(
-        TABLE_NAMES.GROUP_MEMENTOS, engine, if_exists="append", index=False
+        TABLE_NAMES.GROUP_MEMENTO, engine, if_exists="append", index=False
     )
     user_memento_df.to_sql(
-        TABLE_NAMES.USER_MEMENTOS, engine, if_exists="append", index=False
+        TABLE_NAMES.USER_MEMENTO, engine, if_exists="append", index=False
     )
-    map_df.to_sql(TABLE_NAMES.MAPS, engine, if_exists="append", index=False)
-    group_df.to_sql(TABLE_NAMES.GROUPS, engine, if_exists="append", index=False)
+    map_df.to_sql(TABLE_NAMES.MAP, engine, if_exists="append", index=False)
+    group_df.to_sql(TABLE_NAMES.GROUP, engine, if_exists="append", index=False)
     map_preferences_df.to_sql(
         TABLE_NAMES.MAP_PREFERENCES, engine, if_exists="append", index=False
     )
