@@ -171,3 +171,4 @@ reports/flake8/*.css
 geckodriver
 scraping/splatoon3_ink.py
 data
+build_scraper.sh
