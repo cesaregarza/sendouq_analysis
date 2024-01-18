@@ -344,7 +344,6 @@ def parse_all(
     data = list(zip(*data))  # Transpose the list of lists
     # return tuple(pd.concat(d, ignore_index=True) for d in data)
     logger.info("Concatenating data")
-    # print each
     out = []
     for i, d in enumerate(data):
         if i == 0:

@@ -45,12 +45,12 @@ def load_latest_match_number(engine: db.engine.Engine) -> int:
     Returns:
         int: The latest match number
     """
-    query = f"SELECT MAX(match_number) FROM {TABLE_NAMES.MATCH}"
+    query = f'SELECT MAX(match_id) FROM "{TABLE_NAMES.MATCH}"'
     try:
         return pd.read_sql(query, engine).iloc[0, 0]
     # If the table is empty or does not exist, return 1
     except (TypeError, IndexError, ProgrammingError):
-        return 1
+        return 0
 
 
 def load_tables() -> (

@@ -18,12 +18,13 @@ def update_database() -> None:
     logger.info("Creating an engine to connect to the database")
     engine = create_engine()
     logger.info("Loading latest match number")
-    latest_match = load_latest_match_number(engine)
-    logger.info("Scraping matches up to match number %s", latest_match)
+    next_match = load_latest_match_number(engine)
+    logger.info("Scraping matches starting from match number %s", next_match)
     chunk_size = 100
+    count = 0
     condition = True
     while condition:
-        matches = scrape_matches(latest_match, chunk_size=chunk_size)
+        matches = scrape_matches(next_match + count, chunk_size=chunk_size)
         if len(matches) == 0:
             logger.info("Chunk is empty, ending scrape")
             break
@@ -32,6 +33,7 @@ def update_database() -> None:
             condition = False
         parsed_matches = parse_all(matches)
         write_tables(*parsed_matches, engine)
+        count += chunk_size
     logger.info("Finished scraping and parsing process")
 
 

@@ -58,7 +58,6 @@ def scrape_matches(
 
     try:
         for match_id in range(start_id, end_id + 1):
-            print(f"Scraping match id: {match_id}")
             match_json = scrape_match(match_id)
             if match_json["match"]["reportedAt"] is None:
                 logger.info(
@@ -69,7 +68,6 @@ def scrape_matches(
             matches.append(match_json)
             if len(matches) % chunk_size == 0:
                 logger.info("Scraped %s matches", len(matches))
-                print(f"Scraped {len(matches)} matches")
                 return matches
 
             if debounce_amt > 0.0:
