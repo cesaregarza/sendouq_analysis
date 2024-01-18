@@ -347,13 +347,11 @@ def parse_all(
     # print each
     out = []
     for i, d in enumerate(data):
-        [print(x.columns) if i != 0 else print(x.name) for x in d]
         if i == 0:
-            concat = pd.concat(d, ignore_index=True)
+            concat = pd.concat(d, axis=1).T
         else:
             try:
-                concat = pd.concat(d, axis=1, ignore_index=True).T
-                print(concat.columns)
+                concat = pd.concat(d, ignore_index=True)
             except ValueError:
                 concat = pd.DataFrame()
         out.append(concat)

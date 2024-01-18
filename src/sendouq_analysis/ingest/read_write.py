@@ -105,18 +105,16 @@ def write_tables(
         engine (db.engine.Engine): Engine for the database
     """
     logger.warning("Writing tables to database")
-    match_df.to_sql(TABLE_NAMES.MATCH, engine, if_exists="append", index=False)
-    group_memento_df.to_sql(
-        TABLE_NAMES.GROUP_MEMENTO, engine, if_exists="append", index=False
+    gen = (
+        (TABLE_NAMES.MATCH, match_df),
+        (TABLE_NAMES.GROUP_MEMENTO, group_memento_df),
+        (TABLE_NAMES.USER_MEMENTO, user_memento_df),
+        (TABLE_NAMES.MAP, map_df),
+        (TABLE_NAMES.GROUP, group_df),
+        (TABLE_NAMES.MAP_PREFERENCES, map_preferences_df),
+        (TABLE_NAMES.WEAPONS, weapons_df),
     )
-    user_memento_df.to_sql(
-        TABLE_NAMES.USER_MEMENTO, engine, if_exists="append", index=False
-    )
-    map_df.to_sql(TABLE_NAMES.MAP, engine, if_exists="append", index=False)
-    group_df.to_sql(TABLE_NAMES.GROUP, engine, if_exists="append", index=False)
-    map_preferences_df.to_sql(
-        TABLE_NAMES.MAP_PREFERENCES, engine, if_exists="append", index=False
-    )
-    weapons_df.to_sql(
-        TABLE_NAMES.WEAPONS, engine, if_exists="append", index=False
-    )
+    for table_name, df in gen:
+        if len(df) == 0:
+            continue
+        df.to_sql(table_name, engine, if_exists="append", index=False)
