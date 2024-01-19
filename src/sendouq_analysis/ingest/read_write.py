@@ -64,6 +64,18 @@ def get_table_columns(
     Returns:
         list[str]: List of column names
     """
+    # Check if the table exists in the schema
+    check_table_query = f"""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables 
+            WHERE table_schema = '{TABLE_NAMES.SCHEMA}'
+            AND table_name = '{table_name}'
+        );
+    """
+    table_exists = connection.execute(db.text(check_table_query)).scalar()
+    if not table_exists:
+        return []
     query = f"SELECT * FROM {TABLE_NAMES.SCHEMA}.{table_name} LIMIT 0"
     return list(connection.execute(db.text(query)).keys())
 
@@ -212,12 +224,15 @@ def write_tables(
                 logger.info(f"Skipping empty dataframe for table {table_name}")
                 continue
             existing_columns = get_table_columns(connection, table_name)
-            missing_columns = set(df.columns) - set(existing_columns)
-            for column in missing_columns:
-                logger.info(
-                    f"Adding missing column {column} to table {table_name}"
-                )
-                add_column_if_not_exists(connection, table_name, column, df)
+
+            if len(existing_columns) > 0:
+                missing_columns = set(df.columns) - set(existing_columns)
+                for column in missing_columns:
+                    logger.info(
+                        f"Adding missing column {column} to table {table_name}"
+                    )
+                    add_column_if_not_exists(connection, table_name, column, df)
+
             df.to_sql(
                 table_name,
                 con=connection,
