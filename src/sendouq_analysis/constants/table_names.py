@@ -1,10 +1,11 @@
-MATCH = "MATCH"
-GROUP_MEMENTO = "GROUP_MEMENTO"
-USER_MEMENTO = "USER_MEMENTO"
-MAP = "MAP"
-GROUP = "GROUP"
-MAP_PREFERENCES = "MAP_PREFERENCES"
-WEAPONS = "WEAPONS"
+SCHEMA = "sendouq_analysis"
+MATCH = "match"
+GROUP_MEMENTO = "group_memento"
+USER_MEMENTO = "user_memento"
+MAP = "map"
+GROUP = "group"
+MAP_PREFERENCES = "map_preferences"
+WEAPONS = "weapons"
 
 ALL_TABLES = [
     MATCH,
