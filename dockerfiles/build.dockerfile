@@ -16,7 +16,6 @@ ENV PATH="$PATH:$POETRY_HOME/bin"
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
-    cron \
     curl \
     gcc \
     make \
@@ -47,15 +46,6 @@ ARG POSTGRES_HOST
 ARG POSTGRES_PORT
 ARG POSTGRES_DB
 
-# Copy the scrape.crontab file and rename it to just crontab
-# COPY scrape.crontab /etc/crontabs/crontab
-# RUN chmod 0644 /etc/crontabs/crontab
-# RUN crontab /etc/crontabs/crontab
-# RUN touch /var/log/cron.log
-COPY dockerfiles/scrape.crontab /etc/cron.d/crontab
-RUN chmod 0644 /etc/cron.d/crontab
-RUN touch /var/log/cron.log
-RUN crontab /etc/cron.d/crontab
 
 COPY . /app/
 
@@ -72,7 +62,6 @@ RUN poetry version $BUILD_VERSION && \
     poetry install && \
     poetry update
 
-# CMD ["cron", "-f", "-L", "2"]
 ENTRYPOINT ["poetry", "run", "scrape"]
 
 # ###############################
