@@ -37,7 +37,7 @@ def parse_memento(memento: dict) -> tuple[pd.DataFrame, ...]:
             - pd.DataFrame: The user data
             - pd.DataFrame: The map preferences data, if present
     """
-    logger.info("Parsing memento")
+    logger.debug("Parsing memento")
     groups_data = []
     for group_id, details in memento[JSON_KEYS.GROUPS].items():
         group_info = details.copy()
@@ -116,7 +116,7 @@ def parse_match_json(
             - pd.DataFrame: The map data
             - pd.DataFrame | None: The map preferences data, if present
     """
-    logger.info("Parsing match JSON")
+    logger.debug("Parsing match JSON")
     id = match_json[JSON_KEYS.ID]
     alpha_team_id = match_json[JSON_KEYS.ALPHA_GROUP_ID]
     bravo_team_id = match_json[JSON_KEYS.BRAVO_GROUP_ID]
@@ -176,7 +176,7 @@ def calculate_winner(map_list: pd.DataFrame) -> str:
         str: The ID of the winner as a string. If the match was cancelled, the
             string "cancelled" is returned.
     """
-    logger.info("Calculating winner")
+    logger.debug("Calculating winner")
     try:
         return (
             map_list.groupby(MAP_LIST.WINNER_GROUP_ID)[MAP_LIST.ID]
@@ -199,7 +199,7 @@ def parse_group_members(group_data: dict) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the parsed group members data.
     """
-    logger.info("Parsing group members")
+    logger.debug("Parsing group members")
     group_id = group_data[JSON_KEYS.ID]
     members_list = []
 
@@ -228,7 +228,7 @@ def parse_groups(full_json: dict) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame containing the parsed group members.
     """
-    logger.info("Parsing groups")
+    logger.debug("Parsing groups")
     alpha = parse_group_members(full_json[JSON_KEYS.GROUP_ALPHA])
     bravo = parse_group_members(full_json[JSON_KEYS.GROUP_BRAVO])
     alpha[GROUPS.TEAM] = DATA.ALPHA
@@ -340,10 +340,10 @@ def parse_all(
         list(parse_json(json))
         for json in tqdm.tqdm(jsons, disable=disable_tqdm)
     ]
-    logger.info("Transposing data")
+    logger.debug("Transposing data")
     data = list(zip(*data))  # Transpose the list of lists
     # return tuple(pd.concat(d, ignore_index=True) for d in data)
-    logger.info("Concatenating data")
+    logger.debug("Concatenating data")
     out = []
     for i, d in enumerate(data):
         if i == 0:
