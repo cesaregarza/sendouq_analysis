@@ -45,7 +45,7 @@ def update_database() -> None:
         elif len(matches) < chunk_size:
             logger.info("Scraped all matches, ending scrape")
             condition = False
-        parsed_matches = parse_all(matches)
+        parsed_matches = parse_all(matches, disable_tqdm=True)
         try:
             write_tables(*parsed_matches, engine)
         except ProgrammingError:
