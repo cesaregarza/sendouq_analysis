@@ -1,0 +1,78 @@
+name: Build and Run Scraper
+
+on:
+#   push:
+#     branches:
+#       - main
+  workflow_dispatch:
+
+env:
+  BRANCH_NAME: main
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+  DIGITALOCEAN_SSH_KEY_PRIVATE: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check_changes.outputs.skip }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2> /dev/null)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No tags found, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "Latest tag: $LATEST_TAG"
+          fi
+
+          CHANGES = $(git describe --tags `git rev-list --tags --max-count=1`)
+          if [-n "$CHANGES"]; then
+            echo "Changes found, running"
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "No changes found, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+
+  build:
+    needs: check
+    if: needs.check.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Build docker image
+        run: docker build -t ${{ github.repository }}:$GITHUB_SHA -f dockerfiles/scrape.dockerfile .
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_pvt_key: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
