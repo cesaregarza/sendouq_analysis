@@ -11,6 +11,11 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
   DIGITALOCEAN_SSH_KEY_PRIVATE: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
 
 jobs:
   check:
@@ -37,8 +42,8 @@ jobs:
             echo "Latest tag: $LATEST_TAG"
           fi
 
-          CHANGES = $(git describe --tags `git rev-list --tags --max-count=1`)
-          if [-n "$CHANGES"]; then
+          CHANGES=$(git diff --name-only $LATEST_TAG HEAD -- 'src/sendouq_analysis')
+          if [ -n "$CHANGES" ]; then
             echo "Changes found, running"
             echo "skip=false" >> $GITHUB_OUTPUT
             exit 0
@@ -72,7 +77,13 @@ jobs:
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: |
+          terraform apply -auto-approve tfplan \
+          -var="postgres_user=$POSTGRES_USER" \
+          -var="postgres_password=$POSTGRES_PASSWORD" \
+          -var="postgres_host=$POSTGRES_HOST" \
+          -var="postgres_port=$POSTGRES_PORT" \
+          -var="postgres_db=$POSTGRES_DB"
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           TF_VAR_pvt_key: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
