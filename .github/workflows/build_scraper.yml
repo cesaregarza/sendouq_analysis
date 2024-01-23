@@ -9,6 +9,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    environment: Scraper
     outputs:
       skip: ${{ steps.check_changes.outputs.skip }}
 
@@ -47,6 +48,7 @@ jobs:
     needs: check
     if: needs.check.outputs.skip == 'false'
     runs-on: ubuntu-latest
+    environment: Scraper
     steps:
       - name: Checkout
         uses: actions/checkout@v3
