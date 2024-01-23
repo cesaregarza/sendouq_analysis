@@ -24,24 +24,28 @@ jobs:
         id: check_changes
         run: |
           echo "Checking for changes"
-          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1` 2> /dev/null)
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          TAG_FETCH_EXIT_CODE=$?
+          
+          if [ $TAG_FETCH_EXIT_CODE -ne 0 ]; then
+            echo "Failed to fetch latest tag, exit code: $TAG_FETCH_EXIT_CODE"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           if [ -z "$LATEST_TAG" ]; then
             echo "No tags found, skipping"
             echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
           else
             echo "Latest tag: $LATEST_TAG"
-          fi
-
-          CHANGES=$(git diff --name-only $LATEST_TAG HEAD -- 'src/sendouq_analysis')
-          if [ -n "$CHANGES" ]; then
-            echo "Changes found, running"
-            echo "skip=false" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "No changes found, skipping"
-            echo "skip=true" >> $GITHUB_OUTPUT
-            exit 0
+            CHANGES=$(git diff --name-only $LATEST_TAG HEAD -- 'src/sendouq_analysis')
+            if [ -n "$CHANGES" ]; then
+              echo "Changes found, running"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            else
+              echo "No changes found, skipping"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            fi
           fi
 
 
