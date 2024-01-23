@@ -8,7 +8,7 @@ on:
 
 env:
   BRANCH_NAME: main
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.CI_SENDOUQ_SCRAPER_TOKEN }}
   DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
   DIGITALOCEAN_SSH_KEY_PRIVATE: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
   POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -27,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CI_SENDOUQ_SCRAPER_TOKEN }}
           fetch-depth: 0
       
       - name: Check for changes
