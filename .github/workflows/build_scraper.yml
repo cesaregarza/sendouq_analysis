@@ -24,7 +24,7 @@ jobs:
         id: check_changes
         run: |
           echo "Checking for changes"
-          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1 --always` 2>&1)
+          LATEST_TAG=$(git describe --tags --always `git rev-list --tags --max-count=1` 2>&1)
           TAG_FETCH_EXIT_CODE=$?
           
           if [ $TAG_FETCH_EXIT_CODE -ne 0 ]; then
