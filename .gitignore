@@ -172,3 +172,12 @@ geckodriver
 scraping/splatoon3_ink.py
 data
 build_scraper.sh
+terraform/scraper/hidden.tfvars
+terraform/scraper/.terraform.lock.hcl
+terraform/scraper/terraform.tfstate
+terraform/scraper/terraform.tfstate.backup
+terraform/scraper/tfplan
+terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/CHANGELOG.md
+terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/terraform-provider-digitalocean_v2.34.1
+terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/LICENSE
+terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/README.md
