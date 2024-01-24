@@ -1,6 +1,8 @@
 import logging
+import os
 import sys
 
+import requests
 from sqlalchemy.exc import ProgrammingError
 
 from sendouq_analysis.ingest import (
@@ -57,6 +59,63 @@ def update_database() -> None:
 
         count += chunk_size
     logger.info("Finished scraping and parsing process")
+    logger.info("Shutting down droplet")
+    do_api_token = os.environ["DO_API_TOKEN"]
+    if do_api_token is None:
+        logger.warning(
+            "No DigitalOcean API token found, assuming not running on "
+            "DigitalOcean droplet."
+        )
+        return
+
+    # Get droplet id from the droplet name, "sendouq_scraper"
+    droplet_id = get_droplet_id(do_api_token, "sendouq-scraper")
+    delete_droplet(do_api_token, droplet_id)
+
+
+def get_droplet_id(do_api_token: str, droplet_name: str) -> str:
+    """Gets the id of a droplet from its name
+
+    Args:
+        do_api_token (str): The DigitalOcean API token
+        droplet_name (str): The name of the droplet
+
+    Returns:
+        str: The id of the droplet
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {do_api_token}",
+    }
+    response = requests.get(
+        "https://api.digitalocean.com/v2/droplets",
+        headers=headers,
+        params={"per_page": 200},
+    )
+    response.raise_for_status()
+    droplets = response.json().get("droplets", [])
+    for droplet in droplets:
+        if droplet["name"] == droplet_name:
+            return droplet["id"]
+    raise ValueError(f"No droplet with name {droplet_name} found")
+
+
+def delete_droplet(do_api_token: str, droplet_id: str) -> None:
+    """Deletes a droplet
+
+    Args:
+        do_api_token (str): The DigitalOcean API token
+        droplet_id (str): The id of the droplet
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {do_api_token}",
+    }
+    response = requests.delete(
+        f"https://api.digitalocean.com/v2/droplets/{droplet_id}",
+        headers=headers,
+    )
+    response.raise_for_status()
 
 
 if __name__ == "__main__":
