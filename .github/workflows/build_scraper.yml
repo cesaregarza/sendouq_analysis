@@ -81,12 +81,15 @@ jobs:
         uses: hashicorp/setup-terraform@v1
 
       - name: Terraform Init
+        working-directory: terraform/scraper
         run: terraform init
 
       - name: Terraform Plan
+        working-directory: terraform/scraper
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform Apply
+        working-directory: terraform/scraper
         run: |
           terraform apply -auto-approve tfplan \
           -var="postgres_user=$POSTGRES_USER" \
