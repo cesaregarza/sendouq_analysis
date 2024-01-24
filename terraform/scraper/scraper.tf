@@ -10,13 +10,13 @@ resource "digitalocean_droplet" "sendouq_scraper" {
     region = "nyc3"
     size = "s-1vcpu-1gb"
     ssh_keys = [
-        data.digitalocean_ssh_key.terraform.id
+        data.digitalocean_ssh_key.github_actions.id
     ]
     connection {
         host = self.ipv4_address
         user = "root"
         type = "ssh"
-        private_key = file(var.pvt_key)
+        private_key = var.pvt_key
         timeout = "2m"
     }
     provisioner "remote-exec" {
@@ -27,6 +27,7 @@ resource "digitalocean_droplet" "sendouq_scraper" {
             "export POSTGRES_DB=${var.postgres_db}",
             "export POSTGRES_HOST=${var.postgres_host}",
             "export POSTGRES_PORT=${var.postgres_port}",
+            "export DO_API_TOKEN=${var.do_token}",
             "sudo apt-get update",
             "sudo apt-get install -y docker.io",
         ]
