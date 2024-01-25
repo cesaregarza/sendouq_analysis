@@ -1,0 +1,41 @@
+name: Run Scraper
+
+on:
+#   schedule:
+#     - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: Scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+      
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Init
+        working-directory: terraform/scraper
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/scraper
+        run: terraform plan -out=tfplan -input=false \
+          -var="postgres_user=$POSTGRES_USER" \
+          -var="postgres_password=$POSTGRES_PASSWORD" \
+          -var="postgres_host=$POSTGRES_HOST" \
+          -var="postgres_port=$POSTGRES_PORT" \
+          -var="postgres_db=$POSTGRES_DB" \
+          -var="do_token=$DIGITALOCEAN_TOKEN"
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_pvt_key: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
+
+      - name: Terraform Apply
+        working-directory: terraform/scraper
+        run: |
+          terraform apply -auto-approve tfplan
