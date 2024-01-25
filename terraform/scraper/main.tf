@@ -17,3 +17,7 @@ provider "digitalocean" {
 data "digitalocean_ssh_key" "github_actions" {
     name = "github_actions"
 }
+
+data "digitalocean_ssh_key" "wsl" {
+    name = "wsl"
+}

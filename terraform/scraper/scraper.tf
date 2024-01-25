@@ -10,7 +10,8 @@ resource "digitalocean_droplet" "sendouq_scraper" {
     region = "nyc3"
     size = "s-1vcpu-1gb"
     ssh_keys = [
-        data.digitalocean_ssh_key.github_actions.id
+        data.digitalocean_ssh_key.github_actions.id,
+        data.digitalocean_ssh_key.wsl.id,
     ]
     connection {
         host = self.ipv4_address
@@ -29,7 +30,11 @@ resource "digitalocean_droplet" "sendouq_scraper" {
             "export POSTGRES_PORT=${var.postgres_port}",
             "export DO_API_TOKEN=${var.do_token}",
             "sudo apt-get update",
+            # Kill the process that's using apt, update is hanging for some reason
+            "sudo pkill -9 apt-get",
             "sudo apt-get install -y docker.io",
+            "docker pull registry.digitalocean.com/sendouq/scraper:latest",
+            "docker run -d --name scraper registry.digitalocean.com/sendouq/scraper:latest",
         ]
     }
 }
