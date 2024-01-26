@@ -50,8 +50,7 @@ jobs:
       - name: SSH
         run: |
           echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
-          ssh-keyscan ${{ steps.terraform_apply.outputs.scraper_ip }} >> ~/.ssh/known_hosts
-          doctl auth init --verbose
+          doctl auth init --verbose --trace
           doctl compute ssh sendouq-scraper --ssh-key-path key.pem --ssh-command "echo 'hello world'"
       
       # - name: SSH
