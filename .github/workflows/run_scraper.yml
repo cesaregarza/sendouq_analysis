@@ -35,7 +35,8 @@ jobs:
         working-directory: terraform/scraper
         run: |
           terraform apply -auto-approve tfplan
-          echo "scraper_ip=$(terraform output -raw scraper_ip)" >> $GITHUB_OUTPUT
+          SCRAPER_IP=$(terraform output -raw scraper_ip)
+          echo "scraper_ip=$SCRAPER_IP" >> $GITHUB_OUTPUT
 
       - name: SSH to Scraper
         uses: appleboy/ssh-action@master
