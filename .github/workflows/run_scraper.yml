@@ -16,7 +16,7 @@ jobs:
           ref: main
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v1
+        uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         working-directory: terraform/scraper
