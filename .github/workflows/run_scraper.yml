@@ -50,7 +50,7 @@ jobs:
       - name: SSH
         run: |
           echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
-          doctl auth init --verbose --trace
+          doctl auth switch --context cegarza
           doctl compute ssh sendouq-scraper --ssh-key-path key.pem --ssh-command "echo 'hello world'"
       
       # - name: SSH
