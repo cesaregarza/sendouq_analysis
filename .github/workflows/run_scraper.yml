@@ -24,10 +24,10 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform/scraper
-        run: terraform plan -out=tfplan -input=false \
-          -var="do_token=$DIGITALOCEAN_TOKEN"
+        run: |
+          terraform plan -out=tfplan -input=false
         env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           TF_VAR_pvt_key: ${{ secrets.DIGITALOCEAN_SSH_KEY_PRIVATE }}
 
       - name: Terraform Apply
