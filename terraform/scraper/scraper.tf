@@ -8,6 +8,7 @@ resource "digitalocean_droplet" "sendouq_scraper" {
         data.digitalocean_ssh_key.wsl.id,
         data.digitalocean_ssh_key.github_actions_ed25519.id,
     ]
+    user_data = file("cloud-init.yml")
 }
 
 output "scraper_ip" {
