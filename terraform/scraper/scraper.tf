@@ -1,5 +1,3 @@
-variable "source_ip" {}
-
 resource "digitalocean_droplet" "sendouq_scraper" {
     image = "ubuntu-22-04-x64"
     name = "sendouq-scraper"
@@ -10,18 +8,6 @@ resource "digitalocean_droplet" "sendouq_scraper" {
         data.digitalocean_ssh_key.wsl.id,
         data.digitalocean_ssh_key.github_actions_ed25519.id,
     ]
-}
-
-# Allow SSH from source_ip
-resource "digitalocean_firewall" "sendouq_scraper" {
-    name = "sendouq-scraper"
-    droplet_ids = [digitalocean_droplet.sendouq_scraper.id]
-
-    inbound_rule {
-        protocol = "tcp"
-        port_range = "22"
-        source_addresses = [var.source_ip]
-    }
 }
 
 output "scraper_ip" {
