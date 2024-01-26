@@ -48,6 +48,7 @@ jobs:
           host: ${{ steps.terraform_apply.outputs.scraper_ip }}
           username: root
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          debug: true
           script: |
             export PATH=$PATH:/usr/bin
             export POSTGRES_USER=$POSTGRES_USER
