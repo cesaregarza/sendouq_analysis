@@ -1,9 +1,9 @@
 name: Build Scraper
 
 on:
-#   push:
-#     branches:
-#       - main
+  #   push:
+  #     branches:
+  #       - main
   workflow_dispatch:
 
 jobs:
@@ -19,14 +19,14 @@ jobs:
         with:
           token: ${{ secrets.CI_SENDOUQ_SCRAPER_TOKEN }}
           fetch-depth: 0
-      
+
       - name: Check for changes
         id: check_changes
         run: |
           echo "Checking for changes"
           LATEST_TAG=$(git describe --tags --always `git rev-list --tags --max-count=1` 2>&1)
           TAG_FETCH_EXIT_CODE=$?
-          
+
           if [ $TAG_FETCH_EXIT_CODE -ne 0 ]; then
             echo "Failed to fetch latest tag, exit code: $TAG_FETCH_EXIT_CODE"
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -47,7 +47,6 @@ jobs:
               echo "skip=true" >> $GITHUB_OUTPUT
             fi
           fi
-
 
   build:
     needs: check
