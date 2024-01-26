@@ -41,23 +41,27 @@ jobs:
           terraform apply -auto-approve tfplan
           SCRAPER_IP=$(terraform output -raw scraper_ip)
           echo "scraper_ip=$SCRAPER_IP" >> $GITHUB_OUTPUT
+      
+      - name: SSH
+        run: |
+          ssh -i ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} root@${{ steps.terraform_apply.outputs.scraper_ip }} 'echo "hello world"'
 
-      - name: SSH to Scraper
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ steps.terraform_apply.outputs.scraper_ip }}
-          username: root
-          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
-          debug: true
-          script: |
-            export PATH=$PATH:/usr/bin
-            export POSTGRES_USER=${{ secrets.POSTGRES_USER}}
-            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            apt-get update
-            apt-get install -y docker.io
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
-            docker run -d --name sendouq-scraper sendouq-scraper:latest
+      # - name: SSH to Scraper
+      #   uses: appleboy/ssh-action@v1.0.3
+      #   with:
+      #     host: ${{ steps.terraform_apply.outputs.scraper_ip }}
+      #     username: root
+      #     key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+      #     debug: true
+      #     script: |
+      #       export PATH=$PATH:/usr/bin
+      #       export POSTGRES_USER=${{ secrets.POSTGRES_USER}}
+      #       export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+      #       export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+      #       export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+      #       export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+      #       export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      #       apt-get update
+      #       apt-get install -y docker.io
+      #       docker pull registry.digitalocean.com/sendouq/scraper:latest
+      #       docker run -d --name sendouq-scraper sendouq-scraper:latest
