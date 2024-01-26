@@ -44,7 +44,8 @@ jobs:
       
       - name: SSH
         run: |
-          ssh -i ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} root@${{ steps.terraform_apply.outputs.scraper_ip }} 'echo "hello world"'
+          echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
+          ssh -i key.pem root@${{ steps.terraform_apply.outputs.scraper_ip }} 'echo "hello world"'
 
       # - name: SSH to Scraper
       #   uses: appleboy/ssh-action@v1.0.3
