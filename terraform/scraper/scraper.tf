@@ -8,8 +8,8 @@ resource "digitalocean_droplet" "sendouq_scraper" {
     ssh_keys = [
         data.digitalocean_ssh_key.github_actions.id,
         data.digitalocean_ssh_key.wsl.id,
+        data.digitalocean_ssh_key.github_actions_ed25519.id,
     ]
-
 }
 
 # Allow SSH from source_ip
