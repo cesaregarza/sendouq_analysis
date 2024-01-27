@@ -13,6 +13,10 @@ provider "digitalocean" {
     token = var.do_token
 }
 
+data "digitalocean_database_cluster" "sendouq_db" {
+    name = "db-postgresql-nyc3-ceg"
+}
+
 data "digitalocean_ssh_key" "github_actions" {
     name = "github_actions"
 }

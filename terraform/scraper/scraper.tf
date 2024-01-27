@@ -14,8 +14,7 @@ resource "digitalocean_droplet" "sendouq_scraper" {
 }
 
 resource "digitalocean_database_firewall" "sendouq_scraper" {
-    name = "sendouq-scraper"
-    cluster_id = digitalocean_database_cluster.sendouq_scraper.id
+    cluster_id = data.digitalocean_database_cluster.sendouq_db.id
     rule {
         type = "ip_addr"
         value = var.source_ip
