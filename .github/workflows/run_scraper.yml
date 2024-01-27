@@ -56,24 +56,11 @@ jobs:
           SCRAPER_IP=$(terraform output -raw scraper_ip)
           echo "scraper_ip=$SCRAPER_IP" >> $GITHUB_OUTPUT
 
+      # This is a workaround for the fact that terraform releases the apply
+      # before the droplet is actually ready to accept SSH connections
       - name: Wait for Droplet to come online
         run: |
           sleep 60
-
-      # - name: Install doctl
-      #   uses: digitalocean/action-doctl@v2
-      #   with:
-      #       token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      # - name: SSH
-      #   run: |
-      #     echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
-      #     doctl compute ssh sendouq-scraper --ssh-key-path key.pem --ssh-command "echo 'hello world'" --trace --verbose
-
-      # - name: SSH
-      #   run: |
-      #     echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
-      #     ssh -i key.pem root@${{ steps.terraform_apply.outputs.scraper_ip }} -vvv 'echo "hello world"'
 
       - name: SSH to Scraper
         uses: appleboy/ssh-action@v1.0.3
@@ -90,7 +77,8 @@ jobs:
             export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            apt-get update
-            apt-get install -y docker.io
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
             docker pull registry.digitalocean.com/sendouq/scraper:latest
-            docker run -d --name sendouq-scraper sendouq-scraper:latest
+            docker run -d --name scraper_container -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD -e POSTGRES_DB=$POSTGRES_DB -e POSTGRES_HOST=$POSTGRES_HOST -e POSTGRES_PORT=$POSTGRES_PORT -e DO_API_TOKEN=$DO_API_TOKEN registry.digitalocean.com/sendouq/scraper:latest
