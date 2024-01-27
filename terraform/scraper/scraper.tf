@@ -1,3 +1,5 @@
+variable "source_ip" {}
+
 resource "digitalocean_droplet" "sendouq_scraper" {
     image = "ubuntu-22-04-x64"
     name = "sendouq-scraper"
@@ -14,12 +16,10 @@ resource "digitalocean_droplet" "sendouq_scraper" {
 resource "digitalocean_database_firewall" "sendouq_scraper" {
     name = "sendouq-scraper"
     database_cluster_id = digitalocean_database_cluster.sendouq_scraper.id
-    rules = [
-        {
-            type = "ip_addr"
-            value = digitalocean_droplet.sendouq_scraper.ipv4_address
-        },
-    ]
+    rule {
+        type = "ip_addr"
+        value = 
+    }
 }
 
 output "scraper_ip" {
