@@ -1,4 +1,5 @@
 variable "source_ip" {}
+variable "joy_ip" {}
 
 resource "digitalocean_droplet" "sendouq_scraper" {
     image = "ubuntu-22-04-x64"
@@ -18,6 +19,10 @@ resource "digitalocean_database_firewall" "sendouq_scraper" {
     rule {
         type = "ip_addr"
         value = digitalocean_droplet.sendouq_scraper.ipv4_address
+    }
+    rule {
+        type = "ip_addr"
+        value = var.joy_ip
     }
 }
 
