@@ -62,10 +62,10 @@ jobs:
       #     echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
       #     doctl compute ssh sendouq-scraper --ssh-key-path key.pem --ssh-command "echo 'hello world'" --trace --verbose
 
-      # - name: SSH
-      #   run: |
-      #     echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
-      #     ssh -i key.pem root@${{ steps.terraform_apply.outputs.scraper_ip }} 'echo "hello world"'
+      - name: SSH
+        run: |
+          echo ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }} > key.pem
+          ssh -i key.pem root@${{ steps.terraform_apply.outputs.scraper_ip }} -vvv 'echo "hello world"'
 
       # - name: SSH to Scraper
       #   uses: appleboy/ssh-action@v1.0.3

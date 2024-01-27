@@ -11,5 +11,6 @@ runcmd:
   - export POSTGRES_HOST={{POSTGRES_HOST}}
   - export POSTGRES_PORT={{POSTGRES_PORT}}
   - export DO_API_TOKEN={{DO_API_TOKEN}}
+  - docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
   - docker pull registry.digitalocean.com/sendouq/scraper:latest
-  - docker run -d --name scraper -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD -e POSTGRES_DB=$POSTGRES_DB -e POSTGRES_HOST=$POSTGRES_HOST -e POSTGRES_PORT=$POSTGRES_PORT -e DO_API_TOKEN=$DO_API_TOKEN registry.digitalocean.com/sendouq/scraper:latest
+  - docker run -d --name scraper_container -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD -e POSTGRES_DB=$POSTGRES_DB -e POSTGRES_HOST=$POSTGRES_HOST -e POSTGRES_PORT=$POSTGRES_PORT -e DO_API_TOKEN=$DO_API_TOKEN registry.digitalocean.com/sendouq/scraper:latest

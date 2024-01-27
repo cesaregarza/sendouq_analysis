@@ -8,7 +8,18 @@ resource "digitalocean_droplet" "sendouq_scraper" {
         data.digitalocean_ssh_key.wsl.id,
         data.digitalocean_ssh_key.github_actions_ed25519.id,
     ]
-    user_data = file("cloud-init.yml")
+    # user_data = file("cloud-init.yml")
+}
+
+resource "digitalocean_database_firewall" "sendouq_scraper" {
+    name = "sendouq-scraper"
+    database_cluster_id = digitalocean_database_cluster.sendouq_scraper.id
+    rules = [
+        {
+            type = "ip_addr"
+            value = digitalocean_droplet.sendouq_scraper.ipv4_address
+        },
+    ]
 }
 
 output "scraper_ip" {
