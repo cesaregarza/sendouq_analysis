@@ -1,8 +1,8 @@
 name: Run Scraper
 
 on:
-  #   schedule:
-  #     - cron: "0 */2 * * *"
+  schedule:
+    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,16 +24,6 @@ jobs:
           SELF_IP=$(curl -s https://api.ipify.org)
           echo $SELF_IP
           echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
-
-      - name: Replace cloud-init.yml placeholders
-        working-directory: terraform/scraper
-        run: |
-          sed -i "s/{{POSTGRES_USER}}/${{ secrets.POSTGRES_USER }}/g" cloud-init.yml
-          sed -i "s/{{POSTGRES_PASSWORD}}/${{ secrets.POSTGRES_PASSWORD }}/g" cloud-init.yml
-          sed -i "s/{{POSTGRES_HOST}}/${{ secrets.POSTGRES_HOST }}/g" cloud-init.yml
-          sed -i "s/{{POSTGRES_PORT}}/${{ secrets.POSTGRES_PORT }}/g" cloud-init.yml
-          sed -i "s/{{POSTGRES_DB}}/${{ secrets.POSTGRES_DB }}/g" cloud-init.yml
-          sed -i "s/{{DO_API_TOKEN}}/${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}/g" cloud-init.yml
 
       - name: Terraform Init
         working-directory: terraform/scraper
