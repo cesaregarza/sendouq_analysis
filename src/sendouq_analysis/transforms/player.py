@@ -106,6 +106,25 @@ def build_team_enemy_xref(
     ]
 
 
+def calculate_sp(
+    player_df: pd.DataFrame,
+) -> pd.Series:
+    """Calculate the 'sp' values for each player in the DataFrame.
+
+    Parameters
+    ----------
+    player_df : pd.DataFrame
+        DataFrame containing player data with 'sp_diff' and 'after_sp' columns.
+
+    Returns
+    -------
+    pd.Series
+        A Series with the calculated 'sp' values, indexed as 'sp'.
+    """
+    ordinal = player_df[PLAYERCOLS.ORDINAL]
+    return ordinal.mul(15).add(1000)
+
+
 def correct_sp(
     player_df: pd.DataFrame,
 ) -> pd.Series:
@@ -208,6 +227,7 @@ def base_merges(
             == df[COLUMNS.MATCHES.WINNER],
         )
     )
+    player_df[PLAYERCOLS.SP] = calculate_sp(player_df)
     time_cols = [COLUMNS.MATCHES.CREATED_AT, COLUMNS.MATCHES.REPORTED_AT]
     for col in time_cols:
         player_df[f"{col}_dt"] = pd.to_datetime(player_df[col], unit="s")
@@ -241,7 +261,12 @@ def generate_latest_df(
     return (
         no_cancelled[latest_mask]
         .copy()
-        .query("(calculated == 1) | (matches_count == matches_count_needed)")
+        .query(
+            f"({PLAYERCOLS.CALCULATED} == 1) "
+            "| ("
+            f"{PLAYERCOLS.MATCHES_COUNT} == {PLAYERCOLS.MATCHES_COUNT_NEEDED}"
+            ")"
+        )
     )
 
 

@@ -7,6 +7,7 @@ GROUP = "group"
 MAP_PREFERENCES = "map_preferences"
 WEAPONS = "weapons"
 
+
 ALL_TABLES = [
     MATCH,
     GROUP_MEMENTO,
@@ -16,3 +17,7 @@ ALL_TABLES = [
     MAP_PREFERENCES,
     WEAPONS,
 ]
+
+AGGREGATE_SCHEMA = "sendouq_aggregate"
+AGGREGATE_PAST_SEASONS = "past_seasons"
+AGGREGATE_CURRENT_SEASON = "current_season"
