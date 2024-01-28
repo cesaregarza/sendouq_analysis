@@ -44,7 +44,9 @@ jobs:
         run: |
           terraform apply -auto-approve tfplan
           SCRAPER_IP=$(terraform output -raw scraper_ip)
+          SCRAPER_ID=$(terraform output -raw scraper_id)
           echo "scraper_ip=$SCRAPER_IP" >> $GITHUB_OUTPUT
+          echo "scraper_id=$SCRAPER_ID" >> $GITHUB_OUTPUT
 
       # This is a workaround for the fact that terraform releases the apply
       # before the droplet is actually ready to accept SSH connections
@@ -72,3 +74,11 @@ jobs:
             docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
             docker pull registry.digitalocean.com/sendouq/scraper:latest
             docker run -d --name scraper_container -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD -e POSTGRES_DB=$POSTGRES_DB -e POSTGRES_HOST=$POSTGRES_HOST -e POSTGRES_PORT=$POSTGRES_PORT -e DO_API_TOKEN=$DO_API_TOKEN registry.digitalocean.com/sendouq/scraper:latest
+
+      - name: Kill droplet if fail
+        if: ${{ failure() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.scraper_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"

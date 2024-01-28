@@ -28,3 +28,7 @@ resource "digitalocean_database_firewall" "sendouq_scraper" {
 output "scraper_ip" {
     value = digitalocean_droplet.sendouq_scraper.ipv4_address
 }
+
+output "scraper_id" {
+    value = digitalocean_droplet.sendouq_scraper.id
+}
