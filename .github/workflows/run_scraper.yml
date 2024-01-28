@@ -49,10 +49,10 @@ jobs:
           echo "scraper_id=$SCRAPER_ID" >> $GITHUB_OUTPUT
 
       # This is a workaround for the fact that terraform releases the apply
-      # before the droplet is actually ready to accept SSH connections
+      # before the droplet is actually ready
       - name: Wait for Droplet to come online
         run: |
-          sleep 60
+          sleep 90
 
       - name: SSH to Scraper
         uses: appleboy/ssh-action@v1.0.3
@@ -60,7 +60,6 @@ jobs:
           host: ${{ steps.terraform_apply.outputs.scraper_ip }}
           username: root
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
-          debug: true
           script: |
             export PATH=$PATH:/usr/bin
             export POSTGRES_USER=${{ secrets.POSTGRES_USER}}
