@@ -13,6 +13,7 @@ from sendouq_analysis.ingest import (
     scrape_matches,
     write_tables,
 )
+from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +21,8 @@ logger = logging.getLogger(__name__)
 def update_database() -> None:
     """Runs the scraping and parsing process"""
     # Set up logging for output to docker logs, remove for production
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
+    if os.environ.get("ENV") != "prod":
+        setup_logging()
 
     logger.info("Starting scraping and parsing process")
     logger.info("Creating an engine to connect to the database")
@@ -71,51 +65,6 @@ def update_database() -> None:
     # Get droplet id from the droplet name, "sendouq_scraper"
     droplet_id = get_droplet_id(do_api_token, "sendouq-scraper")
     delete_droplet(do_api_token, droplet_id)
-
-
-def get_droplet_id(do_api_token: str, droplet_name: str) -> str:
-    """Gets the id of a droplet from its name
-
-    Args:
-        do_api_token (str): The DigitalOcean API token
-        droplet_name (str): The name of the droplet
-
-    Returns:
-        str: The id of the droplet
-    """
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {do_api_token}",
-    }
-    response = requests.get(
-        "https://api.digitalocean.com/v2/droplets",
-        headers=headers,
-        params={"per_page": 200},
-    )
-    response.raise_for_status()
-    droplets = response.json().get("droplets", [])
-    for droplet in droplets:
-        if droplet["name"] == droplet_name:
-            return droplet["id"]
-    raise ValueError(f"No droplet with name {droplet_name} found")
-
-
-def delete_droplet(do_api_token: str, droplet_id: str) -> None:
-    """Deletes a droplet
-
-    Args:
-        do_api_token (str): The DigitalOcean API token
-        droplet_id (str): The id of the droplet
-    """
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {do_api_token}",
-    }
-    response = requests.delete(
-        f"https://api.digitalocean.com/v2/droplets/{droplet_id}",
-        headers=headers,
-    )
-    response.raise_for_status()
 
 
 if __name__ == "__main__":
