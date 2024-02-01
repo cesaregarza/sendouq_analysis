@@ -13,11 +13,12 @@ Base = declarative_base()
 class SeasonData(Base):
     __tablename__ = AGGREGATE_SEASON_PAST
     __table_args__ = {"schema": AGGREGATE_SCHEMA}
-    season_id = Column(Integer, primary_key=True)
+    season = Column(Integer, primary_key=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     start_match_id = Column(BigInteger)
     end_match_id = Column(BigInteger)
+    num_matches = Column(Integer)
     lognorm_shape = Column(Double)
     lognorm_location = Column(Double)
     lognorm_scale = Column(Double)

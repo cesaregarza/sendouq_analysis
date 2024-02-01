@@ -1,3 +1,4 @@
+import sendouq_analysis.constants.columns.aggregate as AGGREGATE
 import sendouq_analysis.constants.columns.group_memento as GROUP_MEMENTO
 import sendouq_analysis.constants.columns.groups as GROUPS
 import sendouq_analysis.constants.columns.map_list as MAP_LIST
