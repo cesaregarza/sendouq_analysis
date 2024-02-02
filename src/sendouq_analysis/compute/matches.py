@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 def get_matches_metadata(match_df: pd.DataFrame) -> pd.DataFrame:
-    match_df = match_df.groupby("season").agg(
+    match_df = match_df.groupby(MATCHES.SEASON).agg(
         {
             MATCHES.MATCH_ID: ["min", "max", "count"],
             MATCHES.CREATED_AT: ["min", "max"],
