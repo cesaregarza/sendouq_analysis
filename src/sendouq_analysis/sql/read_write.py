@@ -33,7 +33,14 @@ def dataframe_to_sql(
     # Create table if it doesn't exist
     inspector = inspect(engine)
     table_name = table.__tablename__
-    schema = table.__table_args__["schema"]
+    try:
+        schema = table.__table_args__["schema"]
+    except TypeError:
+        try:
+            schema = table.__table_args__[-1]["schema"]
+        except TypeError:
+            schema = None
+
     if not inspector.has_table(table_name, schema=schema):
         table.__table__.create(engine)
     elif replace:
@@ -64,6 +71,13 @@ def read_table(table: Base, engine: db.engine.Engine) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame containing the table data
     """
-    return pd.read_sql_table(
-        table.__tablename__, engine, schema=table.__table_args__["schema"]
-    )
+    try:
+        return pd.read_sql_table(
+            table.__tablename__, engine, schema=table.__table_args__["schema"]
+        )
+    except TypeError:
+        return pd.read_sql_table(
+            table.__tablename__,
+            engine,
+            schema=table.__table_args__[-1]["schema"],
+        )

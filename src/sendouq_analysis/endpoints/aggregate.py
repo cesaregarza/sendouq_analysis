@@ -6,12 +6,13 @@ import sys
 from typing import TYPE_CHECKING
 
 import requests
+from sqlalchemy import inspect
 from sqlalchemy.exc import ProgrammingError
 
 from sendouq_analysis.compute import get_matches_metadata
 from sendouq_analysis.constants.columns import AGGREGATE, MATCHES
 from sendouq_analysis.ingest import create_engine, load_tables
-from sendouq_analysis.sql.meta import CurrentSeason, SeasonData
+from sendouq_analysis.sql.meta import CurrentSeason, PlayerStats, SeasonData
 from sendouq_analysis.sql.read_write import dataframe_to_sql
 from sendouq_analysis.transforms import build_match_df, build_player_df
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
@@ -102,6 +103,62 @@ def write_aggregates(
         user_memento_df (pd.DataFrame): DataFrame of user mementos
         group_df (pd.DataFrame): DataFrame of groups
     """
+    past_seasons_cutoffs = (
+        past_seasons_df.sort_values(by=MATCHES.SEASON, ascending=True)
+        .loc[:, [AGGREGATE.START_MATCH_ID, AGGREGATE.END_MATCH_ID]]
+        .values.tolist()
+    )
+    # Delete all player stats data
+    inspector = inspect(engine)
+    table_name = PlayerStats.__tablename__
+    schema = PlayerStats.__table_args__[-1]["schema"]
+    logger.info("Deleting all player stats data")
+    if inspector.has_table(table_name, schema=schema):
+        PlayerStats.__table__.drop(engine)
+    # Write player stats data
+    logger.info("Writing player stats data to the database")
+    PlayerStats.__table__.create(engine)
+
+    for i, (start, end) in enumerate(past_seasons_cutoffs):
+        if i == 0:
+            logger.info("Season 0 has no lognormal parameters")
+            continue
+
+        logger.info(f"Building player stats for season %s", i)
+        season_df = match_df.loc[
+            (match_df[MATCHES.MATCH_ID] >= start)
+            & (match_df[MATCHES.MATCH_ID] <= end)
+        ]
+
+        player_df, lognorm_params = build_player_df(
+            season_df,
+            user_memento_df.loc[
+                user_memento_df[MATCHES.MATCH_ID].isin(
+                    season_df[MATCHES.MATCH_ID]
+                )
+            ],
+            group_df,
+            return_lognorm_params=True,
+        )
+        player_df[MATCHES.SEASON] = i
+        logger.info("Writing player stats to the database")
+        player_df.to_sql(
+            PlayerStats.__tablename__,
+            engine,
+            if_exists="append",
+            index=False,
+            schema=PlayerStats.__table_args__[-1]["schema"],
+        )
+        row_idx = past_seasons_df.index[i]
+        past_seasons_df.loc[
+            row_idx,
+            [
+                AGGREGATE.LOGNORMAL_SHAPE,
+                AGGREGATE.LOGNORMAL_LOCATION,
+                AGGREGATE.LOGNORMAL_SCALE,
+            ],
+        ] = lognorm_params
+
     logger.info("Writing past season aggregates to the database")
     dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
     logger.info("Writing current season aggregates to the database")
