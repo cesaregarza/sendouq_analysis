@@ -154,17 +154,17 @@ def load_latest_match_number(engine: db.engine.Engine) -> int:
         return 0
 
 
-def load_tables() -> (
-    tuple[
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.DataFrame,
-        pd.DataFrame,
-    ]
-):
+def load_tables(
+    engine: db.engine.Engine | None = None,
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
     """Loads all tables from the database
 
     Returns:
@@ -177,10 +177,10 @@ def load_tables() -> (
             - pd.DataFrame: The map preferences data
             - pd.DataFrame: The weapons data
     """
-    engine = create_engine()
+    engine = engine or create_engine()
     return tuple(
         [
-            pd.read_sql_table(table_name, engine)
+            pd.read_sql_table(table_name, engine, schema=TABLE_NAMES.SCHEMA)
             for table_name in TABLE_NAMES.ALL_TABLES
         ]
     )

@@ -12,7 +12,7 @@ from sendouq_analysis.compute import get_matches_metadata
 from sendouq_analysis.constants.columns import AGGREGATE, MATCHES
 from sendouq_analysis.ingest import create_engine, load_tables
 from sendouq_analysis.sql.meta import CurrentSeason, SeasonData
-from sendouq_analysis.sql.write import dataframe_to_sql
+from sendouq_analysis.sql.read_write import dataframe_to_sql
 from sendouq_analysis.transforms import build_match_df, build_player_df
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def create_new_aggregate() -> None:
+def new_aggregation() -> None:
     """Runs the aggregation process"""
     # Set up logging for output to docker logs, remove for production
     setup_logging()
@@ -35,9 +35,15 @@ def create_new_aggregate() -> None:
         "Pulling metadata from the database, if schema does not exist, "
         "compute all aggregates"
     )
+    try:
+        create_new_aggregate(engine)
+    except ProgrammingError as e:
+        logger.error("Error creating new aggregate, exiting")
+        logger.error(e)
+        raise e
 
 
-def create_new_aggregate(engine: db.engine.Engine) -> None:
+def create_new_aggregate(engine: db.engine.Engine | None = None) -> None:
     """Runs the aggregation process
 
     Args:
@@ -53,14 +59,18 @@ def create_new_aggregate(engine: db.engine.Engine) -> None:
         group_df,
         map_preferences_df,
         weapons_df,
-    ) = load_tables()
+    ) = load_tables(engine)
 
     logger.info("Building match dataframe")
     match_df = build_match_df(match_df)
     aggregates = get_matches_metadata(match_df)
     current_season = aggregates[MATCHES.SEASON].max()
     past_seasons_df = aggregates.query(f"{MATCHES.SEASON} < @current_season")
-    current_season_df = aggregates.query(f"{MATCHES.SEASON} == @current_season")
+    current_season_df = (
+        aggregates.query(f"{MATCHES.SEASON} == @current_season")
+        .rename(columns={AGGREGATE.END_MATCH_ID: AGGREGATE.LATEST_MATCH_ID})
+        .drop(columns=[AGGREGATE.NUM_MATCHES])
+    )
 
     logger.info("Writing aggregates to the database")
     write_aggregates(engine, past_seasons_df, current_season_df)
@@ -80,7 +90,7 @@ def write_aggregates(
         current_season_df (pd.DataFrame): DataFrame of current season aggregates
     """
     logger.info("Writing past season aggregates to the database")
-    dataframe_to_sql(past_seasons_df, SeasonData, engine)
+    dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
     logger.info("Writing current season aggregates to the database")
-    dataframe_to_sql(current_season_df, CurrentSeason, engine)
+    dataframe_to_sql(current_season_df, CurrentSeason, engine, replace=True)
     logger.info("Aggregates written to the database")

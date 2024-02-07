@@ -27,7 +27,7 @@ class SeasonData(Base):
 class CurrentSeason(Base):
     __tablename__ = AGGREGATE_SEASON_CURRENT
     __table_args__ = {"schema": AGGREGATE_SCHEMA}
-    season_id = Column(Integer, primary_key=True)
+    season = Column(Integer, primary_key=True)
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     start_match_id = Column(BigInteger)
