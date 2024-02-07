@@ -75,6 +75,8 @@ def build_player_df(
     player_df = calculate_teammate_enemy_values(player_df)
     player_df = calculate_rolling_data(player_df)
     player_df = calculate_cumulative_data(player_df)
+    if return_lognorm_params:
+        return player_df, (shape, loc, scale)
     return player_df
 
 
