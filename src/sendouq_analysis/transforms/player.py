@@ -1,4 +1,5 @@
 import logging
+from typing import Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -13,27 +14,48 @@ from sendouq_analysis.constants import (
 PLAYERCOLS = COLUMNS.PLAYER
 
 
+@overload
 def build_player_df(
     matches_df: pd.DataFrame,
     user_memento_df: pd.DataFrame,
     groups_df: pd.DataFrame,
+    return_lognorm_params: Literal[False],
 ) -> pd.DataFrame:
+    ...
+
+
+@overload
+def build_player_df(
+    matches_df: pd.DataFrame,
+    user_memento_df: pd.DataFrame,
+    groups_df: pd.DataFrame,
+    return_lognorm_params: Literal[True],
+) -> tuple[pd.DataFrame, tuple[float, float, float]]:
+    ...
+
+
+def build_player_df(
+    matches_df: pd.DataFrame,
+    user_memento_df: pd.DataFrame,
+    groups_df: pd.DataFrame,
+    return_lognorm_params: bool = False,
+) -> pd.DataFrame | tuple[pd.DataFrame, tuple[float, float, float]]:
     """Construct a DataFrame containing player data by merging match, user
     memento, and group data.
 
-    Parameters
-    ----------
-    matches_df : pd.DataFrame
-        DataFrame containing match data.
-    user_memento_df : pd.DataFrame
-        DataFrame containing user memento data.
-    groups_df : pd.DataFrame
-        DataFrame containing group data.
+    Args:
+        matches_df (pd.DataFrame): DataFrame containing match data.
+        user_memento_df (pd.DataFrame): DataFrame containing user memento data.
+        groups_df (pd.DataFrame): DataFrame containing group data.
+        return_lognorm_params (bool): Whether to return the parameters of the
+            fitted log-normal distribution, by default False
 
-    Returns
-    -------
-    pd.DataFrame
-        The resulting DataFrame after merging and processing player data.
+    Returns:
+        pd.DataFrame: The resulting DataFrame after merging and processing
+            player data.
+        tuple[float, float, float]: The shape, location, and scale parameters of
+            the fitted log-normal distribution. Only returned if
+            `return_lognorm_params` is True.
     """
     # Base merges
     logging.info("Building player_df")
@@ -62,15 +84,13 @@ def build_team_enemy_xref(
     """Create a cross-reference Series mapping match and group IDs to enemy
     group IDs.
 
-    Parameters
-    ----------
-    matches_df : pd.DataFrame
-        DataFrame containing match data with team IDs.
+    Parameters:
+        matches_df (pd.DataFrame): DataFrame containing match data with team
+            IDs.
 
-    Returns
-    -------
-    pd.Series
-        A Series indexed by match_id and group_id with enemy_group_id as values.
+    Returns:
+        pd.Series: A Series indexed by match_id and group_id with
+            enemy_group_id as values.
     """
     return pd.concat(
         [
@@ -111,15 +131,12 @@ def calculate_sp(
 ) -> pd.Series:
     """Calculate the 'sp' values for each player in the DataFrame.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data with 'sp_diff' and 'after_sp' columns.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data with
+            'sp_diff' and 'after_sp' columns.
 
-    Returns
-    -------
-    pd.Series
-        A Series with the calculated 'sp' values, indexed as 'sp'.
+    Returns:
+        pd.Series: A Series with the calculated 'sp' values, indexed as 'sp'.
     """
     ordinal = player_df[PLAYERCOLS.ORDINAL]
     return ordinal.mul(15).add(1000)
@@ -131,15 +148,13 @@ def correct_sp(
     """Correct the 'sp' values in the player DataFrame by considering the
     changes and differences over time.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data with 'sp' and 'sp_diff' columns.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data with 'sp'
+            and 'sp_diff' columns.
 
-    Returns
-    -------
-    pd.Series
-        A Series with the corrected 'sp' values, indexed as 'after_sp'.
+    Returns:
+        pd.Series: A Series with the corrected 'sp' values, indexed as
+            'after_sp'.
     """
     sorted_scores = player_df.copy().sort_values(
         [PLAYERCOLS.USER_ID, PLAYERCOLS.CREATED_AT_DT], ascending=True
@@ -174,19 +189,14 @@ def base_merges(
     """Perform base merges of match, user memento, and group data to form a
     preliminary player DataFrame.
 
-    Parameters
-    ----------
-    matches_df : pd.DataFrame
-        DataFrame containing match data.
-    user_memento_df : pd.DataFrame
-        DataFrame containing user memento data.
-    groups_df : pd.DataFrame
-        DataFrame containing group data.
+    Args:
+        matches_df (pd.DataFrame): DataFrame containing match data.
+        user_memento_df (pd.DataFrame): DataFrame containing user memento
+            data.
+        groups_df (pd.DataFrame): DataFrame containing group data.
 
-    Returns
-    -------
-    pd.DataFrame
-        The merged DataFrame with additional computed columns.
+    Returns:
+        pd.DataFrame: The merged DataFrame with additional computed columns.
     """
     team_enemy_xref = build_team_enemy_xref(matches_df)
 
@@ -242,15 +252,11 @@ def generate_latest_df(
     """Generate a DataFrame containing the latest player data, excluding
     cancelled matches.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data.
 
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame with the latest player data for each user.
+    Returns:
+        pd.DataFrame: A DataFrame with the latest player data for each user.
     """
     no_cancelled = player_df.copy().query("winner != 'cancelled'")
 
@@ -276,16 +282,13 @@ def fit_lognorm(
     """Fit a log-normal distribution to the 'after_sp' column of the player
     DataFrame and perform a KS test.
 
-    Parameters
-    ----------
-    player_latest_df : pd.DataFrame
-        DataFrame containing the latest player data.
+    Args:
+        player_latest_df (pd.DataFrame): DataFrame containing the latest player
+            data.
 
-    Returns
-    -------
-    tuple[float, float, float]
-        The shape, location, and scale parameters of the fitted log-normal
-        distribution.
+    Returns:
+        tuple[float, float, float]: The shape, location, and scale parameters of
+            the fitted log-normal distribution.
     """
     # Lognorm fit
     shape, loc, scale = lognorm.fit(
@@ -308,23 +311,17 @@ def calculate_logz_values(
     scale: float,
 ) -> pd.DataFrame:
     """Calculate the log-z values for 'sp' and 'after_sp' columns in the player
-    DataFrame.
+        DataFrame.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data.
-    shape : float
-        The shape parameter of the log-normal distribution.
-    loc : float
-        The location parameter of the log-normal distribution.
-    scale : float
-        The scale parameter of the log-normal distribution.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data.
+        shape (float): The shape parameter of the log-normal distribution.
+        loc (float): The location parameter of the log-normal distribution.
+        scale (float): The scale parameter of the log-normal distribution.
 
-    Returns
-    -------
-    pd.DataFrame
-        The player DataFrame with added 'logz' columns for 'sp' and 'after_sp'.
+    Returns:
+        pd.DataFrame: The player DataFrame with added 'logz' columns for 'sp'
+        and 'after_sp'.
     """
     for col in [PLAYERCOLS.SP, PLAYERCOLS.AFTER_SP]:
         player_df[f"{col}_logz"] = (
@@ -340,20 +337,16 @@ def calculate_logz_values(
 def calculate_teammate_enemy_values(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Calculate teammate and enemy log-z values for each player in the
+    """Calculates teammate and enemy log-z values for each player in the
     DataFrame.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data with 'sp_logz' and 'sp_diff_logz'
-        values.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data with
+            'sp_logz' and 'sp_diff_logz' values.
 
-    Returns
-    -------
-    pd.DataFrame
-        The player DataFrame with added columns for teammate and enemy log-z
-        values.
+    Returns:
+        pd.DataFrame: The player DataFrame with added columns for teammate and
+            enemy log-z values.
     """
     group_sp_logz = (
         player_df.groupby(
@@ -416,19 +409,17 @@ def calculate_teammate_enemy_values(
 def calculate_rolling_data(
     player_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Calculate rolling statistics for player win rates over specified time
+    """
+    Calculate rolling statistics for player win rates over specified time
     windows.
 
-    Parameters
-    ----------
-    player_df : pd.DataFrame
-        DataFrame containing player data with 'is_winner' and 'created_at_dt'
-        columns.
+    Args:
+        player_df (pd.DataFrame): DataFrame containing player data with
+            'is_winner' and 'created_at_dt' columns.
 
-    Returns
-    -------
-    pd.DataFrame
-        The player DataFrame with added rolling statistics for win rates.
+    Returns:
+        pd.DataFrame: The player DataFrame with added rolling statistics for win
+            rates.
     """
     for window in ROLLING_TIME_WINDOWS:
         rolling_data = (

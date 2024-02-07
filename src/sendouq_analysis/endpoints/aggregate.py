@@ -73,7 +73,14 @@ def create_new_aggregate(engine: db.engine.Engine | None = None) -> None:
     )
 
     logger.info("Writing aggregates to the database")
-    write_aggregates(engine, past_seasons_df, current_season_df)
+    write_aggregates(
+        engine,
+        past_seasons_df,
+        current_season_df,
+        match_df,
+        user_memento_df,
+        group_df,
+    )
     logger.info("Aggregation process complete")
 
 
@@ -81,6 +88,9 @@ def write_aggregates(
     engine: db.engine.Engine,
     past_seasons_df: pd.DataFrame,
     current_season_df: pd.DataFrame,
+    match_df: pd.DataFrame,
+    user_memento_df: pd.DataFrame,
+    group_df: pd.DataFrame,
 ) -> None:
     """Writes the aggregated data to the database
 
@@ -88,6 +98,9 @@ def write_aggregates(
         engine (db.engine.Engine): Engine for the database
         past_seasons_df (pd.DataFrame): DataFrame of past season aggregates
         current_season_df (pd.DataFrame): DataFrame of current season aggregates
+        match_df (pd.DataFrame): DataFrame of matches
+        user_memento_df (pd.DataFrame): DataFrame of user mementos
+        group_df (pd.DataFrame): DataFrame of groups
     """
     logger.info("Writing past season aggregates to the database")
     dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
