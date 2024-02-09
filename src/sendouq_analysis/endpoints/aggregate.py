@@ -13,7 +13,7 @@ from sendouq_analysis.compute import get_matches_metadata
 from sendouq_analysis.constants.columns import AGGREGATE, MATCHES
 from sendouq_analysis.ingest import create_engine, load_tables
 from sendouq_analysis.sql.meta import CurrentSeason, PlayerStats, SeasonData
-from sendouq_analysis.sql.read_write import dataframe_to_sql
+from sendouq_analysis.sql.read_write import dataframe_to_sql, read_table
 from sendouq_analysis.transforms import build_match_df, build_player_df
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
@@ -24,10 +24,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def new_aggregation() -> None:
+def run() -> None:
     """Runs the aggregation process"""
     # Set up logging for output to docker logs, remove for production
     setup_logging()
+
+    if os.getenv("NEW_AGGREGATION") == "True":
+        new_aggregation()
+    else:
+        update_aggregation()
+
+
+def new_aggregation() -> None:
+    """Runs the aggregation process"""
 
     logger.info("Starting aggregation process")
     logger.info("Creating an engine to connect to the database")
@@ -103,11 +112,16 @@ def write_aggregates(
         user_memento_df (pd.DataFrame): DataFrame of user mementos
         group_df (pd.DataFrame): DataFrame of groups
     """
-    past_seasons_cutoffs = (
+    seasons_cutoffs = (
         past_seasons_df.sort_values(by=MATCHES.SEASON, ascending=True)
         .loc[:, [AGGREGATE.START_MATCH_ID, AGGREGATE.END_MATCH_ID]]
         .values.tolist()
     )
+    # Add current season cutoffs
+    seasons_cutoffs = [
+        *seasons_cutoffs,
+        (seasons_cutoffs[-1][1] + 1, int(1e9)),
+    ]
     # Delete all player stats data
     inspector = inspect(engine)
     table_name = PlayerStats.__tablename__
@@ -119,7 +133,7 @@ def write_aggregates(
     logger.info("Writing player stats data to the database")
     PlayerStats.__table__.create(engine)
 
-    for i, (start, end) in enumerate(past_seasons_cutoffs):
+    for i, (start, end) in enumerate(seasons_cutoffs):
         if i == 0:
             logger.info("Season 0 has no lognormal parameters")
             continue
@@ -149,6 +163,11 @@ def write_aggregates(
             index=False,
             schema=PlayerStats.__table_args__[-1]["schema"],
         )
+        del player_df
+        if end == int(1e9):
+            logger.info("Current season, skipping aggregate writing")
+            continue
+
         row_idx = past_seasons_df.index[i]
         past_seasons_df.loc[
             row_idx,
@@ -164,3 +183,30 @@ def write_aggregates(
     logger.info("Writing current season aggregates to the database")
     dataframe_to_sql(current_season_df, CurrentSeason, engine, replace=True)
     logger.info("Aggregates written to the database")
+
+
+def update_aggregation() -> None:
+    logger.info("Starting update aggregation process")
+    logger.info("Creating an engine to connect to the database")
+    engine = create_engine()
+    logger.info("Pulling metadata from the database")
+    try:
+        update_existing_aggregate(engine)
+    except ProgrammingError as e:
+        logger.error("Error updating existing aggregate, exiting")
+        logger.error(e)
+        raise e
+
+
+def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
+    """Updates the existing aggregate data
+
+    Args:
+        engine (db.engine.Engine): Engine for the database
+    """
+    logger.info("Pulling all raw data from the database")
+
+    current_season = read_table(CurrentSeason, engine)
+    latest_match = current_season[AGGREGATE.LATEST_MATCH_ID].iloc[0]
+    logger.info(f"Latest match ID: {latest_match}")
+    logger.info("Pulling all rows after the latest match")
