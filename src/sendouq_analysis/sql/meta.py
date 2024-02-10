@@ -11,7 +11,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
+from sendouq_analysis.constants.columns import matches as match_c
+from sendouq_analysis.constants.columns import user_memento as user_c
 from sendouq_analysis.constants.table_names import (
+    AGGREGATE_LATEST_PLAYER_STATS,
+    AGGREGATE_PLAYER_STATS,
     AGGREGATE_SCHEMA,
     AGGREGATE_SEASON_CURRENT,
     AGGREGATE_SEASON_PAST,
@@ -44,14 +48,29 @@ class CurrentSeason(Base):
     latest_match_id = Column(BigInteger)
 
 
-class PlayerStats(Base):
-    __tablename__ = "player_stats"
+class LatestPlayerStats(Base):
+    __tablename__ = AGGREGATE_LATEST_PLAYER_STATS
     __table_args__ = (
-        Index("idx_season", "season"),
-        Index("idx_user_id", "user_id"),
-        Index("idx_match_id", "match_id"),
-        Index("idx_group_id", "group_id"),
-        Index("idx_sp", "sp"),
+        Index("idx_user_id_latest", user_c.USER_ID),
+        Index("idx_match_id_latest", user_c.MATCH_ID),
+        Index("idx_sp_latest", user_c.SP),
+        {"schema": AGGREGATE_SCHEMA},
+    )
+    id = Column(Integer, primary_key=True)
+    season = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    sp = Column(Double, index=True)
+    created_at_dt = Column(DateTime, nullable=False)
+
+
+class PlayerStats(Base):
+    __tablename__ = AGGREGATE_PLAYER_STATS
+    __table_args__ = (
+        Index("idx_season", match_c.SEASON),
+        Index("idx_user_id", user_c.USER_ID),
+        Index("idx_match_id", user_c.MATCH_ID),
+        Index("idx_group_id", user_c.GROUP_ID),
+        Index("idx_sp", user_c.SP),
         {"schema": AGGREGATE_SCHEMA},
     )
     id = Column(Integer, primary_key=True)

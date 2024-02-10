@@ -19,6 +19,8 @@ ALL_TABLES = [
 ]
 
 AGGREGATE_SCHEMA = "sendouq_aggregate"
+AGGREGATE_LATEST_PLAYER_STATS = "latest_player_stats"
+AGGREGATE_PLAYER_STATS = "player_stats"
 
 AGGREGATE_PAST = "past"
 AGGREGATE_CURRENT = "current"

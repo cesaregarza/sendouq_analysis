@@ -8,12 +8,28 @@ from typing import TYPE_CHECKING
 import requests
 from sqlalchemy import inspect
 from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.orm import sessionmaker
 
 from sendouq_analysis.compute import get_matches_metadata
 from sendouq_analysis.constants.columns import AGGREGATE, MATCHES
 from sendouq_analysis.ingest import create_engine, load_tables
-from sendouq_analysis.sql.meta import CurrentSeason, PlayerStats, SeasonData
+from sendouq_analysis.sql.meta import (
+    CurrentSeason,
+    LatestPlayerStats,
+    PlayerStats,
+    SeasonData,
+)
+from sendouq_analysis.sql.raw import (
+    Group,
+    GroupMemento,
+    Map,
+    MapPreferences,
+    Match,
+    UserMemento,
+    Weapons,
+)
 from sendouq_analysis.sql.read_write import dataframe_to_sql, read_table
+from sendouq_analysis.sql.statements import create_latest_player_stats
 from sendouq_analysis.transforms import build_match_df, build_player_df
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
@@ -182,6 +198,17 @@ def write_aggregates(
     dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
     logger.info("Writing current season aggregates to the database")
     dataframe_to_sql(current_season_df, CurrentSeason, engine, replace=True)
+    logger.info("Dropping existing latest player stats table")
+    if inspector.has_table(LatestPlayerStats.__tablename__, schema=schema):
+        LatestPlayerStats.__table__.drop(engine)
+    logger.info("Creating latest player stats table")
+
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    session.execute(create_latest_player_stats)
+    session.commit()
+    session.close()
+
     logger.info("Aggregates written to the database")
 
 
@@ -210,3 +237,8 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
     latest_match = current_season[AGGREGATE.LATEST_MATCH_ID].iloc[0]
     logger.info(f"Latest match ID: {latest_match}")
     logger.info("Pulling all rows after the latest match")
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
+    match_statement = session.query(Match).filter(Match.match_id > latest_match)
+    match_df = pd.read_sql(match_statement.statement, engine)
