@@ -84,6 +84,7 @@ jobs:
 
       - name: SSH to Scraper
         id: ressh
+        if: ${{ steps.ssh.outcome == 'failure' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ steps.terraform_apply.outputs.scraper_ip }}
