@@ -1,4 +1,11 @@
-from sqlalchemy import BigInteger, Boolean, Column, Double, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Double,
+    PrimaryKeyConstraint,
+    Text,
+)
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -6,6 +13,7 @@ Base = declarative_base()
 
 class Match(Base):
     __tablename__ = "match"
+    __table_args__ = {"schema": "sendouq_analysis"}
     match_id = Column(BigInteger, primary_key=True)
     alpha_team_id = Column(BigInteger)
     bravo_team_id = Column(BigInteger)
@@ -18,6 +26,10 @@ class Match(Base):
 
 class GroupMemento(Base):
     __tablename__ = "group_memento"
+    __table_args__ = (
+        PrimaryKeyConstraint("match_id", "group_id"),
+        {"schema": "sendouq_analysis"},
+    )
     match_id = Column(BigInteger, primary_key=True)
     group_id = Column(Text, primary_key=True)
     tier_name = Column(Text)
@@ -31,6 +43,10 @@ class GroupMemento(Base):
 
 class UserMemento(Base):
     __tablename__ = "user_memento"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "match_id"),
+        {"schema": "sendouq_analysis"},
+    )
     user_id = Column(BigInteger, primary_key=True)
     skill_ordinal = Column(Double)
     skill_tier_name = Column(Text)
@@ -49,6 +65,10 @@ class UserMemento(Base):
 
 class Map(Base):
     __tablename__ = "map"
+    __table_args__ = (
+        PrimaryKeyConstraint("id", "match_id"),
+        {"schema": "sendouq_analysis"},
+    )
     id = Column(BigInteger, primary_key=True)
     mode = Column(Text)
     stage_id = Column(BigInteger)
@@ -59,7 +79,12 @@ class Map(Base):
 
 class Group(Base):
     __tablename__ = "group"
-    user_id = Column(BigInteger)
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "group_id"),
+        {"schema": "sendouq_analysis"},
+    )
+
+    user_id = Column(BigInteger, primary_key=True)
     discord_name = Column(Text)
     discord_id = Column(Text)
     custom_url = Column(Text)
@@ -69,22 +94,31 @@ class Group(Base):
     languages = Column(Text)
     private_note = Column(Text)
     chat_name_color = Column(Text)
-    group_id = Column(BigInteger)
+    group_id = Column(BigInteger, primary_key=True)
     team = Column(Text)
     plus_tier = Column(Double)
 
 
 class MapPreferences(Base):
     __tablename__ = "map_preferences"
-    user_id = Column(BigInteger)
+    __table_args__ = (
+        PrimaryKeyConstraint("match_id", "user_id"),
+        {"schema": "sendouq_analysis"},
+    )
+    match_id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, primary_key=True)
     preference = Column(Text)
     map_index = Column(BigInteger)
 
 
 class Weapons(Base):
     __tablename__ = "weapons"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "map_index", "match_id"),
+        {"schema": "sendouq_analysis"},
+    )
     group_match_map_id = Column(Double)
     weapon_spl_id = Column(Double)
-    user_id = Column(Double)
-    map_index = Column(Double)
-    match_id = Column(BigInteger)
+    user_id = Column(Double, primary_key=True)
+    map_index = Column(Double, primary_key=True)
+    match_id = Column(BigInteger, primary_key=True)

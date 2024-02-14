@@ -9,7 +9,7 @@ from sqlalchemy import (
     Integer,
     Text,
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 from sendouq_analysis.constants.columns import matches as match_c
 from sendouq_analysis.constants.columns import user_memento as user_c
@@ -21,7 +21,9 @@ from sendouq_analysis.constants.table_names import (
     AGGREGATE_SEASON_PAST,
 )
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
 class SeasonData(Base):
@@ -59,6 +61,7 @@ class LatestPlayerStats(Base):
     id = Column(Integer, primary_key=True)
     season = Column(Integer, nullable=False, index=True)
     user_id = Column(Integer, nullable=False, index=True)
+    match_id = Column(BigInteger, nullable=False, index=True)
     sp = Column(Double, index=True)
     created_at_dt = Column(DateTime, nullable=False)
 
