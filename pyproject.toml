@@ -25,6 +25,7 @@ tqdm = "^4.66.1"
 dash = "^2.14.2"
 psycopg2-binary = "^2.9.9"
 sqlalchemy = "^2.0.25"
+certifi = "^2024.2.2"
 
 
 [tool.poetry.group.dev.dependencies]
