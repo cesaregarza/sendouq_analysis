@@ -4,17 +4,111 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 from sqlalchemy import inspect
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
 if TYPE_CHECKING:
-    import sqlalchemy as db
+    from typing import Callable, Iterable, TypeAlias
 
-    from sendouq_analysis.sql.meta import Base
+    import sqlalchemy as db
+    from pandas.io.sql import SQLTable
+    from sqlalchemy.orm import DeclarativeBase
+
+    MethodSignature: TypeAlias = Callable[
+        [
+            SQLTable,
+            db.engine.Engine | db.engine.Connection,
+            list[str],
+            Iterable,
+        ],
+        None,
+    ]
+
+
+def insert_on_conflict_do_nothing(
+    table: SQLTable,
+    conn: db.engine.Engine | db.engine.Connection,
+    keys: list[str],
+    data_iter: Iterable,
+) -> None:
+    """Execute SQL statement inserting data. If a conflict occurs, do nothing.
+
+    Args:
+        table (pandas.io.sql.SQLTable): The SQL table to insert data into.
+        conn (sqlalchemy.engine.Engine or sqlalchemy.engine.Connection): The
+            database connection.
+        keys (list of str): The column names.
+        data_iter (Iterable): An iterable that iterates over the values to be
+        inserted.
+    """
+    stmt = insert(table.table).values(list(data_iter))
+    stmt = stmt.on_conflict_do_nothing()
+    conn.execute(stmt)
+
+
+def insert_on_conflict_do_update(
+    base_table: DeclarativeBase,
+) -> MethodSignature:
+    """
+    Returns a function that executes an SQL statement to insert data into a table.
+    If a conflict occurs, it updates the existing row.
+
+    Args:
+        base_table (DeclarativeBase): The SQLAlchemy DeclarativeBase object representing the base table.
+
+    Returns:
+        MethodSignature: A function that takes the following parameters:
+            - table (SQLTable): The SQLAlchemy Table object representing the table.
+            - conn (db.engine.Engine | db.engine.Connection): The database connection.
+            - keys (list[str]): The column names.
+            - data_iter (Iterable): An iterable that iterates over the values to be inserted.
+
+    Example usage:
+        insert_function = insert_on_conflict_do_update(Base)
+        insert_function(table, conn, keys, data_iter)
+    """
+
+    def fxn(
+        table: SQLTable,
+        conn: db.engine.Engine | db.engine.Connection,
+        keys: list[str],
+        data_iter: Iterable,
+    ) -> None:
+        """
+        Execute SQL statement inserting data. If a conflict occurs, update the
+        existing row.
+
+        Args:
+            table (SQLTable): The SQLAlchemy Table object representing the table.
+            conn (sqlalchemy.engine.Engine or sqlalchemy.engine.Connection): The
+                database connection.
+            keys (list of str): The column names.
+            data_iter (Iterable): An iterable that iterates over the values to be
+                inserted.
+        """
+        subtable = table.table
+
+        stmt = insert(subtable).values(list(data_iter))
+
+        primary_keys = [k.name for k in inspect(base_table).primary_key]
+        update_dict = {c.name: c for c in stmt.excluded if not c.primary_key}
+
+        if not update_dict:
+            insert_on_conflict_do_nothing(table, conn, keys, data_iter)
+            return
+
+        update_stmt = stmt.on_conflict_do_update(
+            index_elements=primary_keys,
+            set_=update_dict,
+        )
+        conn.execute(update_stmt)
+
+    return fxn
 
 
 def dataframe_to_sql(
     df: pd.DataFrame,
-    table: Base,
+    table: DeclarativeBase,
     engine: db.engine.Engine,
     replace: bool = False,
 ) -> None:
@@ -22,7 +116,7 @@ def dataframe_to_sql(
 
     Args:
         df (pd.DataFrame): The DataFrame to write to the database
-        table (Base): The SQLAlchemy Base class for the table
+        table (DeclarativeBase): The SQLAlchemy Base class for the table
         engine (db.engine.Engine): The engine for the database
         replace (bool): Whether to replace the table if it exists. Defaults to
             False.
@@ -61,11 +155,13 @@ def dataframe_to_sql(
         session.close()
 
 
-def read_table(table: Base, engine: db.engine.Engine) -> pd.DataFrame:
+def read_table(
+    table: DeclarativeBase, engine: db.engine.Engine
+) -> pd.DataFrame:
     """Reads a table from the database into a DataFrame.
 
     Args:
-        table (Base): The SQLAlchemy Base class for the table
+        table (DeclarativeBase): The SQLAlchemy Base class for the table
         engine (db.engine.Engine): The engine for the database
 
     Returns:
