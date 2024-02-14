@@ -341,8 +341,7 @@ def parse_all(
         for json in tqdm.tqdm(jsons, disable=disable_tqdm)
     ]
     logger.debug("Transposing data")
-    data = list(zip(*data))  # Transpose the list of lists
-    # return tuple(pd.concat(d, ignore_index=True) for d in data)
+    data = list(zip(*data))  # Transposes the list of lists
     logger.debug("Concatenating data")
     out = []
     for i, d in enumerate(data):

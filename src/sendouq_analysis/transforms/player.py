@@ -66,6 +66,36 @@ def build_player_df(
     )
     player_latest_df = generate_latest_df(player_df)
     shape, loc, scale = fit_lognorm(player_latest_df)
+    player_df = aggregate_player_stats(
+        player_df=player_df,
+        shape=shape,
+        loc=loc,
+        scale=scale,
+    )
+    if return_lognorm_params:
+        return player_df, (shape, loc, scale)
+    return player_df
+
+
+def aggregate_player_stats(
+    shape: float,
+    loc: float,
+    scale: float,
+    player_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Aggregate player statistics by performing various calculations on the input
+    DataFrame.
+
+    Args:
+        shape (float): The shape parameter for the logz calculation.
+        loc (float): The loc parameter for the logz calculation.
+        scale (float): The scale parameter for the logz calculation.
+        player_df (pd.DataFrame): The input DataFrame containing player data.
+
+    Returns:
+        pd.DataFrame: The DataFrame with aggregated player statistics.
+    """
     player_df = calculate_logz_values(
         player_df=player_df,
         shape=shape,
@@ -75,8 +105,6 @@ def build_player_df(
     player_df = calculate_teammate_enemy_values(player_df)
     player_df = calculate_rolling_data(player_df)
     player_df = calculate_cumulative_data(player_df)
-    if return_lognorm_params:
-        return player_df, (shape, loc, scale)
     return player_df
 
 

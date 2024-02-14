@@ -11,7 +11,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import sessionmaker
 
 from sendouq_analysis.compute import get_matches_metadata
-from sendouq_analysis.constants.columns import AGGREGATE, MATCHES
+from sendouq_analysis.constants.columns import AGGREGATE, MATCHES, USER_MEMENTO
 from sendouq_analysis.ingest import create_engine, load_tables
 from sendouq_analysis.sql.meta import (
     CurrentSeason,
@@ -30,7 +30,14 @@ from sendouq_analysis.sql.raw import (
 )
 from sendouq_analysis.sql.read_write import dataframe_to_sql, read_table
 from sendouq_analysis.sql.statements import create_latest_player_stats
-from sendouq_analysis.transforms import build_match_df, build_player_df
+from sendouq_analysis.transforms import (
+    aggregate_player_stats,
+    base_merges,
+    build_match_df,
+    build_player_df,
+    fit_lognorm,
+    generate_latest_df,
+)
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
 if TYPE_CHECKING:
@@ -237,8 +244,60 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
     latest_match = current_season[AGGREGATE.LATEST_MATCH_ID].iloc[0]
     logger.info(f"Latest match ID: {latest_match}")
     logger.info("Pulling all rows after the latest match")
+
     Session = sessionmaker(bind=engine)
     session = Session()
 
     match_statement = session.query(Match).filter(Match.match_id > latest_match)
     match_df = pd.read_sql(match_statement.statement, engine)
+
+    user_memento_statement = session.query(UserMemento).filter(
+        UserMemento.match_id > latest_match
+    )
+    user_memento_df = pd.read_sql(user_memento_statement.statement, engine)
+
+    group_df = read_table(Group, engine)
+
+    logger.info("Building player stats for new matches")
+    player_df = base_merges(
+        matches_df=match_df,
+        user_memento_df=user_memento_df,
+        groups_df=group_df,
+    )
+
+    del user_memento_df
+    del group_df
+
+    latest_player_df = read_table(LatestPlayerStats, engine)
+
+    logger.info("Updating latest player stats")
+    pulled_latest_player_df = generate_latest_df(player_df)
+    latest_player_df = pd.concat([latest_player_df, pulled_latest_player_df])
+    del pulled_latest_player_df
+
+    latest_player_df = latest_player_df.drop_duplicates(
+        subset=USER_MEMENTO.USER_ID, keep="last"
+    )
+
+    logger.info("Writing latest player stats to the database")
+    dataframe_to_sql(latest_player_df, LatestPlayerStats, engine, replace=True)
+
+    shape, loc, scale = fit_lognorm(player_df)
+    player_df = aggregate_player_stats(
+        shape=shape, loc=loc, scale=scale, player_df=player_df
+    )
+
+    logger.info("Writing player stats to the database")
+    dataframe_to_sql(player_df, PlayerStats, engine, replace=False)
+    del player_df
+
+    logger.info("Updating current season stats")
+    current_season.iloc[0].loc[CurrentSeason.latest_match_id] = match_df[
+        MATCHES.MATCH_ID
+    ].max()
+
+    logger.info("Writing current season stats to the database")
+    dataframe_to_sql(current_season, CurrentSeason, engine, replace=True)
+
+    logger.info("Aggregation process complete")
+    session.close()
