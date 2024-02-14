@@ -218,6 +218,7 @@ def write_tables(
         (TABLE_NAMES.MAP_PREFERENCES, map_preferences_df),
         (TABLE_NAMES.WEAPONS, weapons_df),
     ]
+
     with engine.begin() as connection:
         for table_name, df in name_dataframe:
             if df.empty:
