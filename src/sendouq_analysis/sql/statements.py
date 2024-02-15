@@ -6,7 +6,7 @@ from sendouq_analysis.constants.table_names import (
     AGGREGATE_SCHEMA,
 )
 
-create_latest_player_stats = f"""
+create_latest_player_stats_query = f"""
 INSERT INTO {AGGREGATE_SCHEMA}.{AGGREGATE_LATEST_PLAYER_STATS} (
     {match_c.SEASON},
     {user_c.USER_ID},
@@ -34,5 +34,10 @@ FROM
             {AGGREGATE_SCHEMA}.{AGGREGATE_PLAYER_STATS}
             ) AS sub
 WHERE
-    rn = 1;
+    rn = 1
+ON CONFLICT ({user_c.USER_ID}) DO UPDATE
+SET
+    {match_c.SEASON} = EXCLUDED.{match_c.SEASON},
+    {user_c.SP} = EXCLUDED.{user_c.SP},
+    {match_c.CREATED_AT} = EXCLUDED.{match_c.CREATED_AT};
 """

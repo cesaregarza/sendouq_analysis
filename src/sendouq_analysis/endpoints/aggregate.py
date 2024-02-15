@@ -29,7 +29,7 @@ from sendouq_analysis.sql.raw import (
     Weapons,
 )
 from sendouq_analysis.sql.read_write import dataframe_to_sql, read_table
-from sendouq_analysis.sql.statements import create_latest_player_stats
+from sendouq_analysis.sql.statements import create_latest_player_stats_query
 from sendouq_analysis.transforms import (
     aggregate_player_stats,
     base_merges,
@@ -106,7 +106,7 @@ def create_new_aggregate(engine: db.engine.Engine | None = None) -> None:
     )
 
     logger.info("Writing aggregates to the database")
-    write_aggregates(
+    write_new_aggregates(
         engine,
         past_seasons_df,
         current_season_df,
@@ -117,7 +117,7 @@ def create_new_aggregate(engine: db.engine.Engine | None = None) -> None:
     logger.info("Aggregation process complete")
 
 
-def write_aggregates(
+def write_new_aggregates(
     engine: db.engine.Engine,
     past_seasons_df: pd.DataFrame,
     current_season_df: pd.DataFrame,
@@ -205,14 +205,10 @@ def write_aggregates(
     dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
     logger.info("Writing current season aggregates to the database")
     dataframe_to_sql(current_season_df, CurrentSeason, engine, replace=True)
-    logger.info("Dropping existing latest player stats table")
-    if inspector.has_table(LatestPlayerStats.__tablename__, schema=schema):
-        LatestPlayerStats.__table__.drop(engine)
-    logger.info("Creating latest player stats table")
-
+    logger.info("Creating latest player stats table with upserts")
     Session = sessionmaker(bind=engine)
     session = Session()
-    session.execute(create_latest_player_stats)
+    session.execute(create_latest_player_stats_query)
     session.commit()
     session.close()
 
