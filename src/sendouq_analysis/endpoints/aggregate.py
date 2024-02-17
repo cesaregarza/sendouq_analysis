@@ -6,7 +6,7 @@ import sys
 from typing import TYPE_CHECKING
 
 import requests
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import sessionmaker
 
@@ -52,18 +52,25 @@ def run() -> None:
     # Set up logging for output to docker logs, remove for production
     setup_logging()
 
+    engine = create_engine()
+
     if os.getenv("NEW_AGGREGATION") == "True":
-        new_aggregation()
+        new_aggregation(engine)
     else:
-        update_aggregation()
+        update_aggregation(engine)
 
 
-def new_aggregation() -> None:
-    """Runs the aggregation process"""
+def new_aggregation(engine: db.engine.Engine) -> None:
+    """Runs the aggregation process
 
+    Args:
+        engine (db.engine.Engine): Engine for the database
+
+    Raises:
+        ProgrammingError: Error creating new aggregate
+    """
     logger.info("Starting aggregation process")
     logger.info("Creating an engine to connect to the database")
-    engine = create_engine()
     logger.info(
         "Pulling metadata from the database, if schema does not exist, "
         "compute all aggregates"
@@ -205,20 +212,39 @@ def write_new_aggregates(
     dataframe_to_sql(past_seasons_df, SeasonData, engine, replace=True)
     logger.info("Writing current season aggregates to the database")
     dataframe_to_sql(current_season_df, CurrentSeason, engine, replace=True)
+    if inspector.has_table(LatestPlayerStats.__tablename__, schema=schema):
+        logger.info("Dropping latest player stats table")
+        LatestPlayerStats.__table__.drop(engine)
     logger.info("Creating latest player stats table with upserts")
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    session.execute(create_latest_player_stats_query)
-    session.commit()
-    session.close()
+    update_latest_player_stats(engine)
 
     logger.info("Aggregates written to the database")
 
 
-def update_aggregation() -> None:
+def update_latest_player_stats(engine: db.engine.Engine) -> None:
+    """Updates the latest player stats table
+
+    Args:
+        engine (db.engine.Engine): Engine for the database
+    """
+    logger.info("Updating latest player stats")
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    inspector = inspect(engine)
+    table_name = LatestPlayerStats.__tablename__
+    schema = LatestPlayerStats.__table_args__[-1]["schema"]
+    if not inspector.has_table(table_name, schema=schema):
+        logger.info("Creating latest player stats table")
+        LatestPlayerStats.__table__.create(bind=engine, checkfirst=True)
+
+    session.execute(text(create_latest_player_stats_query))
+    session.commit()
+    session.close()
+    logger.info("Latest player stats updated")
+
+
+def update_aggregation(engine: db.engine.Engine) -> None:
     logger.info("Starting update aggregation process")
-    logger.info("Creating an engine to connect to the database")
-    engine = create_engine()
     logger.info("Pulling metadata from the database")
     try:
         update_existing_aggregate(engine)
@@ -294,6 +320,8 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
 
     logger.info("Writing current season stats to the database")
     dataframe_to_sql(current_season, CurrentSeason, engine, replace=True)
-
-    logger.info("Aggregation process complete")
     session.close()
+
+    logger.info("Creating latest player stats table with upserts")
+    update_latest_player_stats(engine)
+    logger.info("Aggregation process complete")

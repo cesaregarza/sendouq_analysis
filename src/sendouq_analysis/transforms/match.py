@@ -6,6 +6,7 @@ import pandas as pd
 from sendouq_analysis.constants import COLUMNS, SQ_DATA
 
 MATCHCOLS = COLUMNS.MATCHES
+logger = logging.getLogger(__name__)
 
 
 def build_match_df(
@@ -27,7 +28,7 @@ def build_match_df(
         pd.DataFrame: The transformed DataFrame with additional columns for
         season and time slot.
     """
-    logging.info("Building match df")
+    logger.info("Building match df")
     matches_df = matches_df.copy()
     time_cols = [MATCHCOLS.CREATED_AT, MATCHCOLS.REPORTED_AT]
     for col in time_cols:
@@ -47,7 +48,7 @@ def calculate_seasons(matches_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A DataFrame of matches with a season column
     """
-    logging.info("Calculating seasons")
+    logger.info("Calculating seasons")
     created = matches_df[MATCHCOLS.CREATED_AT]
     previous_created = (
         created.shift(1).rename("previous_created").fillna(created.iloc[0])

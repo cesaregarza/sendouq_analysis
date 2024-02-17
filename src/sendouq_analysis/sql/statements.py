@@ -11,13 +11,15 @@ INSERT INTO {AGGREGATE_SCHEMA}.{AGGREGATE_LATEST_PLAYER_STATS} (
     {match_c.SEASON},
     {user_c.USER_ID},
     {user_c.SP},
-    {match_c.CREATED_AT}
+    {match_c.CREATED_AT},
+    {match_c.MATCH_ID}
 )
 SELECT
     {match_c.SEASON},
     {user_c.USER_ID},
     {user_c.SP},
-    {match_c.CREATED_AT}
+    {match_c.CREATED_AT},
+    {match_c.MATCH_ID}
 FROM
     (
         SELECT
@@ -25,6 +27,7 @@ FROM
             {user_c.USER_ID},
             {user_c.SP},
             {match_c.CREATED_AT},
+            {match_c.MATCH_ID},
             ROW_NUMBER() OVER (
                                 PARTITION BY {user_c.USER_ID}
                                 ORDER BY {match_c.CREATED_AT}
@@ -39,5 +42,6 @@ ON CONFLICT ({user_c.USER_ID}) DO UPDATE
 SET
     {match_c.SEASON} = EXCLUDED.{match_c.SEASON},
     {user_c.SP} = EXCLUDED.{user_c.SP},
-    {match_c.CREATED_AT} = EXCLUDED.{match_c.CREATED_AT};
+    {match_c.CREATED_AT} = EXCLUDED.{match_c.CREATED_AT},
+    {match_c.MATCH_ID} = EXCLUDED.{match_c.MATCH_ID};
 """

@@ -12,6 +12,7 @@ from sendouq_analysis.constants import (
 )
 
 PLAYERCOLS = COLUMNS.PLAYER
+logger = logging.getLogger(__name__)
 
 
 @overload
@@ -58,7 +59,7 @@ def build_player_df(
             `return_lognorm_params` is True.
     """
     # Base merges
-    logging.info("Building player_df")
+    logger.info("Building player_df")
     player_df = base_merges(
         matches_df=matches_df,
         user_memento_df=user_memento_df,
@@ -324,13 +325,13 @@ def fit_lognorm(
     shape, loc, scale = lognorm.fit(
         player_latest_df[PLAYERCOLS.AFTER_SP].dropna()
     )
-    logging.info(f"Lognorm fit: shape={shape}, loc={loc}, scale={scale}")
+    logger.info(f"Lognorm fit: shape={shape}, loc={loc}, scale={scale}")
     ks_stat, p_value = kstest(
         player_latest_df[PLAYERCOLS.AFTER_SP].dropna(),
         "lognorm",
         args=(shape, loc, scale),
     )
-    logging.info(f"KS test: stat={ks_stat}, p_value={p_value}")
+    logger.info(f"KS test: stat={ks_stat}, p_value={p_value}")
     return shape, loc, scale
 
 

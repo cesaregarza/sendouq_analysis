@@ -8,6 +8,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -56,6 +57,7 @@ class LatestPlayerStats(Base):
         Index("idx_user_id_latest", user_c.USER_ID),
         Index("idx_match_id_latest", user_c.MATCH_ID),
         Index("idx_sp_latest", user_c.SP),
+        UniqueConstraint("user_id", name="uq_user_id"),
         {"schema": AGGREGATE_SCHEMA},
     )
     id = Column(Integer, primary_key=True)
@@ -63,7 +65,7 @@ class LatestPlayerStats(Base):
     user_id = Column(Integer, nullable=False, index=True)
     match_id = Column(BigInteger, nullable=False, index=True)
     sp = Column(Double, index=True)
-    created_at_dt = Column(DateTime, nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False)
 
 
 class PlayerStats(Base):
