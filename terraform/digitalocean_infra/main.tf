@@ -28,3 +28,15 @@ data "digitalocean_ssh_key" "github_actions_ed25519" {
 data "digitalocean_ssh_key" "wsl" {
     name = "wsl"
 }
+
+output "database_cluster_id" {
+  value = data.digitalocean_database_cluster.sendouq_db.id
+}
+
+output "ssh_key_ids" {
+  value = [
+    data.digitalocean_ssh_key.github_actions.id,
+    data.digitalocean_ssh_key.github_actions_ed25519.id,
+    data.digitalocean_ssh_key.wsl.id
+  ]
+}
