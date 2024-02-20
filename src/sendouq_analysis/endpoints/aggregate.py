@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
-from typing import TYPE_CHECKING
 
-import requests
-from sqlalchemy import inspect, text
+import pandas as pd
+import sqlalchemy as db
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import sessionmaker
 
@@ -19,15 +17,7 @@ from sendouq_analysis.sql.meta import (
     PlayerStats,
     SeasonData,
 )
-from sendouq_analysis.sql.raw import (
-    Group,
-    GroupMemento,
-    Map,
-    MapPreferences,
-    Match,
-    UserMemento,
-    Weapons,
-)
+from sendouq_analysis.sql.raw import Group, Match, UserMemento
 from sendouq_analysis.sql.read_write import dataframe_to_sql, read_table
 from sendouq_analysis.sql.statements import create_latest_player_stats_query
 from sendouq_analysis.transforms import (
@@ -40,10 +30,6 @@ from sendouq_analysis.transforms import (
 )
 from sendouq_analysis.utils import delete_droplet, get_droplet_id, setup_logging
 
-if TYPE_CHECKING:
-    import pandas as pd
-    import sqlalchemy as db
-
 logger = logging.getLogger(__name__)
 
 
@@ -53,11 +39,27 @@ def run() -> None:
     setup_logging()
 
     engine = create_engine()
+    try:
+        if os.getenv("NEW_AGGREGATION") == "True":
+            new_aggregation(engine)
+        else:
+            update_aggregation(engine)
+        logger.info(
+            "Successfully ran aggregation process, shutting down droplet"
+        )
+    except Exception as e:
+        logger.error("Error running aggregation process, shutting down droplet")
+        logger.error(e)
 
-    if os.getenv("NEW_AGGREGATION") == "True":
-        new_aggregation(engine)
-    else:
-        update_aggregation(engine)
+    do_api_token = os.environ.get("DO_API_TOKEN")
+    if do_api_token is None:
+        logger.warning(
+            "No DigitalOcean API token found, assuming not running on "
+            "DigitalOcean droplet."
+        )
+        return
+    droplet_id = get_droplet_id(do_api_token, "sendouq-aggregator")
+    delete_droplet(do_api_token, droplet_id)
 
 
 def new_aggregation(engine: db.engine.Engine) -> None:
@@ -153,7 +155,7 @@ def write_new_aggregates(
         (seasons_cutoffs[-1][1] + 1, int(1e9)),
     ]
     # Delete all player stats data
-    inspector = inspect(engine)
+    inspector = db.inspect(engine)
     table_name = PlayerStats.__tablename__
     schema = PlayerStats.__table_args__[-1]["schema"]
     logger.info("Deleting all player stats data")
@@ -230,14 +232,14 @@ def update_latest_player_stats(engine: db.engine.Engine) -> None:
     logger.info("Updating latest player stats")
     Session = sessionmaker(bind=engine)
     session = Session()
-    inspector = inspect(engine)
+    inspector = db.inspect(engine)
     table_name = LatestPlayerStats.__tablename__
     schema = LatestPlayerStats.__table_args__[-1]["schema"]
     if not inspector.has_table(table_name, schema=schema):
         logger.info("Creating latest player stats table")
         LatestPlayerStats.__table__.create(bind=engine, checkfirst=True)
 
-    session.execute(text(create_latest_player_stats_query))
+    session.execute(db.text(create_latest_player_stats_query))
     session.commit()
     session.close()
     logger.info("Latest player stats updated")
@@ -261,14 +263,17 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
         engine (db.engine.Engine): Engine for the database
     """
     logger.info("Pulling all raw data from the database")
-
-    current_season = read_table(CurrentSeason, engine)
-    latest_match = current_season[AGGREGATE.LATEST_MATCH_ID].iloc[0]
-    logger.info(f"Latest match ID: {latest_match}")
-    logger.info("Pulling all rows after the latest match")
-
     Session = sessionmaker(bind=engine)
     session = Session()
+
+    current_season = read_table(CurrentSeason, engine)
+    if current_season.empty:
+        logger.info("Between seasons, no updates needed")
+        return
+
+    latest_match = int(current_season[AGGREGATE.LATEST_MATCH_ID].iloc[0])
+    logger.info(f"Latest match ID: {latest_match}")
+    logger.info("Pulling all rows after the latest match")
 
     match_statement = session.query(Match).filter(Match.match_id > latest_match)
     match_df = pd.read_sql(match_statement.statement, engine)
@@ -301,13 +306,19 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
         subset=USER_MEMENTO.USER_ID, keep="last"
     )
 
-    logger.info("Writing latest player stats to the database")
-    dataframe_to_sql(latest_player_df, LatestPlayerStats, engine, replace=True)
-
     shape, loc, scale = fit_lognorm(player_df)
     player_df = aggregate_player_stats(
         shape=shape, loc=loc, scale=scale, player_df=player_df
     )
+
+    player_df[MATCHES.CREATED_AT] = pd.to_datetime(
+        player_df[MATCHES.CREATED_AT], unit="s", utc=True
+    )
+    player_df[MATCHES.REPORTED_AT] = pd.to_datetime(
+        player_df[MATCHES.REPORTED_AT], unit="s", utc=True
+    )
+    # Updates should *never* deal with past seasons, only current season
+    player_df[MATCHES.SEASON] = current_season[MATCHES.SEASON].iloc[0]
 
     logger.info("Writing player stats to the database")
     dataframe_to_sql(player_df, PlayerStats, engine, replace=False)
@@ -325,3 +336,7 @@ def update_existing_aggregate(engine: db.engine.Engine | None = None) -> None:
     logger.info("Creating latest player stats table with upserts")
     update_latest_player_stats(engine)
     logger.info("Aggregation process complete")
+
+
+if __name__ == "__main__":
+    run()
