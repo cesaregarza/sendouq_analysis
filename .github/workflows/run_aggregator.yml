@@ -1,0 +1,38 @@
+name: Run Aggregator
+
+
+on:
+  # schedule:
+  #   - cron: '0 1-23/2 * * *'
+  workflow_dispatch:
+    inputs:
+      just-update:
+        description: If true, only update. Otherwise, start from scratch.
+        type: boolean
+        default: false
+        required: false
+
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: Scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get self ip
+        id: self_ip
+        run: |
+          SELF_IP=$(curl -s https://api.ipify.org)
+          echo $SELF_IP
+          echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
+      
+      - name: Terraform Init
+        working-directory: terraform/aggregate
+        run: terraform init
