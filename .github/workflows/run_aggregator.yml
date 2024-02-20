@@ -76,6 +76,7 @@ jobs:
             export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            export NEW_AGGREGATION=${{ github.event.inputs.just-update }}
             sudo apt-get update
             sudo apt-get install -y docker.io
             docker login -u $DO_API_TOKEN \
@@ -88,6 +89,7 @@ jobs:
               -e POSTGRES_HOST=$POSTGRES_HOST \
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
+              -e NEW_AGGREGATION=$NEW_AGGREGATION \
               --endpoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run aggregate
@@ -114,6 +116,7 @@ jobs:
             export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            export NEW_AGGREGATION=${{ github.event.inputs.just-update }}
             sudo apt-get update
             sudo apt-get install -y docker.io
             docker login -u $DO_API_TOKEN \
@@ -126,6 +129,7 @@ jobs:
               -e POSTGRES_HOST=$POSTGRES_HOST \
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
+              -e NEW_AGGREGATION=$NEW_AGGREGATION \
               --endpoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run aggregate

@@ -40,7 +40,7 @@ def run() -> None:
 
     engine = create_engine()
     try:
-        if os.getenv("NEW_AGGREGATION") == "True":
+        if os.getenv("NEW_AGGREGATION") == "true":
             new_aggregation(engine)
         else:
             update_aggregation(engine)
