@@ -1,6 +1,5 @@
 name: Run Aggregator
 
-
 on:
   # schedule:
   #   - cron: '0 1-23/2 * * *'
@@ -11,7 +10,6 @@ on:
         type: boolean
         default: false
         required: false
-
 
 jobs:
   run:
@@ -32,7 +30,110 @@ jobs:
           SELF_IP=$(curl -s https://api.ipify.org)
           echo $SELF_IP
           echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
-      
+
       - name: Terraform Init
-        working-directory: terraform/aggregate
+        working-directory: terraform/aggregator
         run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/scraper
+        run: |
+          terraform plan -out=tfplan -input=false
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_source_ip: ${{ steps.self_ip.outputs.self_ip }}
+          TF_VAR_joy_ip: ${{ secrets.JOY_IP }}
+
+      - name: Terraform Apply
+        id: terraform_apply
+        working-directory: terraform/scraper
+        run: |
+          terraform apply -auto-approve tfplan
+          AGG_IP=$(terraform output -raw agg_ip)
+          AGG_ID=$(terraform output -raw agg_id)
+          echo "agg_ip=$AGG_IP" >> $GITHUB_OUTPUT
+          echo "agg_id=$AGG_ID" >> $GITHUB_OUTPUT
+
+      # This is a workaround for the fact that terraform releases the apply
+      # before the droplet is actually ready
+      - name: Wait for Droplet to come online
+        run: |
+          sleep 90
+
+      - name: SSH to Scraper
+        id: ssh
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.scraper_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            export POSTGRES_USER=${{ secrets.POSTGRES_USER}}
+            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+            export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            docker login -u $DO_API_TOKEN \
+              -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            docker run -d --name scraper_container \
+              -e POSTGRES_USER=$POSTGRES_USER \
+              -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+              -e POSTGRES_DB=$POSTGRES_DB \
+              -e POSTGRES_HOST=$POSTGRES_HOST \
+              -e POSTGRES_PORT=$POSTGRES_PORT \
+              -e DO_API_TOKEN=$DO_API_TOKEN \
+              --endpoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run aggregate
+
+      - name: Sleep if droplet is still not ready
+        id: resleep
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        run: |
+          sleep 60
+
+      - name: SSH to Scraper
+        id: ressh
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.scraper_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            export POSTGRES_USER=${{ secrets.POSTGRES_USER}}
+            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
+            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
+            export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            docker login -u $DO_API_TOKEN \
+              -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            docker run -d --name scraper_container \
+              -e POSTGRES_USER=$POSTGRES_USER \
+              -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+              -e POSTGRES_DB=$POSTGRES_DB \
+              -e POSTGRES_HOST=$POSTGRES_HOST \
+              -e POSTGRES_PORT=$POSTGRES_PORT \
+              -e DO_API_TOKEN=$DO_API_TOKEN \
+              --endpoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run aggregate
+
+      - name: Kill droplet if fail
+        if: ${{ failure() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.scraper_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"
