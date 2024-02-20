@@ -48,5 +48,3 @@ RUN poetry version $BUILD_VERSION && \
     poetry build && \
     poetry install && \
     poetry update
-
-ENTRYPOINT ["poetry", "run", "scrape"]

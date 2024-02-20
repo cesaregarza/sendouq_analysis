@@ -41,6 +41,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 scrape = "sendouq_analysis.endpoints.scrape:update_database"
+aggregate = "sendouq_analysis.endpoints.aggregate:run"
 
 [tool.black]
 line-length = 80
