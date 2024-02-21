@@ -36,7 +36,7 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        working-directory: terraform/scraper
+        working-directory: terraform/aggregator
         run: |
           terraform plan -out=tfplan -input=false
         env:
@@ -46,7 +46,7 @@ jobs:
 
       - name: Terraform Apply
         id: terraform_apply
-        working-directory: terraform/scraper
+        working-directory: terraform/aggregator
         run: |
           terraform apply -auto-approve tfplan
           AGG_IP=$(terraform output -raw agg_ip)
