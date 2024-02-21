@@ -137,7 +137,7 @@ jobs:
       - name: Kill droplet if fail
         if: ${{ failure() && steps.terraform_apply.outcome == 'success' }}
         run: |
-          DROPLET_ID=${{ steps.terraform_apply.outputs.scraper_id }}
+          DROPLET_ID=${{ steps.terraform_apply.outputs.agg_id }}
           curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
           -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
           -H "Content-Type: application/json"
