@@ -18,7 +18,7 @@ module "digitalocean_infra" {
 
 resource "digitalocean_droplet" "sendouq_agg" {
     image = "ubuntu-22-04-x64"
-    name = "sendouq-scraper"
+    name = "sendouq-agg"
     region = "nyc3"
     size = "s-2vcpu-4gb"
     ssh_keys = module.digitalocean_infra.ssh_key_ids
