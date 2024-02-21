@@ -5,8 +5,8 @@ on:
   #   - cron: '0 1-23/2 * * *'
   workflow_dispatch:
     inputs:
-      just-update:
-        description: If true, only update. Otherwise, start from scratch.
+      reset-aggregation:
+        description: If true, will reset the aggregation. Otherwise, will update.
         type: boolean
         default: false
         required: false
@@ -76,7 +76,7 @@ jobs:
             export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            export NEW_AGGREGATION=${{ github.event.inputs.just-update }}
+            export NEW_AGGREGATION=${{ github.event.inputs.reset-aggregation }}
             sudo apt-get update
             sudo apt-get install -y docker.io
             docker login -u $DO_API_TOKEN \
@@ -116,7 +116,7 @@ jobs:
             export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            export NEW_AGGREGATION=${{ github.event.inputs.just-update }}
+            export NEW_AGGREGATION=${{ github.event.inputs.reset-aggregation }}
             sudo apt-get update
             sudo apt-get install -y docker.io
             docker login -u $DO_API_TOKEN \
