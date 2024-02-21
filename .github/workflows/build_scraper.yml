@@ -5,6 +5,12 @@ on:
   #     branches:
   #       - main
   workflow_dispatch:
+    inputs:
+      override-check:
+        description: 'Override check for changes'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   check:
@@ -50,7 +56,7 @@ jobs:
 
   build:
     needs: check
-    if: needs.check.outputs.skip == 'false'
+    if: (needs.check.outputs.skip == 'false') || (github.event.inputs.override-check == 'true')
     runs-on: ubuntu-latest
     environment: Scraper
     steps:
