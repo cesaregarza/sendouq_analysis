@@ -82,7 +82,7 @@ jobs:
               -e POSTGRES_HOST=$POSTGRES_HOST \
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
-              --endpoint poetry \
+              --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run scrape
 
@@ -120,7 +120,7 @@ jobs:
               -e POSTGRES_HOST=$POSTGRES_HOST \
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
-              --endpoint poetry \
+              --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run scrape
 

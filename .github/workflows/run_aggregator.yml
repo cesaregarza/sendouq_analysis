@@ -90,7 +90,7 @@ jobs:
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
               -e NEW_AGGREGATION=$NEW_AGGREGATION \
-              --endpoint poetry \
+              --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run aggregate
 
@@ -130,7 +130,7 @@ jobs:
               -e POSTGRES_PORT=$POSTGRES_PORT \
               -e DO_API_TOKEN=$DO_API_TOKEN \
               -e NEW_AGGREGATION=$NEW_AGGREGATION \
-              --endpoint poetry \
+              --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run aggregate
 
