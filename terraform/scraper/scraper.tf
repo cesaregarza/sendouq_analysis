@@ -11,6 +11,10 @@ variable "source_ip" {}
 variable "joy_ip" {}
 variable "do_token" {}
 
+provider "digitalocean" {
+  token = var.do_token
+}
+
 module "digitalocean_infra" {
   source   = "../digitalocean_infra"
   do_token = var.do_token
