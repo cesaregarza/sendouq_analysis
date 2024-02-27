@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "sendouq-analysis"
+name = "sendouq-analytics"
 version = "0.1.0"
 description = ""
 authors = ["Cesar E Garza <cesar@cegarza.com>"]
 readme = "README.md"
 packages = [
     {include = "sendouq_analysis", from = "src"},
-    {include = "sendouq_dashboard", from = "src"}
+    {include = "sendouq_dashboard", from = "src"},
 ]
 
 
@@ -22,11 +22,11 @@ nbformat = "^5.9.2"
 statsmodels = "^0.14.0"
 requests = "^2.31.0"
 tqdm = "^4.66.1"
-dash = "^2.14.2"
 psycopg2-binary = "^2.9.9"
 sqlalchemy = "^2.0.25"
 certifi = "^2024.2.2"
 pyarrow = "^15.0.0"
+dash = "^2.15.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -42,6 +42,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 scrape = "sendouq_analysis.endpoints.scrape:update_database"
 aggregate = "sendouq_analysis.endpoints.aggregate:run"
+debug_dashboard = "sendouq_dashboard.app:debug_run"
 
 [tool.black]
 line-length = 80
