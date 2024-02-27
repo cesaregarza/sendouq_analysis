@@ -5,6 +5,7 @@ MAP = "MAP"
 GROUP = "GROUP"
 MAP_PREFERENCES = "MAP_PREFERENCES"
 WEAPONS = "WEAPONS"
+RAW_SCHEMA = "sendouq_analysis"
 
 ALL_TABLES = [
     MATCH,
@@ -14,4 +15,17 @@ ALL_TABLES = [
     GROUP,
     MAP_PREFERENCES,
     WEAPONS,
+]
+
+PLAYER_STATS = "player_stats"
+LATEST_PLAYER_STATS = "latest_player_stats"
+SEASON_DATA = "past_season"
+CURRENT_SEASON = "current_season"
+AGGREGATE_SCHEMA = "sendouq_aggregate"
+
+AGGREGATE_TABLES = [
+    PLAYER_STATS,
+    LATEST_PLAYER_STATS,
+    SEASON_DATA,
+    CURRENT_SEASON,
 ]

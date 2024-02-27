@@ -32,7 +32,7 @@ def create_engine() -> db.engine.Engine:
     )
 
 
-def load_tables() -> (
+def load_raw_tables() -> (
     tuple[
         pd.DataFrame,
         pd.DataFrame,
@@ -58,7 +58,57 @@ def load_tables() -> (
     engine = create_engine()
     return tuple(
         [
-            pd.read_sql_table(table_name, engine)
+            pd.read_sql_table(table_name, engine, schema=TABLE_NAMES.RAW_SCHEMA)
             for table_name in TABLE_NAMES.ALL_TABLES
         ]
+    )
+
+
+def load_player_stats() -> pd.DataFrame:
+    """Loads the player stats table from the database
+
+    Returns:
+        pd.DataFrame: The player stats table
+    """
+    engine = create_engine()
+    return pd.read_sql_table(
+        TABLE_NAMES.PLAYER_STATS, engine, schema=TABLE_NAMES.AGGREGATE_SCHEMA
+    )
+
+
+def load_latest_player_stats() -> pd.DataFrame:
+    """Loads the latest player stats table from the database
+
+    Returns:
+        pd.DataFrame: The latest player stats table
+    """
+    engine = create_engine()
+    return pd.read_sql_table(
+        TABLE_NAMES.LATEST_PLAYER_STATS,
+        engine,
+        schema=TABLE_NAMES.AGGREGATE_SCHEMA,
+    )
+
+
+def load_season_data() -> pd.DataFrame:
+    """Loads the season data table from the database
+
+    Returns:
+        pd.DataFrame: The season data table
+    """
+    engine = create_engine()
+    return pd.read_sql_table(
+        TABLE_NAMES.SEASON_DATA, engine, schema=TABLE_NAMES.AGGREGATE_SCHEMA
+    )
+
+
+def load_current_season() -> pd.DataFrame:
+    """Loads the current season table from the database
+
+    Returns:
+        pd.DataFrame: The current season table
+    """
+    engine = create_engine()
+    return pd.read_sql_table(
+        TABLE_NAMES.CURRENT_SEASON, engine, schema=TABLE_NAMES.AGGREGATE_SCHEMA
     )
