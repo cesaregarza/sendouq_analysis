@@ -1,4 +1,3 @@
-# MAKE SURE TO RUN THIS FROM THE ROOT DIRECTORY
 ###############################
 #         Base Image          #
 ###############################
@@ -48,3 +47,5 @@ RUN poetry version $BUILD_VERSION && \
     poetry build && \
     poetry install && \
     poetry update
+
+EXPOSE 8050
