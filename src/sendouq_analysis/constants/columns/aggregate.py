@@ -7,6 +7,7 @@ LATEST_MATCH_ID = "latest_match_id"
 LOGNORMAL_SHAPE = "lognorm_shape"
 LOGNORMAL_LOCATION = "lognorm_location"
 LOGNORMAL_SCALE = "lognorm_scale"
+AFTER_SP = "after_sp"
 
 MATCH_COLUMNS = [
     START_MATCH_ID,

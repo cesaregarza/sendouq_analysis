@@ -1,5 +1,6 @@
 from sendouq_analysis.constants.columns import matches as match_c
 from sendouq_analysis.constants.columns import user_memento as user_c
+from sendouq_analysis.constants.columns import aggregate as agg_c
 from sendouq_analysis.constants.table_names import (
     AGGREGATE_LATEST_PLAYER_STATS,
     AGGREGATE_PLAYER_STATS,
@@ -17,7 +18,7 @@ INSERT INTO {AGGREGATE_SCHEMA}.{AGGREGATE_LATEST_PLAYER_STATS} (
 SELECT
     {match_c.SEASON},
     {user_c.USER_ID},
-    {user_c.SP},
+    {agg_c.AFTER_SP} AS {user_c.SP},
     {match_c.CREATED_AT},
     {match_c.MATCH_ID}
 FROM
@@ -25,7 +26,7 @@ FROM
         SELECT
             {match_c.SEASON},
             {user_c.USER_ID},
-            {user_c.SP},
+            {agg_c.AFTER_SP},
             {match_c.CREATED_AT},
             {match_c.MATCH_ID},
             ROW_NUMBER() OVER (
