@@ -1,0 +1,209 @@
+# Sendou.ink Tournament Rankings
+
+This module provides comprehensive tournament ranking capabilities for Sendou.ink data, implementing both basic PageRank algorithms and advanced iterative rating engines with tournament strength modeling.
+
+## Features
+
+### Core Functionality
+- **Tournament Data Parsing**: Parse Sendou.ink JSON exports into structured DataFrames
+- **Team & Player Rankings**: Rank both teams and individual players
+- **Time Decay**: Exponential decay weighting for match age
+- **Tournament Strength**: Dynamic tournament importance calculation
+- **Multiple Algorithms**: Basic PageRank and advanced tick-tock algorithm
+
+### Algorithms
+
+#### 1. Basic PageRank (`basic_rankings.py`)
+- Straightforward PageRank implementation
+- Optional tournament strength weighting based on participant count
+- Fast and simple for most use cases
+
+#### 2. Advanced Rating Engine (`advanced_rankings.py`)
+- Sophisticated tick-tock algorithm that iteratively refines ratings and tournament strengths
+- Tournament influence calculated based on participant skill levels
+- Multiple aggregation methods for tournament strength
+- Configurable teleport vectors and decay models
+
+## Quick Start
+
+```python
+import json
+from src.rankings import parse_tournaments_data, rank_players_basic, RatingEngine
+
+# Load and parse tournament data
+with open("tournament_data.json") as f:
+    raw_data = json.load(f)
+
+tables = parse_tournaments_data(raw_data)
+matches_df = tables["matches"]
+players_df = tables["players"]
+
+# Basic player rankings
+basic_rankings = rank_players_basic(matches_df, players_df)
+
+# Advanced engine with tournament strength
+engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
+advanced_rankings = engine.rank_players(matches_df, players_df)
+
+# Access tournament strength data
+tournament_influence = engine.tournament_influence
+tournament_strength = engine.tournament_strength
+```
+
+## API Reference
+
+### Data Parsing
+
+#### `parse_tournaments_data(tournaments: list[dict]) -> dict`
+Parses Sendou.ink tournament JSON into structured DataFrames.
+
+**Returns:**
+- `stages`: Tournament stages information
+- `groups`: Tournament groups  
+- `rounds`: Tournament rounds
+- `teams`: Team information and rosters
+- `players`: Individual player records
+- `matches`: Match results with winners/losers
+
+### Basic Rankings
+
+#### `rank_teams_basic(matches_df, **kwargs) -> pl.DataFrame`
+Basic PageRank team rankings.
+
+#### `rank_players_basic(matches_df, players_df, **kwargs) -> pl.DataFrame`
+Basic PageRank player rankings.
+
+#### `rank_teams_with_strength(matches_df, teams_df, base_weight=1.0, **kwargs) -> pl.DataFrame`
+Enhanced team rankings with tournament strength weighting.
+
+#### `rank_players_with_strength(matches_df, players_df, teams_df, base_weight=1.0, **kwargs) -> pl.DataFrame`
+Enhanced player rankings with tournament strength weighting.
+
+### Advanced Engine
+
+#### `class RatingEngine`
+
+**Key Parameters:**
+- `decay_half_life_days`: Time decay half-life (default: 30 days)
+- `damping_factor`: PageRank damping factor (default: 0.85)
+- `beta`: Tournament strength exponent (default: 0.0, range: 0.0-1.0)
+- `influence_agg_method`: How to aggregate participant ratings ("mean", "sum", "median", "top_20_sum")
+- `teleport`: Teleport vector type ("uniform", "volume_inverse", or custom dict)
+
+**Methods:**
+- `rank_teams(matches_df) -> pl.DataFrame`: Rank teams
+- `rank_players(matches_df, players_df) -> pl.DataFrame`: Rank players
+
+**Properties:**
+- `tournament_influence`: Dict of tournament ID to influence values
+- `tournament_strength`: DataFrame with retroactive tournament strength metrics
+
+## Configuration
+
+### Time Decay
+Control how much recent matches matter vs historical ones:
+```python
+# Recent matches matter more (shorter half-life)
+engine = RatingEngine(decay_half_life_days=15.0)
+
+# Historical matches remain relevant longer
+engine = RatingEngine(decay_half_life_days=60.0)
+```
+
+### Tournament Strength
+Control how much tournament "strength" affects ratings:
+```python
+# No tournament strength weighting
+engine = RatingEngine(beta=0.0)
+
+# Moderate tournament strength weighting  
+engine = RatingEngine(beta=0.5)
+
+# Full tournament strength weighting
+engine = RatingEngine(beta=1.0)
+```
+
+### Influence Aggregation
+How to compute tournament strength from participant ratings:
+```python
+# Mean skill of all participants
+engine = RatingEngine(influence_agg_method="mean")
+
+# Sum of top 20 participant ratings
+engine = RatingEngine(influence_agg_method="top_20_sum")
+```
+
+## Utilities
+
+The `utils.py` module provides helper functions:
+
+- `prepare_player_summary()`: Format player rankings with statistics
+- `prepare_team_summary()`: Format team rankings with statistics  
+- `prepare_tournament_summary()`: Tournament metadata with strength metrics
+- `format_top_rankings()`: Pretty-print top rankings
+- `compare_rankings()`: Compare two ranking systems
+- `get_head_to_head_record()`: Head-to-head statistics between entities
+
+## Example Output
+
+```
+Top 10 Players (Advanced Engine):
+ 1. Grey                  100.0 (69 tournaments)
+ 2. Jared                  99.0 (20 tournaments)
+ 3. Noah                   96.9 (78 tournaments)
+ 4. phoenix                91.4 (227 tournaments)
+ 5. Crowny                 80.8 (187 tournaments)
+ 6. .q                     76.7 (29 tournaments)
+ 7. Silver                 76.7 (181 tournaments)
+ 8. kiki                   72.4 (311 tournaments)
+ 9. bran                   66.1 (14 tournaments)
+10. Aaron                  65.2 (54 tournaments)
+
+Tournament Analysis:
+Top 5 Strongest Tournaments:
+1. SendouQ Season 7 Finale         Influence: 4.88, Strength: 6.77
+2. Barnacle Bash #7                Influence: 4.01, Strength: 5.91
+3. Fry Basket Invitational #1      Influence: 3.99, Strength: 5.41
+4. Barnacle Bash #6.5              Influence: 4.66, Strength: 5.14
+5. LUTI: Season 16 - Division X    Influence: 3.98, Strength: 5.07
+```
+
+## Algorithm Details
+
+### Basic Algorithm
+1. Build weighted directed graph from match results
+2. Apply exponential time decay to edge weights
+3. Optionally weight by tournament strength (based on team count)
+4. Run PageRank to get final rankings
+
+### Advanced Algorithm (Tick-Tock)
+1. **Initialize**: Set all tournament strengths to 1.0
+2. **Tick**: Compute player/team ratings using current tournament strengths
+3. **Tock**: Recompute tournament strengths based on participant skill levels
+4. **Repeat**: Until tournament strengths converge
+5. **Output**: Final ratings and retrospective tournament strength metrics
+
+The tick-tock algorithm produces mutually consistent ratings where strong tournaments are those with strong participants, and strong participants are those who perform well in strong tournaments.
+
+## Performance Notes
+
+- Basic algorithms are fast and suitable for real-time applications
+- Advanced engine is more computationally intensive but provides richer insights
+- Both scale well to thousands of players and hundreds of tournaments
+- Polars DataFrames provide efficient memory usage and fast operations
+
+## Dependencies
+
+- `polars`: Fast DataFrame library
+- `numpy`: Numerical computations for PageRank
+- `zoneinfo`: Timezone handling for time decay
+
+## Files
+
+- `__init__.py`: Main module exports
+- `parser.py`: Tournament data parsing
+- `basic_rankings.py`: Basic PageRank implementations
+- `advanced_rankings.py`: Advanced RatingEngine class
+- `constants.py`: Configuration constants
+- `utils.py`: Helper functions and utilities
+- `README.md`: This documentation 

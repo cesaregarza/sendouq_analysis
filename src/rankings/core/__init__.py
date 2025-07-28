@@ -1,0 +1,73 @@
+"""
+Core functionality for the rankings module.
+
+This module contains fundamental components used throughout the rankings system:
+- parser: Tournament data parsing from JSON exports
+- constants: Configuration constants and default values
+"""
+
+from rankings.core.constants import (  # Time and decay parameters; Scraping configuration; PageRank parameters; Tournament strength parameters; Other constants
+    CALENDAR_URL,
+    DEFAULT_BACKOFF_FACTOR,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_BETA,
+    DEFAULT_DAMPING_FACTOR,
+    DEFAULT_DECAY_HALF_LIFE_DAYS,
+    DEFAULT_DECAY_RATE,
+    DEFAULT_INFLUENCE_AGG_METHOD,
+    DEFAULT_MAX_FAILURES,
+    DEFAULT_MAX_ITERATIONS,
+    DEFAULT_MAX_PAGERANK_ITER,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TICK_TOCK,
+    DEFAULT_PAGERANK_TOLERANCE,
+    DEFAULT_REFERENCE_DATE,
+    DEFAULT_STRENGTH_AGG,
+    DEFAULT_STRENGTH_K,
+    DEFAULT_TICK_TOCK_TOLERANCE,
+    DEFAULT_TIMEOUT,
+    DEFAULT_TOURNAMENT_STRENGTH_WEIGHT,
+    MIN_MATCHES_FOR_EDGE,
+    MIN_TEAMS_FOR_STRENGTH,
+    MIN_TOURNAMENTS_FOR_RANKING,
+    SECONDS_PER_DAY,
+    SENDOU_BASE_URL,
+    SENDOU_DATA_SUFFIX,
+    TELEPORT_UNIFORM,
+    TELEPORT_VOLUME_INVERSE,
+)
+from rankings.core.parser import parse_tournaments_data
+
+__all__ = [
+    # Parser
+    "parse_tournaments_data",
+    # Constants
+    "DEFAULT_REFERENCE_DATE",
+    "DEFAULT_DECAY_HALF_LIFE_DAYS",
+    "DEFAULT_DECAY_RATE",
+    "SECONDS_PER_DAY",
+    "SENDOU_BASE_URL",
+    "SENDOU_DATA_SUFFIX",
+    "CALENDAR_URL",
+    "DEFAULT_TIMEOUT",
+    "DEFAULT_MAX_RETRIES",
+    "DEFAULT_BACKOFF_FACTOR",
+    "DEFAULT_BATCH_SIZE",
+    "DEFAULT_MAX_FAILURES",
+    "DEFAULT_DAMPING_FACTOR",
+    "DEFAULT_PAGERANK_TOLERANCE",
+    "DEFAULT_MAX_ITERATIONS",
+    "DEFAULT_TICK_TOCK_TOLERANCE",
+    "DEFAULT_MAX_TICK_TOCK",
+    "DEFAULT_MAX_PAGERANK_ITER",
+    "DEFAULT_TOURNAMENT_STRENGTH_WEIGHT",
+    "MIN_TEAMS_FOR_STRENGTH",
+    "DEFAULT_BETA",
+    "DEFAULT_INFLUENCE_AGG_METHOD",
+    "DEFAULT_STRENGTH_AGG",
+    "DEFAULT_STRENGTH_K",
+    "TELEPORT_UNIFORM",
+    "TELEPORT_VOLUME_INVERSE",
+    "MIN_TOURNAMENTS_FOR_RANKING",
+    "MIN_MATCHES_FOR_EDGE",
+]
