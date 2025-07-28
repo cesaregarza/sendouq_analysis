@@ -1,0 +1,58 @@
+"""
+Tournament scraping module for Sendou.ink data.
+
+This module provides comprehensive scraping capabilities organized into focused submodules:
+- api: Core scraping functions and HTTP operations
+- discovery: Tournament discovery via calendar and other methods
+- batch: Batch processing and range scraping
+- storage: Data loading, saving, and management
+"""
+
+# Core API functions
+from rankings.scraping.api import (
+    build_tournament_url,
+    extract_tournament_id_from_url,
+    scrape_tournament,
+    validate_tournament_data,
+)
+
+# Batch processing functions
+from rankings.scraping.batch import (
+    scrape_latest_tournaments,
+    scrape_to_database,
+    scrape_tournament_batch,
+    scrape_tournament_range,
+    scrape_tournaments_from_calendar,
+)
+
+# Discovery functions
+from rankings.scraping.discovery import (
+    discover_tournaments_from_calendar,
+    get_latest_tournament_id,
+)
+
+# Storage and data management
+from rankings.scraping.storage import (
+    get_tournament_summary,
+    load_scraped_tournaments,
+)
+
+__all__ = [
+    # API
+    "scrape_tournament",
+    "build_tournament_url",
+    "validate_tournament_data",
+    "extract_tournament_id_from_url",
+    # Discovery
+    "discover_tournaments_from_calendar",
+    "get_latest_tournament_id",
+    # Batch processing
+    "scrape_tournament_batch",
+    "scrape_tournament_range",
+    "scrape_latest_tournaments",
+    "scrape_tournaments_from_calendar",
+    "scrape_to_database",
+    # Storage
+    "load_scraped_tournaments",
+    "get_tournament_summary",
+]
