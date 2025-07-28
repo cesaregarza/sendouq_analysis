@@ -11,6 +11,7 @@ from rankings.analysis.utils import (
     format_top_rankings,
     prepare_player_summary,
     prepare_tournament_summary,
+    get_most_influential_matches,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "prepare_player_summary",
     "prepare_tournament_summary",
     "format_top_rankings",
+    "get_most_influential_matches",
 ]
