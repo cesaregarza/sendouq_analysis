@@ -9,9 +9,9 @@ This module contains the advanced analysis capabilities:
 from rankings.analysis.engine import RatingEngine
 from rankings.analysis.utils import (
     format_top_rankings,
+    get_most_influential_matches,
     prepare_player_summary,
     prepare_tournament_summary,
-    get_most_influential_matches,
 )
 
 __all__ = [
