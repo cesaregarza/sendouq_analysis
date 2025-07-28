@@ -45,6 +45,36 @@ basic_rankings = rank_players_basic(matches_df, players_df)
 engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
 advanced_rankings = engine.rank_players(matches_df, players_df)
 
+# Convenience functions for adding names
+from rankings.analysis.utils import (
+    add_player_names,
+    add_tournament_names,
+    get_most_influential_matches,
+    get_player_match_history
+)
+
+# Add player names to rankings
+rankings_with_names = add_player_names(advanced_rankings, players_df, "id", "username")
+
+# Get a player's most influential matches
+influential = get_most_influential_matches(
+    player_id=123,
+    matches_df=matches_df,
+    players_df=players_df,
+    engine=engine,
+    top_n=10
+)
+
+# Get complete match history with names
+history = get_player_match_history(
+    player_id=123,
+    matches_df=matches_df,
+    players_df=players_df,
+    teams_df=tables["teams"],
+    tournament_data=raw_data,
+    limit=50
+)
+
 # Access tournament strength data
 tournament_influence = engine.tournament_influence
 tournament_strength = engine.tournament_strength
@@ -198,12 +228,64 @@ The tick-tock algorithm produces mutually consistent ratings where strong tourna
 - `numpy`: Numerical computations for PageRank
 - `zoneinfo`: Timezone handling for time decay
 
+## Utility Functions
+
+The module provides several convenience functions for enhancing data with human-readable names and timestamps:
+
+### Name Resolution Functions
+- `add_player_names()`: Add player usernames to DataFrames with user IDs
+- `add_team_names()`: Add team names to DataFrames with team IDs  
+- `add_tournament_names()`: Add tournament names from raw JSON data
+- `add_match_timestamps()`: Convert Unix timestamps to readable dates
+
+### Analysis Functions
+- `get_most_influential_matches()`: Find matches with highest impact on a player's ranking
+- `get_player_match_history()`: Get complete match history with names and context
+- `create_match_summary_with_names()`: Create comprehensive match summaries
+- `prepare_player_summary()`: Create player rankings with statistics
+- `prepare_tournament_summary()`: Create tournament summaries with strength metrics
+
+### Example Usage
+```python
+# Add names to rankings
+rankings_with_names = add_player_names(rankings_df, players_df)
+
+# Get influential matches with timestamps
+influential = get_most_influential_matches(player_id=123, ...)
+wins_with_names = add_tournament_names(influential["wins"], tournament_data)
+wins_with_dates = add_match_timestamps(wins_with_names)
+
+# Get full match history
+history = get_player_match_history(
+    player_id=123,
+    matches_df=matches_df,
+    players_df=players_df,
+    teams_df=teams_df,
+    tournament_data=raw_data,
+    limit=50
+)
+```
+
 ## Files
 
-- `__init__.py`: Main module exports
-- `parser.py`: Tournament data parsing
-- `basic_rankings.py`: Basic PageRank implementations
-- `advanced_rankings.py`: Advanced RatingEngine class
-- `constants.py`: Configuration constants
-- `utils.py`: Helper functions and utilities
+### Core Module Structure
+- `core/`
+  - `__init__.py`: Core module exports
+  - `parser.py`: Tournament data parsing from JSON
+  - `constants.py`: Configuration constants and defaults
+
+### Scraping Module
+- `scraping/`
+  - `__init__.py`: Scraping module exports
+  - `api.py`: Sendou.ink API interface
+  - `batch.py`: Batch scraping operations
+  - `discovery.py`: Tournament discovery via calendar
+  - `storage.py`: Data persistence utilities
+
+### Analysis Module  
+- `analysis/`
+  - `__init__.py`: Analysis module exports
+  - `engine.py`: Advanced RatingEngine with tick-tock algorithm
+  - `utils.py`: Analysis utilities and convenience functions
+
 - `README.md`: This documentation 

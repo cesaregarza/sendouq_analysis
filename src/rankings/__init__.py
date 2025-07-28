@@ -24,7 +24,24 @@ Examples:
 """
 
 # Analysis functionality
-from rankings.analysis import RatingEngine
+from rankings.analysis import (
+    RatingEngine,
+    add_match_timestamps,
+    add_player_names,
+    add_team_names,
+    add_tournament_names,
+    analyze_player_performance,
+    create_match_summary_with_names,
+    display_player_rankings,
+    format_influential_matches,
+    format_tournament_influence_summary,
+    generate_tournament_report,
+    get_most_influential_matches,
+    get_player_match_history,
+    get_tournament_name_lookup,
+    prepare_player_summary,
+    prepare_tournament_summary,
+)
 
 # Core functionality
 from rankings.core import parse_tournaments_data
@@ -79,8 +96,24 @@ __all__ = [
     # Scraping - Storage
     "load_scraped_tournaments",
     "get_tournament_summary",
-    # Analysis
+    # Analysis - Engine
     "RatingEngine",
+    # Analysis - Utility functions
+    "get_most_influential_matches",
+    "add_player_names",
+    "add_team_names",
+    "add_tournament_names",
+    "add_match_timestamps",
+    "analyze_player_performance",
+    "create_match_summary_with_names",
+    "display_player_rankings",
+    "format_influential_matches",
+    "format_tournament_influence_summary",
+    "generate_tournament_report",
+    "get_player_match_history",
+    "get_tournament_name_lookup",
+    "prepare_player_summary",
+    "prepare_tournament_summary",
     # Constants
     "DEFAULT_DECAY_HALF_LIFE_DAYS",
     "DEFAULT_DAMPING_FACTOR",
