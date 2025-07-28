@@ -1,6 +1,6 @@
+from sendouq_analysis.constants.columns import aggregate as agg_c
 from sendouq_analysis.constants.columns import matches as match_c
 from sendouq_analysis.constants.columns import user_memento as user_c
-from sendouq_analysis.constants.columns import aggregate as agg_c
 from sendouq_analysis.constants.table_names import (
     AGGREGATE_LATEST_PLAYER_STATS,
     AGGREGATE_PLAYER_STATS,
