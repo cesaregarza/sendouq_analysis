@@ -11,16 +11,20 @@ import numpy as np
 import polars as pl
 from scipy.optimize import minimize_scalar
 
+from rankings.analysis.transforms import bt_prob
 from rankings.core.logging import get_logger, log_timing
 
 
 def compute_match_probability(
-    rating_a: float, rating_b: float, alpha: float = 1.0
+    rating_a: float,
+    rating_b: float,
+    *,
+    alpha: float = 1.0,
+    score_transform: str = "bradley_terry",
+    global_prior: float | None = None,
 ) -> float:
     """
     Compute probability that team/player A beats team/player B.
-
-    Uses sigmoid function: P(A wins) = 1 / (1 + exp(-alpha * (r_A - r_B)))
 
     Parameters
     ----------
@@ -29,17 +33,33 @@ def compute_match_probability(
     rating_b : float
         Rating of team/player B
     alpha : float
-        Inverse temperature parameter (higher = more deterministic)
+        Temperature parameter (higher = more deterministic)
+    score_transform : str
+        Transform to apply: "bradley_terry", "logistic", or "identity"
+    global_prior : float, optional
+        Prior rating for unknown players (defaults to 0.05)
 
     Returns
     -------
     float
         Probability that A beats B
     """
-    rating_a = float(rating_a) if rating_a is not None else 0.0
-    rating_b = float(rating_b) if rating_b is not None else 0.0
-    z = alpha * (rating_a - rating_b)
-    return 1.0 / (1.0 + np.exp(-z))
+    prior = global_prior if global_prior is not None else 0.05
+    rating_a = max(float(rating_a) if rating_a is not None else prior, prior)
+    rating_b = max(float(rating_b) if rating_b is not None else prior, prior)
+
+    if score_transform == "bradley_terry":
+        # Use Bradley-Terry model with positive scores
+        return bt_prob(rating_a, rating_b, alpha=alpha)
+    elif score_transform == "logistic":
+        # Legacy logistic on raw score difference
+        z = alpha * (rating_a - rating_b)
+        return 1.0 / (1.0 + np.exp(-z))
+    elif score_transform == "identity":
+        # Assume ratings are already probabilities
+        return rating_a
+    else:
+        raise ValueError(f"Unknown score_transform: {score_transform}")
 
 
 def compute_match_loss(
@@ -73,12 +93,14 @@ def compute_match_loss(
 def compute_tournament_loss(
     matches_df: pl.DataFrame,
     rating_map: dict[int, float],
+    *,
     alpha: float = 1.0,
-    use_inverse_variance_weights: bool = True,
+    score_transform: str = "bradley_terry",
+    scheme: str = "entropy",
     winner_id_col: str = "winner_team_id",
     loser_id_col: str = "loser_team_id",
     return_predictions: bool = False,
-    weighting_scheme: str = "var_inv",
+    global_prior: float | None = None,
 ) -> tuple[float, dict[str, any]]:
     """
     Compute aggregated loss for a tournament.
@@ -90,17 +112,19 @@ def compute_tournament_loss(
     rating_map : Dict[int, float]
         Mapping from team/player ID to rating
     alpha : float
-        Inverse temperature parameter
-    use_inverse_variance_weights : bool
-        If True, weight matches by inverse variance (legacy parameter)
+        Temperature parameter
+    score_transform : str
+        Transform to apply: "bradley_terry", "logistic", or "identity"
+    scheme : str
+        Weighting scheme: "none", "var_inv", or "entropy"
     winner_id_col : str
         Column name for winner ID
     loser_id_col : str
         Column name for loser ID
     return_predictions : bool
         If True, include prediction probabilities in return dict
-    weighting_scheme : str
-        Weighting scheme: "var_inv", "entropy", or "none"
+    global_prior : float, optional
+        Prior rating for unknown players (defaults to 0.05)
 
     Returns
     -------
@@ -120,8 +144,6 @@ def compute_tournament_loss(
         ]
     )
 
-    losses = []
-    weights = []
     predictions = []
 
     with log_timing(
@@ -133,52 +155,45 @@ def compute_tournament_loss(
             winner_id = row["winner"]
             loser_id = row["loser"]
 
-            # Get ratings (default to 0 if not found)
-            r_winner = rating_map.get(winner_id, 0.0)
-            r_loser = rating_map.get(loser_id, 0.0)
+            # Get ratings (default to global_prior if not found)
+            prior = global_prior if global_prior is not None else 0.05
+            r_winner = rating_map.get(winner_id, prior)
+            r_loser = rating_map.get(loser_id, prior)
 
             # Compute probability that winner beats loser
-            p_win = compute_match_probability(r_winner, r_loser, alpha)
+            p_win = compute_match_probability(
+                r_winner,
+                r_loser,
+                alpha=alpha,
+                score_transform=score_transform,
+                global_prior=global_prior,
+            )
             predictions.append(p_win)
 
-            # Compute loss (winner actually won, so y=1)
-            loss = compute_match_loss(p_win, actual_winner_is_a=True)
-            losses.append(loss)
-
-            # Compute weight if using inverse variance
-            if use_inverse_variance_weights:
-                # Variance of Bernoulli = p(1-p)
-                variance = p_win * (1.0 - p_win)
-                # Avoid division by zero
-                weight = 1.0 / max(variance, 1e-10)
-            else:
-                weight = 1.0
-            weights.append(weight)
-
     # Convert to numpy arrays
-    losses = np.array(losses)
-    weights = np.array(weights)
     predictions = np.array(predictions)
 
-    if len(losses) == 0:
+    if len(predictions) == 0:
         logger.warning("No matches found, returning infinite loss")
         return np.inf, {"n_matches": 0}
 
-    # Apply new weighting scheme if specified
-    if weighting_scheme == "entropy":
-        final_loss = compute_weighted_log_loss(predictions, scheme="entropy")
-    elif weighting_scheme == "none":
-        final_loss = compute_weighted_log_loss(predictions, scheme="none")
+    # Compute loss using new unified weighting logic
+    base = -np.log(np.clip(predictions, 1e-15, 1.0 - 1e-15))  # Bernoulli y=1
+    if scheme == "var_inv":
+        w = 1.0 / np.maximum(predictions * (1 - predictions), 1e-10)
+    elif scheme == "entropy":
+        w = 2.0 * np.abs(predictions - 0.5)
     else:
-        # Legacy inverse variance weighting
-        final_loss = np.sum(losses * weights) / np.sum(weights)
+        w = np.ones_like(base)
+
+    final_loss = np.average(base, weights=w)
 
     # Compute additional metrics
     metrics = {
-        "n_matches": len(losses),
+        "n_matches": len(predictions),
         "mean_probability": np.mean(predictions),
         "accuracy": np.mean(predictions > 0.5),
-        "unweighted_loss": np.mean(losses),
+        "unweighted_loss": np.mean(base),
         "weighted_loss": final_loss,
     }
 
@@ -191,7 +206,7 @@ def compute_tournament_loss(
 
         outcomes = np.ones_like(predictions)  # All winners
         metrics["brier_score"] = compute_brier_score(predictions, outcomes)
-        metrics["bucketised_metrics"] = bucketised_metrics(predictions, losses)
+        metrics["bucketised_metrics"] = bucketised_metrics(predictions, base)
 
     logger.debug(
         f"Tournament loss computed: {final_loss:.4f} (accuracy: {metrics['accuracy']:.3f})"
@@ -309,10 +324,12 @@ def bucketised_metrics(
 def fit_alpha_parameter(
     train_matches_df: pl.DataFrame,
     rating_map: dict[int, float],
-    alpha_bounds: tuple[float, float] = (0.1, 10.0),
+    alpha_bounds: tuple[float, float] = (0.1, 5.0),
+    score_transform: str = "bradley_terry",
     winner_id_col: str = "winner_team_id",
     loser_id_col: str = "loser_team_id",
-    weighting_scheme: str = "none",
+    scheme: str = "entropy",
+    global_prior: float | None = None,
 ) -> float:
     """
     Fit the alpha parameter using maximum likelihood on training data.
@@ -325,12 +342,16 @@ def fit_alpha_parameter(
         Pre-computed ratings
     alpha_bounds : Tuple[float, float]
         Bounds for alpha search
+    score_transform : str
+        Transform to apply: "bradley_terry", "logistic", or "identity"
     winner_id_col : str
         Column name for winner ID
     loser_id_col : str
         Column name for loser ID
-    weighting_scheme : str
-        Weighting scheme: "var_inv", "entropy", or "none"
+    scheme : str
+        Weighting scheme: "none", "var_inv", or "entropy"
+    global_prior : float, optional
+        Prior rating for unknown players (defaults to 0.05)
     Returns
     -------
     float
@@ -347,11 +368,12 @@ def fit_alpha_parameter(
             train_matches_df,
             rating_map,
             alpha=alpha,
-            use_inverse_variance_weights=False,
+            score_transform=score_transform,
+            scheme=scheme,
             winner_id_col=winner_id_col,
             loser_id_col=loser_id_col,
             return_predictions=False,
-            weighting_scheme=weighting_scheme,
+            global_prior=global_prior,
         )
         return loss * len(train_matches_df)
 

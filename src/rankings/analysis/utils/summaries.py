@@ -9,19 +9,48 @@ from __future__ import annotations
 
 from typing import Optional
 
+import numpy as np
 import polars as pl
 
+from rankings.analysis.transforms import log_center
 from rankings.core.constants import MIN_TOURNAMENTS_FOR_RANKING
 from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
+
+
+def _agg_player_scores(scores: list[float]) -> float:
+    """
+    Aggregate player scores using mean of log-centred scores.
+
+    Parameters
+    ----------
+    scores : list[float]
+        List of player scores
+
+    Returns
+    -------
+    float
+        Aggregated team score
+    """
+    if not scores:
+        return 0.0
+    # Filter None values
+    valid_scores = [s for s in scores if s is not None]
+    if not valid_scores:
+        return 0.0
+    centred = log_center(valid_scores)
+    return float(np.mean(centred))
 
 
 def derive_team_ratings_from_players(
     players_df: pl.DataFrame,
     player_ratings_df: pl.DataFrame,
-    agg: str = "mean",  # or "median", "max", etc.
+    agg: str = "log_centered_mean",  # or "mean", "median", "max", etc.
 ) -> pl.DataFrame:
     """
     Map each team to an aggregate of its members' player ratings.
+
+    Default aggregation uses mean of log-centred scores to work better
+    in power-law space as specified in the plan.
 
     Parameters
     ----------
@@ -30,7 +59,7 @@ def derive_team_ratings_from_players(
     player_ratings_df : pl.DataFrame
         Player ratings DataFrame with id and player_rank columns
     agg : str, optional
-        Aggregation method ("mean", "median", "max", etc.)
+        Aggregation method ("log_centered_mean", "mean", "median", "max", etc.)
 
     Returns
     -------
@@ -56,10 +85,21 @@ def derive_team_ratings_from_players(
             .alias("player_rating")
         )
 
-        agg_expr = getattr(pl.col("player_rating"), agg)()
-        result = with_ratings.group_by("team_id").agg(
-            agg_expr.alias("team_rating")
-        )
+        if agg == "log_centered_mean":
+            # Use map_groups for the aggregation
+            result = with_ratings.group_by("team_id").agg(
+                pl.col("player_rating")
+                .map_elements(
+                    lambda scores: _agg_player_scores(scores.to_list()),
+                    return_dtype=pl.Float64,
+                )
+                .alias("team_rating")
+            )
+        else:
+            agg_expr = getattr(pl.col("player_rating"), agg)()
+            result = with_ratings.group_by("team_id").agg(
+                agg_expr.alias("team_rating")
+            )
 
     log_dataframe_stats(logger, result, "team_ratings_result")
     logger.debug(f"Generated team ratings for {result.height} teams")

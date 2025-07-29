@@ -31,6 +31,7 @@ from rankings.analysis import (
     add_team_names,
     add_tournament_names,
     analyze_player_performance,
+    bt_prob,
     create_match_summary_with_names,
     derive_team_ratings_from_players,
     display_player_rankings,
@@ -124,6 +125,8 @@ __all__ = [
     "get_tournament_summary",
     # Analysis - Engine
     "RatingEngine",
+    # Analysis - Probability models
+    "bt_prob",
     # Analysis - Utility functions
     "get_most_influential_matches",
     "add_player_names",

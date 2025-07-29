@@ -20,6 +20,63 @@ from rankings.evaluation.loss import (
     compute_tournament_loss,
     fit_alpha_parameter,
 )
+from rankings.evaluation.metrics_extras import (
+    accuracy_threshold,
+    alpha_std,
+    concordance,
+    placement_spearman,
+    skill_score,
+    upset_oe,
+)
+
+
+def _count_unrated_players(
+    team_id: int, tournament_id: int, players_df: pl.DataFrame, rating_map: dict
+) -> int:
+    """Count unrated players in a team for a specific tournament."""
+    roster = players_df.filter(
+        (pl.col("team_id") == team_id)
+        & (pl.col("tournament_id") == tournament_id)
+    )
+    if roster.height == 0:
+        return 0
+    user_ids = roster["user_id"].to_list()
+    unrated_count = sum(1 for uid in user_ids if uid not in rating_map)
+    return unrated_count
+
+
+def _filter_incomplete_rosters(
+    matches_df: pl.DataFrame,
+    players_df: pl.DataFrame,
+    rating_map: dict,
+    winner_col: str = "winner_team_id",
+    loser_col: str = "loser_team_id",
+) -> pl.DataFrame:
+    """Filter matches where either team has >= 2 unrated players."""
+    if players_df is None:
+        return matches_df
+
+    filtered_matches = []
+    for row in matches_df.iter_rows(named=True):
+        winner_team = row[winner_col]
+        loser_team = row[loser_col]
+        tournament_id = row["tournament_id"]
+
+        winner_unrated = _count_unrated_players(
+            winner_team, tournament_id, players_df, rating_map
+        )
+        loser_unrated = _count_unrated_players(
+            loser_team, tournament_id, players_df, rating_map
+        )
+
+        # Skip if either team has >= 2 unrated players
+        if winner_unrated < 2 and loser_unrated < 2:
+            filtered_matches.append(row)
+
+    if not filtered_matches:
+        return pl.DataFrame([], schema=matches_df.schema)
+
+    return pl.DataFrame(filtered_matches)
 
 
 def create_time_based_splits(
@@ -115,6 +172,8 @@ def evaluate_on_split(
     agg_func: str = "mean",
     fit_alpha: bool = True,
     alpha: float = 1.0,
+    alpha_bounds: tuple[float, float] = (0.1, 5.0),
+    score_transform: str = "bradley_terry",
 ) -> Dict[str, float]:
     """
     Evaluate rating engine on a single train/test split.
@@ -143,7 +202,10 @@ def evaluate_on_split(
         Whether to fit alpha on training data
     alpha : float
         Fixed alpha value if not fitting
-
+    alpha_bounds : tuple[float, float]
+        Bounds for alpha fitting
+    score_transform : str
+        Transform to apply: "bradley_terry", "logistic", or "identity"
     Returns
     -------
     Dict[str, float]
@@ -208,7 +270,27 @@ def evaluate_on_split(
         winner_col = "winner_user_id"
         loser_col = "loser_user_id"
 
-    # Fit alpha if requested
+    # Apply row-skipping rule for incomplete rosters
+    if prediction_entity == "team" and players_df is not None:
+        logger.debug("Applying row-skipping rule for incomplete rosters")
+        original_train_size = train_df.height
+        original_test_size = test_df.height
+
+        train_df = _filter_incomplete_rosters(
+            train_df, players_df, rating_map, winner_col, loser_col
+        )
+        test_df = _filter_incomplete_rosters(
+            test_df, players_df, rating_map, winner_col, loser_col
+        )
+
+        logger.debug(
+            f"Filtered training matches: {original_train_size} -> {train_df.height}"
+        )
+        logger.debug(
+            f"Filtered test matches: {original_test_size} -> {test_df.height}"
+        )
+
+    # Fit alpha if requested (using filtered training data)
     if fit_alpha:
         logger.debug("Fitting alpha parameter on training data")
         alpha = fit_alpha_parameter(
@@ -216,6 +298,10 @@ def evaluate_on_split(
             rating_map,
             winner_id_col=winner_col,
             loser_id_col=loser_col,
+            alpha_bounds=alpha_bounds,
+            score_transform=score_transform,
+            scheme="entropy",
+            global_prior=getattr(engine, "global_prior_", None),
         )
     else:
         logger.debug(f"Using fixed alpha={alpha}")
@@ -235,9 +321,44 @@ def evaluate_on_split(
             tournament_matches,
             rating_map,
             alpha=alpha,
+            score_transform=score_transform,
+            scheme="entropy",
             winner_id_col=winner_col,
             loser_id_col=loser_col,
+            return_predictions=True,
+            global_prior=getattr(engine, "global_prior_", None),
         )
+
+        # Compute additional metrics
+        try:
+            metrics["c_stat"] = concordance(
+                tournament_matches,
+                rating_map,
+                winner_col=winner_col,
+                loser_col=loser_col,
+            )
+        except Exception:
+            metrics["c_stat"] = np.nan
+
+        try:
+            metrics["skill_score"] = skill_score(
+                tournament_matches,
+                rating_map,
+                alpha=alpha,
+                score_transform=score_transform,
+                winner_col=winner_col,
+                loser_col=loser_col,
+            )
+        except Exception:
+            metrics["skill_score"] = np.nan
+
+        try:
+            predictions = metrics.get("predictions", np.array([]))
+            metrics["upset_oe"] = upset_oe(predictions)
+            metrics["acc_conf"] = accuracy_threshold(predictions, 0.65)
+        except Exception:
+            metrics["upset_oe"] = np.nan
+            metrics["acc_conf"] = np.nan
 
         tournament_losses.append(loss)
         metrics["tournament_id"] = tournament_id
@@ -261,8 +382,19 @@ def evaluate_on_split(
 
     # Add average metrics
     if all_metrics:
-        for key in ["accuracy", "mean_probability"]:
-            values = [m.get(key, 0) for m in all_metrics if key in m]
+        for key in [
+            "accuracy",
+            "mean_probability",
+            "c_stat",
+            "skill_score",
+            "upset_oe",
+            "acc_conf",
+        ]:
+            values = [
+                m.get(key, 0)
+                for m in all_metrics
+                if key in m and np.isfinite(m[key])
+            ]
             if values:
                 results[f"avg_{key}"] = np.mean(values)
 
@@ -280,6 +412,8 @@ def cross_validate_ratings(
     agg_func: str = "mean",
     n_splits: int = 5,
     fit_alpha: bool = True,
+    alpha_bounds: tuple[float, float] = (0.1, 5.0),
+    score_transform: str = "bradley_terry",
     regularization_lambda: float = 0.0,
     default_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -308,6 +442,10 @@ def cross_validate_ratings(
         Number of CV folds
     fit_alpha : bool
         Whether to fit alpha parameter
+    alpha_bounds : tuple[float, float]
+        Bounds for alpha fitting
+    score_transform : str
+        Transform to apply: "bradley_terry", "logistic", or "identity"
     regularization_lambda : float
         L2 regularization strength
     default_params : Optional[Dict[str, Any]]
@@ -349,6 +487,8 @@ def cross_validate_ratings(
                 prediction_entity=prediction_entity,
                 agg_func=agg_func,
                 fit_alpha=fit_alpha,
+                alpha_bounds=alpha_bounds,
+                score_transform=score_transform,
             )
 
             results["split_id"] = i
@@ -360,6 +500,10 @@ def cross_validate_ratings(
     losses = [r["loss"] for r in split_results]
     avg_loss = np.mean(losses)
     std_loss = np.std(losses)
+
+    # Compute alpha_std if alphas were fitted
+    alphas = [r.get("alpha", np.nan) for r in split_results]
+    alpha_variability = alpha_std(alphas) if fit_alpha else np.nan
 
     # Add regularization if specified
     if regularization_lambda > 0 and default_params:
@@ -386,13 +530,35 @@ def cross_validate_ratings(
         f"Cross-validation complete: avg_loss={avg_loss:.4f} ± {std_loss:.4f}"
     )
 
+    # Aggregate other metrics across splits
+    aggregated_metrics = {}
+    for metric in [
+        "c_stat",
+        "skill_score",
+        "upset_oe",
+        "acc_conf",
+        "accuracy",
+        "mean_probability",
+    ]:
+        values = []
+        for r in split_results:
+            avg_key = f"avg_{metric}"
+            if avg_key in r and np.isfinite(r[avg_key]):
+                values.append(r[avg_key])
+
+        if values:
+            aggregated_metrics[f"avg_{metric}"] = np.mean(values)
+            aggregated_metrics[f"std_{metric}"] = np.std(values)
+
     return {
         "avg_loss": avg_loss,
         "regularized_loss": regularized_loss,
         "std_loss": std_loss,
+        "alpha_std": alpha_variability,
         "split_results": split_results,
         "engine_params": engine_params,
         "n_splits": n_splits,
+        **aggregated_metrics,
     }
 
 

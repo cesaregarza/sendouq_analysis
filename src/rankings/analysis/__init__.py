@@ -7,6 +7,7 @@ This module contains the advanced analysis capabilities:
 """
 
 from rankings.analysis.engine import RatingEngine
+from rankings.analysis.transforms import bt_prob
 from rankings.analysis.utils import (
     add_match_timestamps,
     add_player_names,
@@ -30,6 +31,8 @@ from rankings.analysis.utils import (
 __all__ = [
     # Engine
     "RatingEngine",
+    # Probability models
+    "bt_prob",
     # Utils
     "prepare_player_summary",
     "prepare_tournament_summary",

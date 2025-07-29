@@ -5,6 +5,12 @@ from rankings.evaluation.cross_validation import (
     cross_validate_ratings,
     evaluate_on_split,
 )
+from rankings.evaluation.dashboards import (
+    format_metrics_table,
+    format_split_summary,
+    format_tournament_metrics,
+    print_evaluation_dashboard,
+)
 from rankings.evaluation.loss import (
     bucketised_metrics,
     compute_cross_tournament_loss,
@@ -24,6 +30,14 @@ from rankings.evaluation.metrics import (
     compute_spearman_correlation,
     evaluate_by_rating_separation,
     evaluate_tournament_predictions,
+)
+from rankings.evaluation.metrics_extras import (
+    accuracy_threshold,
+    alpha_std,
+    concordance,
+    placement_spearman,
+    skill_score,
+    upset_oe,
 )
 from rankings.evaluation.optimizer import (
     BayesianOptimizer,
@@ -50,6 +64,13 @@ __all__ = [
     "compute_round_metrics",
     "evaluate_tournament_predictions",
     "aggregate_tournament_metrics",
+    # Extra metrics
+    "concordance",
+    "skill_score",
+    "upset_oe",
+    "accuracy_threshold",
+    "placement_spearman",
+    "alpha_std",
     # Cross-validation
     "create_time_based_splits",
     "evaluate_on_split",
@@ -58,4 +79,9 @@ __all__ = [
     "GridSearchOptimizer",
     "BayesianOptimizer",
     "optimize_rating_engine",
+    # Dashboards
+    "format_metrics_table",
+    "format_split_summary",
+    "format_tournament_metrics",
+    "print_evaluation_dashboard",
 ]

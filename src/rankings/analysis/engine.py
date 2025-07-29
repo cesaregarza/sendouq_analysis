@@ -76,7 +76,7 @@ class RatingEngine:
         PageRank convergence tolerance
     now : datetime, optional
         Reference time for decay calculation
-    teleport : str or dict, default="uniform"
+    teleport : str or dict, default="volume_inverse"
         Teleport vector specification ("uniform", "volume_inverse", or dict)
     influence_agg_method : str, default="mean"
         Method for aggregating participant ratings into tournament influence
@@ -97,7 +97,7 @@ class RatingEngine:
         max_pagerank_iter: int = DEFAULT_MAX_PAGERANK_ITER,
         pagerank_tol: float = DEFAULT_PAGERANK_TOLERANCE,
         now: Optional[datetime] = None,
-        teleport: str | dict[int, float] = TELEPORT_UNIFORM,
+        teleport: str | dict[int, float] = TELEPORT_VOLUME_INVERSE,
         influence_agg_method: Literal[
             "mean", "sum", "median", "top_20_sum"
         ] = DEFAULT_INFLUENCE_AGG_METHOD,
@@ -133,6 +133,7 @@ class RatingEngine:
         self.tournament_influence_: Optional[Dict[int, float]] = None
         self.tournament_strength: Optional[pl.DataFrame] = None
         self.ratings_df: Optional[pl.DataFrame] = None
+        self.global_prior_: Optional[float] = None
 
     @property
     def tournament_influence(self) -> Optional[Dict[int, float]]:
@@ -361,20 +362,34 @@ class RatingEngine:
             {"tournament_id": list(S.keys()), "S": list(S.values())}
         )
 
-        # Filter valid matches and join strengths
+        # Filter valid matches (exclude byes/forfeits) and join strengths
         df = (
             matches.filter(
                 pl.col("winner_team_id").is_not_null()
                 & pl.col("loser_team_id").is_not_null()
+                & ~pl.col("is_bye", default=False)
             )
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)  # Default strength for unseen tournaments
         )
 
-        # Add event timestamps and compute weights
+        # Add event timestamps and compute weights with influence decay
         df = df.with_columns(self._event_ts_expr().alias("ts"))
+
+        # Compute age in days
+        age_days = (
+            int(self.now.timestamp()) - pl.col("ts").cast(pl.Float64)
+        ) / 86400.0
+
+        # Apply influence decay: λ = log(2)/365 (1-year half-life for influence)
+        influence_decay_rate = math.log(2) / 365.0
+        influence_decay = (-influence_decay_rate * age_days).exp()
+
         df = df.with_columns(
-            (self._decay_expr("ts") * (pl.col("S") ** self.beta)).alias("w")
+            (
+                self._decay_expr("ts")
+                * ((pl.col("S") * influence_decay) ** self.beta)
+            ).alias("w")
         )
 
         # Aggregate and normalize edges
@@ -398,20 +413,30 @@ class RatingEngine:
             {"tournament_id": list(S.keys()), "S": list(S.values())}
         )
 
-        # Prepare matches with strengths and weights
+        # Prepare matches with strengths and weights (exclude byes/forfeits)
         m = (
             matches.filter(
                 pl.col("winner_team_id").is_not_null()
                 & pl.col("loser_team_id").is_not_null()
+                & ~pl.col("is_bye", default=False)
             )
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)
         )
         m = m.with_columns(self._event_ts_expr().alias("ts"))
+
+        # Compute age in days and apply influence decay
+        age_days = (
+            int(self.now.timestamp()) - pl.col("ts").cast(pl.Float64)
+        ) / 86400.0
+        influence_decay_rate = math.log(2) / 365.0
+        influence_decay = (-influence_decay_rate * age_days).exp()
+
         m = m.with_columns(
-            (self._decay_expr("ts") * (pl.col("S") ** self.beta)).alias(
-                "match_w"
-            )
+            (
+                self._decay_expr("ts")
+                * ((pl.col("S") * influence_decay) ** self.beta)
+            ).alias("match_w")
         )
 
         # Player selection for joins
@@ -567,6 +592,10 @@ class RatingEngine:
             "score", descending=True
         )
 
+        # Compute global_prior as 5th percentile of scores
+        self.global_prior_ = float(np.quantile(r, 0.05))
+        self.logger.debug(f"Global prior set to: {self.global_prior_:.6f}")
+
         self.logger.debug(
             f"PageRank completed: top score={result['score'][0]:.6f}, bottom score={result['score'][-1]:.6f}"
         )
@@ -617,11 +646,13 @@ class RatingEngine:
                 .rename({"user_id": "id"})
             )
 
-        # Add ratings to participant data
+        # Add ratings to participant data (use global_prior instead of 0.0)
+        global_prior = self.global_prior_ or 0.05
         part_df = part_df.with_columns(
             pl.col("id")
             .map_elements(
-                lambda x: rating_map.get(x, 0.0), return_dtype=pl.Float64
+                lambda x: rating_map.get(x, global_prior),
+                return_dtype=pl.Float64,
             )
             .alias("r")
         )
@@ -696,7 +727,8 @@ class RatingEngine:
         part_df = part_df.with_columns(
             pl.col("id")
             .map_elements(
-                lambda x: rating_map.get(x, 0.0), return_dtype=pl.Float64
+                lambda x: rating_map.get(x, self.global_prior_ or 0.05),
+                return_dtype=pl.Float64,
             )
             .alias("r")
         )

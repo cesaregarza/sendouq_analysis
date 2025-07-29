@@ -10,6 +10,9 @@ This module is organized into submodules:
 - analysis: Higher-level analysis functions
 """
 
+# Probability model functions
+from rankings.analysis.transforms import bt_prob
+
 # Higher-level analysis functions
 from rankings.analysis.utils.analysis import (
     analyze_player_performance,
@@ -60,6 +63,8 @@ __all__ = [
     "analyze_player_performance",
     "compare_player_performances",
     "generate_tournament_report",
+    # Probability models
+    "bt_prob",
     # Summaries
     "derive_team_ratings_from_players",
     "prepare_player_summary",

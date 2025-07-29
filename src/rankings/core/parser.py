@@ -210,10 +210,14 @@ def parse_tournaments_data(
                 elif winner_id == row.get("team2_id"):
                     score_diff = team2_score - team1_score
 
+            # Check if this is a bye or forfeit
+            is_bye = (opp2 is None) or (row["status"] in {"bye", "forfeit"})
+
             row["winner_team_id"] = winner_id
             row["loser_team_id"] = loser_id
             row["score_diff"] = score_diff
             row["total_games"] = total_games
+            row["is_bye"] = is_bye
 
             match_rows.append(row)
 
