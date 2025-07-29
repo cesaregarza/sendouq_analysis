@@ -32,6 +32,7 @@ from rankings.analysis import (
     add_tournament_names,
     analyze_player_performance,
     create_match_summary_with_names,
+    derive_team_ratings_from_players,
     display_player_rankings,
     format_influential_matches,
     format_tournament_influence_summary,
@@ -54,7 +55,32 @@ from rankings.core.constants import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_PAGERANK_TOLERANCE,
     DEFAULT_TOURNAMENT_STRENGTH_WEIGHT,
+    MIN_TOURNAMENTS_BEFORE_CV,
     SENDOU_BASE_URL,
+)
+
+# Evaluation functionality
+from rankings.evaluation import (  # Loss functions; Metrics; Cross-validation; Optimization
+    BayesianOptimizer,
+    GridSearchOptimizer,
+    bucketised_metrics,
+    compute_accuracy,
+    compute_accuracy_at_threshold,
+    compute_brier_score,
+    compute_cross_tournament_loss,
+    compute_expected_upset_rate,
+    compute_match_loss,
+    compute_match_probability,
+    compute_round_metrics,
+    compute_spearman_correlation,
+    compute_tournament_loss,
+    compute_weighted_log_loss,
+    create_time_based_splits,
+    cross_validate_ratings,
+    evaluate_by_rating_separation,
+    evaluate_on_split,
+    fit_alpha_parameter,
+    optimize_rating_engine,
 )
 
 # Scraping functionality
@@ -106,6 +132,7 @@ __all__ = [
     "add_match_timestamps",
     "analyze_player_performance",
     "create_match_summary_with_names",
+    "derive_team_ratings_from_players",
     "display_player_rankings",
     "format_influential_matches",
     "format_tournament_influence_summary",
@@ -114,12 +141,37 @@ __all__ = [
     "get_tournament_name_lookup",
     "prepare_player_summary",
     "prepare_tournament_summary",
+    # Evaluation - Loss functions
+    "compute_match_probability",
+    "compute_match_loss",
+    "compute_tournament_loss",
+    "compute_cross_tournament_loss",
+    "compute_weighted_log_loss",
+    "bucketised_metrics",
+    "fit_alpha_parameter",
+    # Evaluation - Metrics
+    "compute_brier_score",
+    "compute_accuracy",
+    "compute_accuracy_at_threshold",
+    "compute_expected_upset_rate",
+    "evaluate_by_rating_separation",
+    "compute_spearman_correlation",
+    "compute_round_metrics",
+    # Evaluation - Cross-validation
+    "create_time_based_splits",
+    "evaluate_on_split",
+    "cross_validate_ratings",
+    # Evaluation - Optimization
+    "GridSearchOptimizer",
+    "BayesianOptimizer",
+    "optimize_rating_engine",
     # Constants
     "DEFAULT_DECAY_HALF_LIFE_DAYS",
     "DEFAULT_DAMPING_FACTOR",
     "DEFAULT_TOURNAMENT_STRENGTH_WEIGHT",
     "DEFAULT_PAGERANK_TOLERANCE",
     "DEFAULT_MAX_ITERATIONS",
+    "MIN_TOURNAMENTS_BEFORE_CV",
     "SENDOU_BASE_URL",
     "CALENDAR_URL",
 ]

@@ -8,6 +8,7 @@ strength values until convergence.
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional
@@ -30,6 +31,12 @@ from rankings.core.constants import (
     DEFAULT_TICK_TOCK_TOLERANCE,
     TELEPORT_UNIFORM,
     TELEPORT_VOLUME_INVERSE,
+)
+from rankings.core.logging import (
+    get_logger,
+    log_algorithm_convergence,
+    log_dataframe_stats,
+    log_timing,
 )
 
 
@@ -99,6 +106,14 @@ class RatingEngine:
         ] = DEFAULT_STRENGTH_AGG,
         strength_k: int = DEFAULT_STRENGTH_K,
     ):
+        self.logger = get_logger(__name__)
+        self.logger.info("Initializing RatingEngine with parameters:")
+        self.logger.info(f"  decay_half_life_days={decay_half_life_days}")
+        self.logger.info(f"  damping_factor={damping_factor}")
+        self.logger.info(f"  beta={beta}")
+        self.logger.info(f"  tick_tock_stabilize_tol={tick_tock_stabilize_tol}")
+        self.logger.info(f"  max_tick_tock={max_tick_tock}")
+        self.logger.info(f"  influence_agg_method={influence_agg_method}")
         self.decay_half_life_days = decay_half_life_days
         self.decay_rate = math.log(2.0) / decay_half_life_days
         self.damping_factor = damping_factor
@@ -142,12 +157,22 @@ class RatingEngine:
         pl.DataFrame
             Team rankings with columns: team_id, team_rank
         """
-        return self._tick_tock_loop(
-            matches=matches,
-            players=None,
-            node_from="loser_team_id",
-            node_to="winner_team_id",
+        self.logger.info("Starting team ranking calculation")
+        log_dataframe_stats(self.logger, matches, "team_matches")
+
+        with log_timing(self.logger, "team ranking calculation"):
+            result = self._tick_tock_loop(
+                matches=matches,
+                players=None,
+                node_from="loser_team_id",
+                node_to="winner_team_id",
+            )
+
+        log_dataframe_stats(self.logger, result, "team_rankings_result")
+        self.logger.info(
+            f"Team ranking completed: {result.height} teams ranked"
         )
+        return result
 
     def rank_players(
         self, matches: pl.DataFrame, players: pl.DataFrame
@@ -167,12 +192,23 @@ class RatingEngine:
         pl.DataFrame
             Player rankings with columns: user_id, player_rank
         """
-        return self._tick_tock_loop(
-            matches=matches,
-            players=players,
-            node_from="loser_user_id",
-            node_to="winner_user_id",
+        self.logger.info("Starting player ranking calculation")
+        log_dataframe_stats(self.logger, matches, "matches")
+        log_dataframe_stats(self.logger, players, "players")
+
+        with log_timing(self.logger, "player ranking calculation"):
+            result = self._tick_tock_loop(
+                matches=matches,
+                players=players,
+                node_from="loser_user_id",
+                node_to="winner_user_id",
+            )
+
+        log_dataframe_stats(self.logger, result, "player_rankings_result")
+        self.logger.info(
+            f"Player ranking completed: {result.height} players ranked"
         )
+        return result
 
     # =========================================================================
     # Core tick-tock algorithm
@@ -192,47 +228,104 @@ class RatingEngine:
         Alternates between computing ratings (tick) and updating tournament
         strengths (tock) until convergence.
         """
+        self.logger.debug(
+            f"Starting tick-tock loop with max_iterations={self.max_tick_tock}"
+        )
+        log_dataframe_stats(self.logger, matches, "tick_tock_matches")
+        if players is not None:
+            log_dataframe_stats(self.logger, players, "tick_tock_players")
+
         # Initialize tournament influences to 1.0
         tournament_influence = {
             tid: 1.0 for tid in matches["tournament_id"].unique()
         }
+        self.logger.info(
+            f"Initialized {len(tournament_influence)} tournaments with influence=1.0"
+        )
         prev_influence = {}
         rating_df = pl.DataFrame([])
 
-        for i in range(self.max_tick_tock):
-            # TICK: Build edges with current tournament strengths
-            if node_from == "loser_team_id":
-                edges = self._build_team_edges(matches, tournament_influence)
-            else:  # players
-                assert players is not None
-                edges = self._build_player_edges(
-                    matches, players, tournament_influence
+        with log_timing(self.logger, "tick-tock iterations"):
+            for i in range(self.max_tick_tock):
+                self.logger.debug(
+                    f"Starting tick-tock iteration {i + 1}/{self.max_tick_tock}"
                 )
 
-            rating_df = self._pagerank(
-                edges, node_col_from=node_from, node_col_to=node_to
-            )
+                # TICK: Build edges with current tournament strengths
+                with log_timing(
+                    self.logger,
+                    f"tick step {i + 1} - edge building",
+                    logging.DEBUG,
+                ):
+                    if node_from == "loser_team_id":
+                        edges = self._build_team_edges(
+                            matches, tournament_influence
+                        )
+                    else:  # players
+                        assert players is not None
+                        edges = self._build_player_edges(
+                            matches, players, tournament_influence
+                        )
 
-            # TOCK: Recompute tournament strengths from fresh ratings
-            tournament_influence = self._compute_tournament_influence(
-                rating_df, matches, players, node_to
-            )
-
-            # Check convergence
-            delta = sum(
-                abs(tournament_influence[t] - prev_influence.get(t, 0.0))
-                for t in tournament_influence
-            ) / len(tournament_influence)
-
-            prev_influence = tournament_influence
-            if delta < self.tick_tock_stabilize_tol:
-                print(
-                    f"Tick-tock stabilized at iteration {i + 1} with delta {delta:.2e}"
+                log_dataframe_stats(
+                    self.logger,
+                    edges,
+                    f"edges_iteration_{i + 1}",
+                    logging.DEBUG,
                 )
-                break
+
+                with log_timing(
+                    self.logger, f"tick step {i + 1} - PageRank", logging.DEBUG
+                ):
+                    rating_df = self._pagerank(
+                        edges, node_col_from=node_from, node_col_to=node_to
+                    )
+
+                log_dataframe_stats(
+                    self.logger,
+                    rating_df,
+                    f"ratings_iteration_{i + 1}",
+                    logging.DEBUG,
+                )
+
+                # TOCK: Recompute tournament strengths from fresh ratings
+                with log_timing(
+                    self.logger,
+                    f"tock step {i + 1} - tournament influence",
+                    logging.DEBUG,
+                ):
+                    tournament_influence = self._compute_tournament_influence(
+                        rating_df, matches, players, node_to
+                    )
+
+                # Check convergence
+                delta = sum(
+                    abs(tournament_influence[t] - prev_influence.get(t, 0.0))
+                    for t in tournament_influence
+                ) / len(tournament_influence)
+
+                log_algorithm_convergence(
+                    self.logger,
+                    i + 1,
+                    delta,
+                    self.tick_tock_stabilize_tol,
+                    "tick-tock",
+                )
+
+                prev_influence = tournament_influence
+                if delta < self.tick_tock_stabilize_tol:
+                    self.logger.info(
+                        f"Tick-tock converged at iteration {i + 1} with delta {delta:.2e}"
+                    )
+                    break
+            else:
+                self.logger.warning(
+                    f"Tick-tock reached max iterations ({self.max_tick_tock}) without convergence. Final delta: {delta:.2e}"
+                )
 
         # Save final results
         self.tournament_influence_ = tournament_influence
+        self.logger.debug("Computing retrospective tournament strengths")
         self._compute_retro_strength(
             rating_df, matches, players, node_to, tournament_influence
         )
@@ -242,9 +335,15 @@ class RatingEngine:
         score_name = (
             "team_rank" if node_from.startswith("loser_team") else "player_rank"
         )
-        return rating_df.rename({"score": score_name}).sort(
+        result = rating_df.rename({"score": score_name}).sort(
             score_name, descending=True
         )
+
+        log_dataframe_stats(self.logger, result, "final_tick_tock_result")
+        self.logger.info(
+            f"Tick-tock loop completed, returning {result.height} ranked entities"
+        )
+        return result
 
     # =========================================================================
     # Edge building functions
@@ -383,7 +482,10 @@ class RatingEngine:
         """
         Compute PageRank from edge table with flexible teleport vectors.
         """
+        self.logger.debug(f"Computing PageRank with {edges.height} edges")
+
         if edges.is_empty():
+            self.logger.warning("Empty edges DataFrame, returning empty result")
             return pl.DataFrame([])
 
         # Extract unique nodes
@@ -392,9 +494,11 @@ class RatingEngine:
             | set(edges[node_col_to].unique())
         )
         n = len(nodes)
+        self.logger.debug(f"PageRank graph has {n} nodes")
         index: Dict[int, int] = {v: i for i, v in enumerate(nodes)}
 
         # Build transition matrix
+        self.logger.debug("Building transition matrix")
         M = np.zeros((n, n), dtype=float)
         for row in edges.iter_rows(named=True):
             i = index[row[node_col_from]]
@@ -403,9 +507,17 @@ class RatingEngine:
 
         # Handle dangling nodes (no outgoing edges)
         row_sums = M.sum(axis=1)
-        M[row_sums == 0.0] = 1.0 / n
+        dangling_nodes = np.sum(row_sums == 0.0)
+        if dangling_nodes > 0:
+            self.logger.debug(
+                f"Found {dangling_nodes} dangling nodes, fixing with uniform distribution"
+            )
+            M[row_sums == 0.0] = 1.0 / n
 
         # Create teleport vector
+        self.logger.debug(
+            f"Creating teleport vector with spec: {self.teleport_spec}"
+        )
         teleport_vec = self._make_teleport_vec(nodes, edges, node_col_from)
         assert abs(teleport_vec.sum() - 1.0) < 1e-12
 
@@ -414,14 +526,33 @@ class RatingEngine:
         r = np.full(n, 1.0 / n)
         base = (1.0 - alpha) * teleport_vec
 
-        for _ in range(self.max_pagerank_iter):
+        self.logger.debug(
+            f"Starting PageRank iterations (max={self.max_pagerank_iter}, tol={self.pagerank_tol})"
+        )
+
+        for iteration in range(self.max_pagerank_iter):
             r_new = base + alpha * M.T.dot(r)
-            if np.abs(r_new - r).sum() < self.pagerank_tol:
+            delta = np.abs(r_new - r).sum()
+
+            if iteration % 20 == 0 or delta < self.pagerank_tol:
+                self.logger.debug(
+                    f"PageRank iteration {iteration}: delta={delta:.2e}"
+                )
+
+            if delta < self.pagerank_tol:
+                self.logger.debug(
+                    f"PageRank converged at iteration {iteration} with delta {delta:.2e}"
+                )
                 r = r_new
                 break
             r = r_new
+        else:
+            self.logger.warning(
+                f"PageRank reached max iterations ({self.max_pagerank_iter}) without convergence. Final delta: {delta:.2e}"
+            )
 
         # Store edge flux information for analysis
+        self.logger.debug("Computing edge flux information")
         flux = M * r[:, None]
         li, wi = np.nonzero(M)
         self.edge_flux_ = pl.DataFrame(
@@ -432,9 +563,14 @@ class RatingEngine:
             }
         )
 
-        return pl.DataFrame({"id": nodes, "score": r.tolist()}).sort(
+        result = pl.DataFrame({"id": nodes, "score": r.tolist()}).sort(
             "score", descending=True
         )
+
+        self.logger.debug(
+            f"PageRank completed: top score={result['score'][0]:.6f}, bottom score={result['score'][-1]:.6f}"
+        )
+        return result
 
     # =========================================================================
     # Tournament influence calculation

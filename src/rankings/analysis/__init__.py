@@ -14,6 +14,7 @@ from rankings.analysis.utils import (
     add_tournament_names,
     analyze_player_performance,
     create_match_summary_with_names,
+    derive_team_ratings_from_players,
     display_player_rankings,
     format_influential_matches,
     format_top_rankings,
@@ -32,6 +33,7 @@ __all__ = [
     # Utils
     "prepare_player_summary",
     "prepare_tournament_summary",
+    "derive_team_ratings_from_players",
     "format_top_rankings",
     "get_most_influential_matches",
     "add_player_names",

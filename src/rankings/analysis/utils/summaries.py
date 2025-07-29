@@ -12,6 +12,58 @@ from typing import Optional
 import polars as pl
 
 from rankings.core.constants import MIN_TOURNAMENTS_FOR_RANKING
+from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
+
+
+def derive_team_ratings_from_players(
+    players_df: pl.DataFrame,
+    player_ratings_df: pl.DataFrame,
+    agg: str = "mean",  # or "median", "max", etc.
+) -> pl.DataFrame:
+    """
+    Map each team to an aggregate of its members' player ratings.
+
+    Parameters
+    ----------
+    players_df : pl.DataFrame
+        Players DataFrame with team_id and user_id columns
+    player_ratings_df : pl.DataFrame
+        Player ratings DataFrame with id and player_rank columns
+    agg : str, optional
+        Aggregation method ("mean", "median", "max", etc.)
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with team_id and team_rating columns
+    """
+    logger = get_logger(__name__)
+    logger.debug(
+        f"Deriving team ratings from player ratings using {agg} aggregation"
+    )
+    log_dataframe_stats(logger, players_df, "input_players")
+    log_dataframe_stats(logger, player_ratings_df, "input_player_ratings")
+
+    with log_timing(logger, f"team rating derivation with {agg} aggregation"):
+        rating_map = dict(
+            zip(player_ratings_df["id"], player_ratings_df["player_rank"])
+        )
+        logger.debug(f"Created rating map for {len(rating_map)} players")
+
+        with_ratings = players_df.with_columns(
+            pl.col("user_id")
+            .map_elements(rating_map.get, return_dtype=pl.Float64)
+            .alias("player_rating")
+        )
+
+        agg_expr = getattr(pl.col("player_rating"), agg)()
+        result = with_ratings.group_by("team_id").agg(
+            agg_expr.alias("team_rating")
+        )
+
+    log_dataframe_stats(logger, result, "team_ratings_result")
+    logger.debug(f"Generated team ratings for {result.height} teams")
+    return result
 
 
 def prepare_player_summary(

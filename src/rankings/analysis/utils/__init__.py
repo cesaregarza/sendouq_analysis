@@ -49,6 +49,7 @@ from rankings.analysis.utils.names import (
 
 # Summary functions
 from rankings.analysis.utils.summaries import (
+    derive_team_ratings_from_players,
     prepare_player_summary,
     prepare_team_summary,
     prepare_tournament_summary,
@@ -60,6 +61,7 @@ __all__ = [
     "compare_player_performances",
     "generate_tournament_report",
     # Summaries
+    "derive_team_ratings_from_players",
     "prepare_player_summary",
     "prepare_team_summary",
     "prepare_tournament_summary",

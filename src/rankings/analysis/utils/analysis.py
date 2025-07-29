@@ -11,18 +11,19 @@ from typing import Optional
 
 import polars as pl
 
-from .formatting import (
+from rankings.analysis.engine import RatingEngine
+from rankings.analysis.utils.formatting import (
     format_influential_matches,
     format_tournament_influence_summary,
 )
-from .matches import get_most_influential_matches
-from .names import get_tournament_name_lookup
+from rankings.analysis.utils.matches import get_most_influential_matches
+from rankings.analysis.utils.names import get_tournament_name_lookup
 
 
 def analyze_player_performance(
     player_id: int,
     player_name: str,
-    engine: "RatingEngine",
+    engine: RatingEngine,
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
     tournament_data: list[dict],
@@ -141,7 +142,7 @@ def generate_tournament_report(
 
 def compare_player_performances(
     player_ids: list[int],
-    engine: "RatingEngine",
+    engine: RatingEngine,
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
     player_summary: pl.DataFrame,

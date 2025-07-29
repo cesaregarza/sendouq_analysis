@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
+from rankings.core.logging import get_logger, log_timing
 from sendouq_analysis.sql.tourney_models import (  # ParticipatedUser  # Uncomment if this model exists
     Base,
     BracketProgression,
@@ -44,10 +45,19 @@ def build_url(tournament_id: int) -> str:
 
 def scrape_tournament(tournament_id: int, session=requests.Session()) -> dict:
     """Scrape tournament data from the API."""
+    logger = get_logger(__name__)
     url = build_url(tournament_id)
-    response = session.get(url, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    logger.debug(f"Scraping tournament {tournament_id} from {url}")
+
+    with log_timing(logger, f"tournament {tournament_id} scraping"):
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+    logger.info(
+        f"Successfully scraped tournament {tournament_id} ({len(json.dumps(data))} bytes)"
+    )
+    return data
 
 
 def parse_staff_user(user_data: dict, db_session) -> User:

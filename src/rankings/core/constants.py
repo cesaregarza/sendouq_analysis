@@ -88,5 +88,8 @@ TELEPORT_VOLUME_INVERSE = "volume_inverse"
 # Minimum tournaments for inclusion in rankings
 MIN_TOURNAMENTS_FOR_RANKING: int = 5
 
+# Minimum tournaments that must exist before first test tournament in cross-validation
+MIN_TOURNAMENTS_BEFORE_CV: int = 10
+
 # Minimum matches for edge weight consideration
 MIN_MATCHES_FOR_EDGE: int = 1
