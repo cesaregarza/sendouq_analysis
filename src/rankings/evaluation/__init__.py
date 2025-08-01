@@ -12,6 +12,7 @@ from rankings.evaluation.dashboards import (
     print_evaluation_dashboard,
 )
 from rankings.evaluation.loss import (
+    analyze_exclusion_impact,
     bucketised_metrics,
     compute_cross_tournament_loss,
     compute_match_loss,
@@ -47,6 +48,7 @@ from rankings.evaluation.optimizer import (
 
 __all__ = [
     # Loss functions
+    "analyze_exclusion_impact",
     "compute_match_probability",
     "compute_match_loss",
     "compute_tournament_loss",

@@ -18,6 +18,7 @@ from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
 from rankings.evaluation.loss import (
     compute_cross_tournament_loss,
     compute_tournament_loss,
+    filter_matches_by_ranked_threshold,
     fit_alpha_parameter,
 )
 from rankings.evaluation.metrics_extras import (
@@ -28,55 +29,6 @@ from rankings.evaluation.metrics_extras import (
     skill_score,
     upset_oe,
 )
-
-
-def _count_unrated_players(
-    team_id: int, tournament_id: int, players_df: pl.DataFrame, rating_map: dict
-) -> int:
-    """Count unrated players in a team for a specific tournament."""
-    roster = players_df.filter(
-        (pl.col("team_id") == team_id)
-        & (pl.col("tournament_id") == tournament_id)
-    )
-    if roster.height == 0:
-        return 0
-    user_ids = roster["user_id"].to_list()
-    unrated_count = sum(1 for uid in user_ids if uid not in rating_map)
-    return unrated_count
-
-
-def _filter_incomplete_rosters(
-    matches_df: pl.DataFrame,
-    players_df: pl.DataFrame,
-    rating_map: dict,
-    winner_col: str = "winner_team_id",
-    loser_col: str = "loser_team_id",
-) -> pl.DataFrame:
-    """Filter matches where either team has >= 2 unrated players."""
-    if players_df is None:
-        return matches_df
-
-    filtered_matches = []
-    for row in matches_df.iter_rows(named=True):
-        winner_team = row[winner_col]
-        loser_team = row[loser_col]
-        tournament_id = row["tournament_id"]
-
-        winner_unrated = _count_unrated_players(
-            winner_team, tournament_id, players_df, rating_map
-        )
-        loser_unrated = _count_unrated_players(
-            loser_team, tournament_id, players_df, rating_map
-        )
-
-        # Skip if either team has >= 2 unrated players
-        if winner_unrated < 2 and loser_unrated < 2:
-            filtered_matches.append(row)
-
-    if not filtered_matches:
-        return pl.DataFrame([], schema=matches_df.schema)
-
-    return pl.DataFrame(filtered_matches)
 
 
 def create_time_based_splits(
@@ -174,6 +126,9 @@ def evaluate_on_split(
     alpha: float = 1.0,
     alpha_bounds: tuple[float, float] = (0.1, 5.0),
     score_transform: str = "bradley_terry",
+    weight_scheme: str = "entropy",
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
 ) -> Dict[str, float]:
     """
     Evaluate rating engine on a single train/test split.
@@ -270,27 +225,28 @@ def evaluate_on_split(
         winner_col = "winner_user_id"
         loser_col = "loser_user_id"
 
-    # Apply row-skipping rule for incomplete rosters
+    # Apply 75% threshold filtering for evaluation
     if prediction_entity == "team" and players_df is not None:
-        logger.debug("Applying row-skipping rule for incomplete rosters")
-        original_train_size = train_df.height
+        logger.debug("Applying 75% threshold filtering for evaluation")
         original_test_size = test_df.height
 
-        train_df = _filter_incomplete_rosters(
-            train_df, players_df, rating_map, winner_col, loser_col
-        )
-        test_df = _filter_incomplete_rosters(
-            test_df, players_df, rating_map, winner_col, loser_col
+        # Note: We don't filter training data here as it's already been used for ranking
+        # We only filter test data for fair evaluation
+        test_df = filter_matches_by_ranked_threshold(
+            test_df,
+            players_df,
+            rating_map,
+            threshold=0.75,
+            winner_col=winner_col,
+            loser_col=loser_col,
         )
 
         logger.debug(
-            f"Filtered training matches: {original_train_size} -> {train_df.height}"
-        )
-        logger.debug(
-            f"Filtered test matches: {original_test_size} -> {test_df.height}"
+            f"Filtered test matches by 75% threshold: {original_test_size} -> {test_df.height} "
+            f"({test_df.height/original_test_size*100:.1f}% kept)"
         )
 
-    # Fit alpha if requested (using filtered training data)
+    # Fit alpha if requested
     if fit_alpha:
         logger.debug("Fitting alpha parameter on training data")
         alpha = fit_alpha_parameter(
@@ -300,8 +256,13 @@ def evaluate_on_split(
             loser_id_col=loser_col,
             alpha_bounds=alpha_bounds,
             score_transform=score_transform,
-            scheme="entropy",
+            scheme=weight_scheme,
             global_prior=getattr(engine, "global_prior_", None),
+            players_df=players_df,
+            apply_threshold_filter=(prediction_entity == "team"),
+            threshold=0.75,
+            weight_threshold=weight_threshold,
+            weight_exp_base=weight_exp_base,
         )
     else:
         logger.debug(f"Using fixed alpha={alpha}")
@@ -322,11 +283,16 @@ def evaluate_on_split(
             rating_map,
             alpha=alpha,
             score_transform=score_transform,
-            scheme="entropy",
+            scheme=weight_scheme,
             winner_id_col=winner_col,
             loser_id_col=loser_col,
             return_predictions=True,
             global_prior=getattr(engine, "global_prior_", None),
+            players_df=players_df,
+            weight_threshold=weight_threshold,
+            weight_exp_base=weight_exp_base,
+            apply_threshold_filter=False,  # Already filtered above
+            threshold=0.75,
         )
 
         # Compute additional metrics
@@ -416,6 +382,9 @@ def cross_validate_ratings(
     score_transform: str = "bradley_terry",
     regularization_lambda: float = 0.0,
     default_params: Optional[Dict[str, Any]] = None,
+    weight_scheme: str = "entropy",
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
 ) -> Dict[str, Any]:
     """
     Perform full cross-validation evaluation of rating engine.
@@ -489,6 +458,9 @@ def cross_validate_ratings(
                 fit_alpha=fit_alpha,
                 alpha_bounds=alpha_bounds,
                 score_transform=score_transform,
+                weight_scheme=weight_scheme,
+                weight_threshold=weight_threshold,
+                weight_exp_base=weight_exp_base,
             )
 
             results["split_id"] = i

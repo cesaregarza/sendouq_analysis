@@ -15,6 +15,102 @@ from rankings.analysis.transforms import bt_prob
 from rankings.core.logging import get_logger, log_timing
 
 
+def get_team_ranked_ratio(
+    team_id: int,
+    tournament_id: int | None,
+    players_df: pl.DataFrame,
+    rating_map: dict[int, float],
+) -> float:
+    """
+    Calculate the percentage of ranked players in a team.
+
+    Parameters
+    ----------
+    team_id : int
+        Team ID
+    tournament_id : int
+        Tournament ID
+    players_df : pl.DataFrame
+        Players dataframe with team rosters
+    rating_map : dict[int, float]
+        Mapping from player ID to rating
+
+    Returns
+    -------
+    float
+        Ratio of ranked players (0.0 to 1.0)
+    """
+    if tournament_id is None:
+        # If no tournament_id, just filter by team
+        roster = players_df.filter(pl.col("team_id") == team_id)
+    else:
+        roster = players_df.filter(
+            (pl.col("team_id") == team_id)
+            & (pl.col("tournament_id") == tournament_id)
+        )
+
+    if roster.height == 0:
+        return 0.0
+
+    total_players = roster.height
+    ranked_players = sum(
+        1 for uid in roster["user_id"].to_list() if uid in rating_map
+    )
+
+    return ranked_players / total_players
+
+
+def filter_matches_by_ranked_threshold(
+    matches_df: pl.DataFrame,
+    players_df: pl.DataFrame,
+    rating_map: dict[int, float],
+    threshold: float = 0.75,
+    winner_col: str = "winner_team_id",
+    loser_col: str = "loser_team_id",
+) -> pl.DataFrame:
+    """
+    Filter matches where both teams have at least threshold % ranked players.
+
+    Parameters
+    ----------
+    matches_df : pl.DataFrame
+        Matches to filter
+    players_df : pl.DataFrame
+        Players dataframe with team rosters
+    rating_map : dict[int, float]
+        Mapping from entity ID to rating
+    threshold : float
+        Minimum ratio of ranked players required (default: 0.75)
+    winner_col : str
+        Column name for winner ID
+    loser_col : str
+        Column name for loser ID
+
+    Returns
+    -------
+    pl.DataFrame
+        Filtered matches
+    """
+    filtered = []
+
+    for row in matches_df.iter_rows(named=True):
+        winner_ratio = get_team_ranked_ratio(
+            row[winner_col], row["tournament_id"], players_df, rating_map
+        )
+        loser_ratio = get_team_ranked_ratio(
+            row[loser_col], row["tournament_id"], players_df, rating_map
+        )
+
+        # Keep if both teams meet the threshold
+        if winner_ratio >= threshold and loser_ratio >= threshold:
+            filtered.append(row)
+
+    if not filtered:
+        return pl.DataFrame([], schema=matches_df.schema)
+
+    return pl.DataFrame(filtered, schema=matches_df.schema)
+
+
 def compute_match_probability(
     rating_a: float,
     rating_b: float,
@@ -45,8 +141,8 @@ def compute_match_probability(
         Probability that A beats B
     """
     prior = global_prior if global_prior is not None else 0.05
-    rating_a = max(float(rating_a) if rating_a is not None else prior, prior)
-    rating_b = max(float(rating_b) if rating_b is not None else prior, prior)
+    rating_a = float(rating_a) if rating_a is not None else prior
+    rating_b = float(rating_b) if rating_b is not None else prior
 
     if score_transform == "bradley_terry":
         # Use Bradley-Terry model with positive scores
@@ -101,6 +197,11 @@ def compute_tournament_loss(
     loser_id_col: str = "loser_team_id",
     return_predictions: bool = False,
     global_prior: float | None = None,
+    players_df: pl.DataFrame | None = None,
+    apply_threshold_filter: bool = True,
+    threshold: float = 0.75,
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
 ) -> tuple[float, dict[str, any]]:
     """
     Compute aggregated loss for a tournament.
@@ -116,7 +217,8 @@ def compute_tournament_loss(
     score_transform : str
         Transform to apply: "bradley_terry", "logistic", or "identity"
     scheme : str
-        Weighting scheme: "none", "var_inv", or "entropy"
+        Weighting scheme: "none", "var_inv", "entropy", "entropy_squared",
+        "entropy_exp", or "threshold"
     winner_id_col : str
         Column name for winner ID
     loser_id_col : str
@@ -125,6 +227,16 @@ def compute_tournament_loss(
         If True, include prediction probabilities in return dict
     global_prior : float, optional
         Prior rating for unknown players (defaults to 0.05)
+    players_df : pl.DataFrame, optional
+        Players dataframe for threshold filtering
+    apply_threshold_filter : bool
+        If True, filter matches by ranked player threshold
+    threshold : float
+        Minimum ratio of ranked players required (default: 0.75)
+    weight_threshold : float
+        For threshold scheme, minimum distance from 0.5 to include (default: 0.1)
+    weight_exp_base : float
+        Base for exponential weighting scheme (default: 2.0)
 
     Returns
     -------
@@ -132,9 +244,30 @@ def compute_tournament_loss(
         (tournament_loss, metrics_dict with optional predictions)
     """
     logger = get_logger(__name__)
+    original_count = matches_df.height
     logger.debug(
-        f"Computing tournament loss for {matches_df.height} matches with alpha={alpha}"
+        f"Computing tournament loss for {original_count} matches with alpha={alpha}"
     )
+
+    # Apply threshold filtering if requested
+    if (
+        apply_threshold_filter
+        and players_df is not None
+        and winner_id_col == "winner_team_id"
+    ):
+        matches_df = filter_matches_by_ranked_threshold(
+            matches_df,
+            players_df,
+            rating_map,
+            threshold,
+            winner_id_col,
+            loser_id_col,
+        )
+        filtered_count = matches_df.height
+        logger.debug(
+            f"Filtered matches by {threshold:.0%} threshold: {original_count} -> {filtered_count} "
+            f"({filtered_count/original_count*100:.1f}% kept)"
+        )
 
     # Extract winner and loser IDs
     match_data = matches_df.select(
@@ -177,20 +310,28 @@ def compute_tournament_loss(
         logger.warning("No matches found, returning infinite loss")
         return np.inf, {"n_matches": 0}
 
-    # Compute loss using new unified weighting logic
+    # Compute loss using enhanced weighting schemes
+    from .enhanced_weighting import compute_confidence_weights
+
     base = -np.log(np.clip(predictions, 1e-15, 1.0 - 1e-15))  # Bernoulli y=1
-    if scheme == "var_inv":
-        w = 1.0 / np.maximum(predictions * (1 - predictions), 1e-10)
-    elif scheme == "entropy":
-        w = 2.0 * np.abs(predictions - 0.5)
-    else:
-        w = np.ones_like(base)
+
+    # Use enhanced weighting schemes
+    w = compute_confidence_weights(
+        predictions,
+        scheme=scheme,
+        threshold=weight_threshold,
+        exp_base=weight_exp_base,
+    )
 
     final_loss = np.average(base, weights=w)
 
     # Compute additional metrics
     metrics = {
         "n_matches": len(predictions),
+        "n_matches_original": original_count,
+        "n_matches_filtered": original_count - matches_df.height
+        if apply_threshold_filter and players_df is not None
+        else 0,
         "mean_probability": np.mean(predictions),
         "accuracy": np.mean(predictions > 0.5),
         "unweighted_loss": np.mean(base),
@@ -307,7 +448,7 @@ def bucketised_metrics(
         df.group_by("bucket")
         .agg(
             [
-                pl.count().alias("count"),
+                pl.len().alias("count"),
                 pl.col("loss").mean().alias("mean_loss"),
             ]
         )
@@ -330,6 +471,11 @@ def fit_alpha_parameter(
     loser_id_col: str = "loser_team_id",
     scheme: str = "entropy",
     global_prior: float | None = None,
+    players_df: pl.DataFrame | None = None,
+    apply_threshold_filter: bool = True,
+    threshold: float = 0.75,
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
 ) -> float:
     """
     Fit the alpha parameter using maximum likelihood on training data.
@@ -349,9 +495,20 @@ def fit_alpha_parameter(
     loser_id_col : str
         Column name for loser ID
     scheme : str
-        Weighting scheme: "none", "var_inv", or "entropy"
+        Weighting scheme: "none", "var_inv", "entropy", "entropy_squared",
+        "entropy_exp", or "threshold"
     global_prior : float, optional
         Prior rating for unknown players (defaults to 0.05)
+    players_df : pl.DataFrame, optional
+        Players dataframe for threshold filtering
+    apply_threshold_filter : bool
+        If True, filter matches by ranked player threshold
+    threshold : float
+        Minimum ratio of ranked players required (default: 0.75)
+    weight_threshold : float
+        For threshold scheme, minimum distance from 0.5 to include (default: 0.1)
+    weight_exp_base : float
+        Base for exponential weighting scheme (default: 2.0)
     Returns
     -------
     float
@@ -364,7 +521,7 @@ def fit_alpha_parameter(
     logger.debug(f"Alpha bounds: {alpha_bounds}")
 
     def neg_log_likelihood(alpha: float) -> float:
-        loss, _ = compute_tournament_loss(
+        loss, metrics = compute_tournament_loss(
             train_matches_df,
             rating_map,
             alpha=alpha,
@@ -374,8 +531,15 @@ def fit_alpha_parameter(
             loser_id_col=loser_id_col,
             return_predictions=False,
             global_prior=global_prior,
+            players_df=players_df,
+            apply_threshold_filter=apply_threshold_filter,
+            threshold=threshold,
+            weight_threshold=weight_threshold,
+            weight_exp_base=weight_exp_base,
         )
-        return loss * len(train_matches_df)
+        # Use actual number of matches after filtering
+        n_matches = metrics.get("n_matches", len(train_matches_df))
+        return loss * n_matches
 
     # Use scipy's bounded minimization
     with log_timing(logger, "alpha parameter optimization"):
@@ -390,3 +554,97 @@ def fit_alpha_parameter(
     )
 
     return optimal_alpha
+
+
+def analyze_exclusion_impact(
+    matches_df: pl.DataFrame,
+    players_df: pl.DataFrame,
+    rating_map: dict[int, float],
+    threshold: float = 0.75,
+    winner_col: str = "winner_team_id",
+    loser_col: str = "loser_team_id",
+) -> dict[str, any]:
+    """
+    Analyze the impact of match exclusion based on ranked player threshold.
+
+    Parameters
+    ----------
+    matches_df : pl.DataFrame
+        Matches to analyze
+    players_df : pl.DataFrame
+        Players dataframe with team rosters
+    rating_map : dict[int, float]
+        Mapping from entity ID to rating
+    threshold : float
+        Minimum ratio of ranked players required
+    winner_col : str
+        Column name for winner ID
+    loser_col : str
+        Column name for loser ID
+
+    Returns
+    -------
+    dict[str, any]
+        Analysis results including counts and percentages
+    """
+    logger = get_logger(__name__)
+
+    total_matches = matches_df.height
+
+    # Get filtered matches
+    filtered_df = filter_matches_by_ranked_threshold(
+        matches_df, players_df, rating_map, threshold, winner_col, loser_col
+    )
+    kept_matches = filtered_df.height
+    excluded_matches = total_matches - kept_matches
+
+    # Analyze by tournament
+    tournament_stats = []
+    for tid in matches_df["tournament_id"].unique():
+        tournament_matches = matches_df.filter(pl.col("tournament_id") == tid)
+        tournament_filtered = filtered_df.filter(pl.col("tournament_id") == tid)
+
+        tournament_stats.append(
+            {
+                "tournament_id": tid,
+                "total_matches": tournament_matches.height,
+                "kept_matches": tournament_filtered.height,
+                "excluded_matches": tournament_matches.height
+                - tournament_filtered.height,
+                "kept_percentage": tournament_filtered.height
+                / tournament_matches.height
+                * 100
+                if tournament_matches.height > 0
+                else 0,
+            }
+        )
+
+    tournament_df = pl.DataFrame(tournament_stats).sort("kept_percentage")
+
+    # Summary statistics
+    summary = {
+        "total_matches": total_matches,
+        "kept_matches": kept_matches,
+        "excluded_matches": excluded_matches,
+        "kept_percentage": kept_matches / total_matches * 100
+        if total_matches > 0
+        else 0,
+        "excluded_percentage": excluded_matches / total_matches * 100
+        if total_matches > 0
+        else 0,
+        "threshold": threshold,
+        "tournament_stats": tournament_df,
+        "most_affected_tournaments": tournament_df.head(10),
+        "least_affected_tournaments": tournament_df.tail(10),
+    }
+
+    logger.info(f"Match exclusion analysis with {threshold:.0%} threshold:")
+    logger.info(f"  Total matches: {total_matches:,}")
+    logger.info(
+        f"  Kept matches: {kept_matches:,} ({summary['kept_percentage']:.1f}%)"
+    )
+    logger.info(
+        f"  Excluded: {excluded_matches:,} ({summary['excluded_percentage']:.1f}%)"
+    )
+
+    return summary

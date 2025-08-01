@@ -418,7 +418,7 @@ class RatingEngine:
             matches.filter(
                 pl.col("winner_team_id").is_not_null()
                 & pl.col("loser_team_id").is_not_null()
-                & ~pl.col("is_bye", default=False)
+                & ~pl.col("is_bye")
             )
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)
@@ -784,7 +784,7 @@ class RatingEngine:
             v = np.array([self.teleport_spec.get(node, 0.0) for node in nodes])
         elif self.teleport_spec == TELEPORT_VOLUME_INVERSE:
             counts = edges[node_col_from].value_counts()
-            c_map = dict(zip(counts[node_col_from], counts["counts"]))
+            c_map = dict(zip(counts[node_col_from], counts["count"]))
             v = np.array(
                 [1.0 / math.sqrt(c_map.get(node, 1)) for node in nodes]
             )

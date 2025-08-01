@@ -41,16 +41,43 @@ def _agg_player_scores(scores: list[float]) -> float:
     return float(np.mean(centred))
 
 
+def _geometric_mean(scores: list[float]) -> float:
+    """
+    Calculate geometric mean of scores.
+
+    Parameters
+    ----------
+    scores : list[float]
+        List of player scores
+
+    Returns
+    -------
+    float
+        Geometric mean
+    """
+    if not scores:
+        return 0.0
+    valid_scores = [s for s in scores if s is not None and s > 0]
+    if not valid_scores:
+        return 0.0
+    # Add small epsilon to each score to avoid log(0)
+    valid_scores_array = np.array(valid_scores) + 1e-10
+    # Geometric mean = exp(mean(log(scores)))
+    return float(np.exp(np.mean(np.log(valid_scores_array))))
+
+
 def derive_team_ratings_from_players(
     players_df: pl.DataFrame,
     player_ratings_df: pl.DataFrame,
     agg: str = "log_centered_mean",  # or "mean", "median", "max", etc.
+    only_ranked_players: bool = True,
 ) -> pl.DataFrame:
     """
     Map each team to an aggregate of its members' player ratings.
 
     Default aggregation uses mean of log-centred scores to work better
-    in power-law space as specified in the plan.
+    in power-law space as specified in the plan. By default, only uses
+    ranked players for aggregation.
 
     Parameters
     ----------
@@ -59,7 +86,9 @@ def derive_team_ratings_from_players(
     player_ratings_df : pl.DataFrame
         Player ratings DataFrame with id and player_rank columns
     agg : str, optional
-        Aggregation method ("log_centered_mean", "mean", "median", "max", etc.)
+        Aggregation method ("log_centered_mean", "geometric", "mean", "median", "max", etc.)
+    only_ranked_players : bool, optional
+        If True, only aggregate ratings from ranked players (default: True)
 
     Returns
     -------
@@ -85,12 +114,31 @@ def derive_team_ratings_from_players(
             .alias("player_rating")
         )
 
+        # Filter to only ranked players if requested
+        if only_ranked_players:
+            with_ratings = with_ratings.filter(
+                pl.col("player_rating").is_not_null()
+            )
+            logger.debug(
+                "Filtering to only ranked players for team aggregation"
+            )
+
         if agg == "log_centered_mean":
             # Use map_groups for the aggregation
             result = with_ratings.group_by("team_id").agg(
                 pl.col("player_rating")
                 .map_elements(
                     lambda scores: _agg_player_scores(scores.to_list()),
+                    return_dtype=pl.Float64,
+                )
+                .alias("team_rating")
+            )
+        elif agg == "geometric":
+            # Geometric mean aggregation
+            result = with_ratings.group_by("team_id").agg(
+                pl.col("player_rating")
+                .map_elements(
+                    lambda scores: _geometric_mean(scores.to_list()),
                     return_dtype=pl.Float64,
                 )
                 .alias("team_rating")
