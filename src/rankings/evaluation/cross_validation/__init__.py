@@ -6,15 +6,15 @@ This module provides various cross-validation approaches:
 - Utilities for creating and visualizing splits
 """
 
-from src.rankings.evaluation.cross_validation.cross_validation_advanced import (
+from rankings.evaluation.cross_validation.cross_validation_advanced import (
     create_time_based_folds,
     cross_validate_ratings,
     evaluate_on_split,
 )
-from src.rankings.evaluation.cross_validation.cross_validation_simple import (
+from rankings.evaluation.cross_validation.cross_validation_simple import (
     cross_validate_simple,
 )
-from src.rankings.evaluation.cross_validation.simple_splits import (
+from rankings.evaluation.cross_validation.simple_splits import (
     create_simple_time_splits,
     get_split_info,
     visualize_splits,
