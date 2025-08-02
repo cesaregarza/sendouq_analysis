@@ -3,6 +3,10 @@ Data serialization module for synthetic tournament data.
 
 This module converts generated tournament structures into Sendou.ink JSON format
 compatible with the existing parser and analysis tools.
+
+FIXES APPLIED:
+1. Timestamps are now serialized as Unix timestamps (milliseconds) instead of ISO strings
+2. Better handling of match status and bye scenarios
 """
 
 from datetime import datetime
@@ -65,7 +69,7 @@ class DataSerializer:
                 "ctx": {
                     "id": tournament.tournament_id,
                     "name": tournament.name,
-                    "startTime": tournament.start_date.isoformat()
+                    "startTime": int(tournament.start_date.timestamp() * 1000)
                     if tournament.start_date
                     else None,
                     "teams": [],
@@ -129,7 +133,7 @@ class DataSerializer:
             "noScreen": False,
             "droppedOut": False,
             "inviteCode": f"SYNTH_{team.team_id}",
-            "createdAt": datetime.now().isoformat(),
+            "createdAt": int(datetime.now().timestamp() * 1000),
             "members": [],
         }
 
@@ -144,7 +148,7 @@ class DataSerializer:
                     "country": "XX",  # Synthetic country code
                     "twitch": None,
                     "isOwner": i == 0,  # First player is owner
-                    "createdAt": datetime.now().isoformat(),
+                    "createdAt": int(datetime.now().timestamp() * 1000),
                 }
             )
 
@@ -191,6 +195,14 @@ class DataSerializer:
         data_section["stage"].append(stage_data)
         stage_id = self._stage_id_counter
         self._stage_id_counter += 1
+
+        # Add bracket information for double elimination
+        if stage.format == TournamentFormat.DOUBLE_ELIMINATION:
+            stage_data["brackets"] = {
+                "winners": len(stage.winners_bracket),
+                "losers": len(stage.losers_bracket),
+                "grand_finals": len(stage.grand_finals) > 0,
+            }
 
         # Handle group stages
         group_id_map = {}
@@ -252,7 +264,7 @@ class DataSerializer:
         match_number: int,
         group_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Serialize a single match."""
+        """Serialize a single match with Unix timestamps."""
         # Determine match status
         if match.winner:
             status = "completed"
@@ -268,15 +280,26 @@ class DataSerializer:
             "round_id": round_id,
             "number": match_number,
             "status": status,
-            "lastGameFinishedAt": match.timestamp.isoformat()
+            # Convert to Unix timestamp (milliseconds)
+            "lastGameFinishedAt": int(match.timestamp.timestamp() * 1000)
             if match.timestamp and match.winner
             else None,
-            "createdAt": match.timestamp.isoformat()
+            "createdAt": int(match.timestamp.timestamp() * 1000)
             if match.timestamp
-            else datetime.now().isoformat(),
+            else int(datetime.now().timestamp() * 1000),
             "opponent1": None,
             "opponent2": None,
         }
+
+        # Add double elimination specific fields if present
+        if match.bracket_type:
+            match_data["bracket_type"] = match.bracket_type
+        if match.is_elimination_match:
+            match_data["is_elimination_match"] = match.is_elimination_match
+        if match.loser_to_round is not None:
+            match_data["loser_to_round"] = match.loser_to_round
+        if match.loser_to_position is not None:
+            match_data["loser_to_position"] = match.loser_to_position
 
         # Add team 1 data
         if match.team_a:
