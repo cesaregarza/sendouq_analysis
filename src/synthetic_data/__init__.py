@@ -8,9 +8,9 @@ from synthetic_data.validator import DataValidator
 
 __all__ = [
     "PlayerGenerator",
-    "SyntheticPlayer", 
+    "SyntheticPlayer",
     "TournamentGenerator",
     "MatchSimulator",
     "DataSerializer",
-    "DataValidator"
+    "DataValidator",
 ]
