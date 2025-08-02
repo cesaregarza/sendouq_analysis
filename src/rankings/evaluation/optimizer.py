@@ -12,8 +12,7 @@ import numpy as np
 import polars as pl
 
 from rankings.analysis.engine import RatingEngine
-
-from .cross_validation import cross_validate_ratings
+from src.rankings.evaluation.cross_validation import cross_validate_ratings
 
 
 class GridSearchOptimizer:

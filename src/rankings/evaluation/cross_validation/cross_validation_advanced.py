@@ -15,8 +15,7 @@ from rankings.analysis.engine import RatingEngine
 from rankings.analysis.utils.summaries import derive_team_ratings_from_players
 from rankings.core.constants import MIN_TOURNAMENTS_BEFORE_CV
 from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
-
-from ..loss import (
+from src.rankings.evaluation.loss import (
     compute_cross_tournament_loss,
     compute_tournament_loss,
     filter_matches_by_ranked_threshold,
@@ -26,7 +25,7 @@ from ..loss import (
 )
 
 # TODO: Incorporate improved splits functionality
-from ..metrics_extras import (
+from src.rankings.evaluation.metrics_extras import (
     accuracy_threshold,
     alpha_std,
     concordance,

@@ -15,10 +15,11 @@ import polars as pl
 from tqdm import tqdm
 
 from rankings.analysis.utils.summaries import derive_team_ratings_from_players
-
-from ..loss import compute_weighted_log_loss
-from ..metrics_extras import concordance
-from .simple_splits import create_simple_time_splits
+from src.rankings.evaluation.cross_validation.simple_splits import (
+    create_simple_time_splits,
+)
+from src.rankings.evaluation.loss import compute_weighted_log_loss
+from src.rankings.evaluation.metrics_extras import concordance
 
 logger = logging.getLogger(__name__)
 
