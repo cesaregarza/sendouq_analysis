@@ -1,9 +1,12 @@
 """Evaluation module for tournament ranking models."""
 
 from rankings.evaluation.cross_validation import (
-    create_time_based_splits,
+    create_simple_time_splits,
+    create_time_based_folds,
     cross_validate_ratings,
+    cross_validate_simple,
     evaluate_on_split,
+    visualize_splits,
 )
 from rankings.evaluation.dashboards import (
     format_metrics_table,
@@ -74,9 +77,12 @@ __all__ = [
     "placement_spearman",
     "alpha_std",
     # Cross-validation
-    "create_time_based_splits",
-    "evaluate_on_split",
+    "create_time_based_folds",
     "cross_validate_ratings",
+    "cross_validate_simple",
+    "create_simple_time_splits",
+    "evaluate_on_split",
+    "visualize_splits",
     # Optimization
     "GridSearchOptimizer",
     "BayesianOptimizer",

@@ -182,3 +182,6 @@ terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digita
 terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/LICENSE
 terraform/scraper/.terraform/providers/registry.terraform.io/digitalocean/digitalocean/2.34.1/linux_amd64/README.md
 run_dashapp.sh
+
+# Documentation images
+docs/images/*.png

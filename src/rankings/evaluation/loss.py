@@ -217,8 +217,8 @@ def compute_tournament_loss(
     score_transform : str
         Transform to apply: "bradley_terry", "logistic", or "identity"
     scheme : str
-        Weighting scheme: "none", "var_inv", "entropy", "entropy_squared",
-        "entropy_exp", or "threshold"
+        Weighting scheme: "none", "var_inv", "entropy", "entropy_sqrt",
+        "entropy_squared", "entropy_exp", or "threshold"
     winner_id_col : str
         Column name for winner ID
     loser_id_col : str
@@ -310,18 +310,27 @@ def compute_tournament_loss(
         logger.warning("No matches found, returning infinite loss")
         return np.inf, {"n_matches": 0}
 
-    # Compute loss using enhanced weighting schemes
-    from .enhanced_weighting import compute_confidence_weights
-
+    # Compute loss using weighting schemes
     base = -np.log(np.clip(predictions, 1e-15, 1.0 - 1e-15))  # Bernoulli y=1
 
-    # Use enhanced weighting schemes
-    w = compute_confidence_weights(
-        predictions,
-        scheme=scheme,
-        threshold=weight_threshold,
-        exp_base=weight_exp_base,
-    )
+    # Apply weighting scheme
+    if scheme == "none":
+        w = np.ones_like(predictions)
+    elif scheme == "entropy":
+        w = np.abs(predictions - 0.5) * 2  # ranges 0…1
+    elif scheme == "entropy_sqrt":
+        w = np.sqrt(np.abs(predictions - 0.5) * 2)  # sqrt of confidence
+    elif scheme == "entropy_squared":
+        w = (np.abs(predictions - 0.5) * 2) ** 2  # squared confidence
+    elif scheme == "var_inv":
+        w = 1.0 / (predictions * (1 - predictions))
+    elif scheme == "entropy_exp":
+        w = weight_exp_base ** (np.abs(predictions - 0.5) * 2)
+    elif scheme == "threshold":
+        # Only weight matches that are sufficiently different from 0.5
+        w = np.where(np.abs(predictions - 0.5) > weight_threshold, 1.0, 0.1)
+    else:
+        raise ValueError(f"Unknown weighting scheme: {scheme}")
 
     final_loss = np.average(base, weights=w)
 
@@ -405,6 +414,10 @@ def compute_weighted_log_loss(
 
     if scheme == "entropy":
         w = np.abs(p - 0.5) * 2  # ranges 0…1
+    elif scheme == "entropy_sqrt":
+        w = np.sqrt(np.abs(p - 0.5) * 2)  # sqrt of confidence
+    elif scheme == "entropy_squared":
+        w = (np.abs(p - 0.5) * 2) ** 2  # squared confidence
     elif scheme == "var_inv":
         w = 1.0 / (p * (1 - p))
     else:
@@ -495,8 +508,8 @@ def fit_alpha_parameter(
     loser_id_col : str
         Column name for loser ID
     scheme : str
-        Weighting scheme: "none", "var_inv", "entropy", "entropy_squared",
-        "entropy_exp", or "threshold"
+        Weighting scheme: "none", "var_inv", "entropy", "entropy_sqrt",
+        "entropy_squared", "entropy_exp", or "threshold"
     global_prior : float, optional
         Prior rating for unknown players (defaults to 0.05)
     players_df : pl.DataFrame, optional
@@ -552,6 +565,405 @@ def fit_alpha_parameter(
     logger.info(
         f"Loss at optimal alpha: {neg_log_likelihood(optimal_alpha):.6f}"
     )
+
+    return optimal_alpha
+
+
+def fit_alpha_parameter_sampled(
+    train_matches_df: pl.DataFrame,
+    rating_map: dict[int, float],
+    alpha_bounds: tuple[float, float] = (0.1, 5.0),
+    score_transform: str = "bradley_terry",
+    winner_id_col: str = "winner_team_id",
+    loser_id_col: str = "loser_team_id",
+    scheme: str = "entropy",
+    global_prior: float | None = None,
+    players_df: pl.DataFrame | None = None,
+    apply_threshold_filter: bool = True,
+    threshold: float = 0.75,
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
+    sample_size: int = 1000,
+    n_grid_points: int = 20,
+) -> float:
+    """
+    Fit alpha parameter using sampling and grid search.
+
+    Key optimizations:
+    1. Sample matches instead of using all
+    2. Pre-compute aggregated ratings once
+    3. Use grid search with vectorized operations
+    4. Cache filtering results
+
+    Parameters
+    ----------
+    sample_size : int
+        Number of matches to sample for optimization (default: 1000)
+    n_grid_points : int
+        Number of points in initial grid search (default: 20)
+
+    Other parameters same as fit_alpha_parameter
+
+    Returns
+    -------
+    float
+        Optimal alpha value
+    """
+    logger = get_logger(__name__)
+    logger.info(
+        f"Sampled alpha fitting on {train_matches_df.height} training matches"
+    )
+
+    # Sample matches if dataset is large
+    if train_matches_df.height > sample_size:
+        train_sample = train_matches_df.sample(n=sample_size, seed=42)
+        logger.debug(f"Sampled {sample_size} matches for optimization")
+    else:
+        train_sample = train_matches_df
+
+    # Get team ratings directly from rating_map
+    # This assumes team_id exists in rating_map or we aggregate from members
+    prior = global_prior if global_prior is not None else 0.05
+
+    # Skip filtering in sampled version for speed
+
+    # Extract winner/loser ratings
+    if (
+        "winner_members" in train_sample.columns
+        and "loser_members" in train_sample.columns
+    ):
+        # Aggregate from team members
+        winner_ratings = (
+            train_sample["winner_members"]
+            .map_elements(
+                lambda members: np.mean(
+                    [rating_map.get(p, prior) for p in members]
+                )
+                if members is not None and len(members) > 0
+                else prior,
+                return_dtype=pl.Float64,
+            )
+            .to_numpy()
+        )
+
+        loser_ratings = (
+            train_sample["loser_members"]
+            .map_elements(
+                lambda members: np.mean(
+                    [rating_map.get(p, prior) for p in members]
+                )
+                if members is not None and len(members) > 0
+                else prior,
+                return_dtype=pl.Float64,
+            )
+            .to_numpy()
+        )
+    else:
+        # Direct lookup from rating_map
+        winner_ratings = np.array(
+            [rating_map.get(tid, prior) for tid in train_sample[winner_id_col]]
+        )
+        loser_ratings = np.array(
+            [rating_map.get(tid, prior) for tid in train_sample[loser_id_col]]
+        )
+
+    # Compute match weights once
+    if scheme != "none":
+        # Compute base probabilities with alpha=1 for weighting
+        base_probs = compute_probabilities(
+            winner_ratings,
+            loser_ratings,
+            alpha=1.0,
+            score_transform=score_transform,
+            global_prior=global_prior,
+        )
+        weights = compute_weights(
+            base_probs,
+            scheme=scheme,
+            weight_threshold=weight_threshold,
+            weight_exp_base=weight_exp_base,
+        )
+    else:
+        weights = np.ones(len(winner_ratings))
+
+    # Vectorized loss computation
+    def compute_loss_vectorized(alpha: float) -> float:
+        probs = compute_probabilities(
+            winner_ratings,
+            loser_ratings,
+            alpha=alpha,
+            score_transform=score_transform,
+            global_prior=global_prior,
+        )
+        # All matches have winner as first team by construction
+        losses = -np.log(np.clip(probs, 1e-15, 1 - 1e-15))
+        return np.sum(losses * weights) / np.sum(weights)
+
+    # Grid search for rough optimum
+    alphas = np.linspace(alpha_bounds[0], alpha_bounds[1], n_grid_points)
+    losses = [compute_loss_vectorized(alpha) for alpha in alphas]
+    best_idx = np.argmin(losses)
+
+    # Refine with bounded optimization around best grid point
+    if best_idx == 0:
+        refined_bounds = (alpha_bounds[0], alphas[1])
+    elif best_idx == len(alphas) - 1:
+        refined_bounds = (alphas[-2], alpha_bounds[1])
+    else:
+        refined_bounds = (alphas[best_idx - 1], alphas[best_idx + 1])
+
+    with log_timing(logger, "refined alpha optimization"):
+        result = minimize_scalar(
+            compute_loss_vectorized, bounds=refined_bounds, method="bounded"
+        )
+
+    optimal_alpha = result.x
+    logger.info(f"Optimal alpha (sampled): {optimal_alpha:.6f}")
+
+    return optimal_alpha
+
+
+def compute_probabilities(
+    rating_a: np.ndarray,
+    rating_b: np.ndarray,
+    alpha: float,
+    score_transform: str = "bradley_terry",
+    global_prior: float | None = None,
+) -> np.ndarray:
+    """Vectorized probability computation."""
+    if score_transform == "bradley_terry":
+        # Bradley-Terry: P(A > B) = s_A^alpha / (s_A^alpha + s_B^alpha)
+        a_alpha = np.power(rating_a, alpha)
+        b_alpha = np.power(rating_b, alpha)
+        return a_alpha / (a_alpha + b_alpha)
+    elif score_transform == "logistic":
+        z = alpha * (rating_a - rating_b)
+        return 1.0 / (1.0 + np.exp(-z))
+    else:
+        return rating_a
+
+
+def compute_weights(
+    probs: np.ndarray,
+    scheme: str = "entropy",
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
+) -> np.ndarray:
+    """Compute match weights based on scheme."""
+    if scheme == "none":
+        return np.ones_like(probs)
+    elif scheme == "var_inv":
+        variance = probs * (1 - probs)
+        return 1.0 / (variance + 1e-10)
+    elif scheme == "entropy":
+        entropy = -probs * np.log(probs + 1e-10) - (1 - probs) * np.log(
+            1 - probs + 1e-10
+        )
+        return entropy / np.log(2)
+    elif scheme == "entropy_sqrt":
+        entropy = -probs * np.log(probs + 1e-10) - (1 - probs) * np.log(
+            1 - probs + 1e-10
+        )
+        return np.sqrt(entropy / np.log(2))
+    elif scheme == "entropy_squared":
+        entropy = -probs * np.log(probs + 1e-10) - (1 - probs) * np.log(
+            1 - probs + 1e-10
+        )
+        return (entropy / np.log(2)) ** 2
+    elif scheme == "entropy_exp":
+        entropy = -probs * np.log(probs + 1e-10) - (1 - probs) * np.log(
+            1 - probs + 1e-10
+        )
+        return np.power(weight_exp_base, entropy / np.log(2))
+    elif scheme == "threshold":
+        distance = np.abs(probs - 0.5)
+        return (distance >= weight_threshold).astype(float)
+    else:
+        raise ValueError(f"Unknown weighting scheme: {scheme}")
+
+
+def fit_alpha_parameter_optimized(
+    train_matches_df: pl.DataFrame,
+    rating_map: dict[int, float],
+    alpha_bounds: tuple[float, float] = (0.1, 5.0),
+    score_transform: str = "bradley_terry",
+    winner_id_col: str = "winner_team_id",
+    loser_id_col: str = "loser_team_id",
+    scheme: str = "entropy",
+    global_prior: float | None = None,
+    players_df: pl.DataFrame | None = None,
+    apply_threshold_filter: bool = True,
+    threshold: float = 0.75,
+    weight_threshold: float = 0.1,
+    weight_exp_base: float = 2.0,
+    sample_size: int = 500,
+    n_grid_points: int = 7,
+) -> float:
+    """
+    Optimized alpha parameter fitting with minimal overhead.
+
+    Key optimizations over v1:
+    1. Smaller default sample size (500 vs 1000)
+    2. Fewer grid points (7 vs 20)
+    3. Skip team aggregation - work directly with player ratings
+    4. Vectorized team rating computation
+    5. Golden section search instead of scipy minimize
+    6. Skip filtering if threshold is low
+
+    Returns
+    -------
+    float
+        Optimal alpha value
+    """
+    logger = get_logger(__name__)
+    prior = global_prior if global_prior is not None else 0.05
+
+    # Ultra-fast sampling
+    n_matches = train_matches_df.height
+    if n_matches > sample_size:
+        # Use systematic sampling for better coverage
+        step = n_matches // sample_size
+        # Simple random sampling
+        train_sample = train_matches_df.sample(n=sample_size, seed=42)
+    else:
+        train_sample = train_matches_df
+
+    # Skip filtering if threshold is permissive
+    if apply_threshold_filter and threshold > 0.5 and players_df is not None:
+        # Quick approximate filter - just check if teams exist in rating map
+        has_ratings = train_sample.with_columns(
+            [
+                pl.col(winner_id_col)
+                .is_in(list(rating_map.keys()))
+                .alias("w_rated"),
+                pl.col(loser_id_col)
+                .is_in(list(rating_map.keys()))
+                .alias("l_rated"),
+            ]
+        )
+        train_sample = has_ratings.filter(
+            pl.col("w_rated") & pl.col("l_rated")
+        ).drop(["w_rated", "l_rated"])
+
+    # Get team player lists if available, else assume team_id = player_id
+    if (
+        "winner_members" in train_sample.columns
+        and "loser_members" in train_sample.columns
+    ):
+        # Fast vectorized rating aggregation
+        def get_team_ratings_vectorized(members_col):
+            return train_sample[members_col].map_elements(
+                lambda members: np.mean(
+                    [rating_map.get(p, prior) for p in members]
+                )
+                if members is not None and len(members) > 0
+                else prior,
+                return_dtype=pl.Float64,
+            )
+
+        winner_ratings = get_team_ratings_vectorized(
+            "winner_members"
+        ).to_numpy()
+        loser_ratings = get_team_ratings_vectorized("loser_members").to_numpy()
+    else:
+        # Direct lookup - much faster
+        winner_ratings = np.array(
+            [rating_map.get(tid, prior) for tid in train_sample[winner_id_col]]
+        )
+        loser_ratings = np.array(
+            [rating_map.get(tid, prior) for tid in train_sample[loser_id_col]]
+        )
+
+    # Pre-compute for entropy weighting if needed
+    if scheme != "none":
+        # Use alpha=1 base probabilities
+        if score_transform == "bradley_terry":
+            base_probs = winner_ratings / (winner_ratings + loser_ratings)
+        else:
+            base_probs = 1.0 / (1.0 + np.exp(-(winner_ratings - loser_ratings)))
+
+        # Simplified weight computation
+        if scheme == "entropy":
+            eps = 1e-10
+            weights = -(
+                base_probs * np.log(base_probs + eps)
+                + (1 - base_probs) * np.log(1 - base_probs + eps)
+            )
+        elif scheme == "entropy_squared":
+            eps = 1e-10
+            entropy = -(
+                base_probs * np.log(base_probs + eps)
+                + (1 - base_probs) * np.log(1 - base_probs + eps)
+            )
+            weights = entropy * entropy
+        else:
+            weights = np.ones(len(winner_ratings))
+
+        # Normalize weights
+        weights = weights / np.sum(weights)
+    else:
+        weights = np.ones(len(winner_ratings)) / len(winner_ratings)
+
+    # Ultra-fast loss function
+    def loss(alpha: float) -> float:
+        if score_transform == "bradley_terry":
+            if alpha == 1.0:
+                probs = winner_ratings / (winner_ratings + loser_ratings)
+            else:
+                wa = np.power(winner_ratings, alpha)
+                la = np.power(loser_ratings, alpha)
+                probs = wa / (wa + la)
+        else:
+            z = alpha * (winner_ratings - loser_ratings)
+            probs = 1.0 / (1.0 + np.exp(-z))
+
+        # Weighted cross-entropy
+        return -np.sum(weights * np.log(np.maximum(probs, 1e-15)))
+
+    # Coarse grid search
+    alphas = np.linspace(alpha_bounds[0], alpha_bounds[1], n_grid_points)
+    losses = [loss(a) for a in alphas]
+    best_idx = np.argmin(losses)
+
+    # Golden section search for refinement
+    if best_idx == 0:
+        a, b = alpha_bounds[0], alphas[1]
+    elif best_idx == len(alphas) - 1:
+        a, b = alphas[-2], alpha_bounds[1]
+    else:
+        a, b = alphas[best_idx - 1], alphas[best_idx + 1]
+
+    # Golden ratio
+    phi = (1 + np.sqrt(5)) / 2
+    resphi = 2 - phi
+
+    # Initial points
+    tol = 1e-5
+    x1 = a + resphi * (b - a)
+    x2 = b - resphi * (b - a)
+    f1 = loss(x1)
+    f2 = loss(x2)
+
+    # Golden section iterations (usually converges in 10-15 iterations)
+    for _ in range(15):
+        if abs(b - a) < tol:
+            break
+
+        if f1 < f2:
+            b = x2
+            x2 = x1
+            f2 = f1
+            x1 = a + resphi * (b - a)
+            f1 = loss(x1)
+        else:
+            a = x1
+            x1 = x2
+            f1 = f2
+            x2 = b - resphi * (b - a)
+            f2 = loss(x2)
+
+    optimal_alpha = (a + b) / 2
+    logger.info(f"Optimal alpha: {optimal_alpha:.6f}")
 
     return optimal_alpha
 

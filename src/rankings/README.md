@@ -2,6 +2,28 @@
 
 This module provides comprehensive tournament ranking capabilities for Sendou.ink data, implementing both basic PageRank algorithms and advanced iterative rating engines with tournament strength modeling.
 
+## Current Status (v0.2.0)
+
+### Recent Updates
+- **Bradley-Terry Probability Model**: Implemented natural probability model `P(A beats B) = s_A / (s_A + s_B)` replacing legacy logistic model
+- **Improved Alpha Bounds**: Updated from extreme values (1e3-1e5) to reasonable range (0.1-5.0)
+- **Enhanced Evaluation Suite**: 7 orthogonal metrics including discrimination, calibration, ranking order, confidence performance, and stability indicators
+
+### Known Issues & In-Progress Improvements
+Based on test_tour_7.ipynb analysis, the current loss function needs improvements:
+1. **Poor Calibration**: Low accuracy (~10%) and poor upset O/E ratio (~0.2) indicate probability calibration issues
+2. **Unknown Player Handling**: Current approach injects 0.0 ratings for unknown players, causing extreme probabilities
+3. **Incomplete Roster Handling**: Teams with many unrated players skew predictions
+4. **Loss Function Optimization**: Need better weighting scheme and aggregation methods
+
+### Planned Fixes (from plan.md)
+- Implement global prior for unknown players (5th percentile of ratings)
+- Add row-skipping rule for teams with ≥2 unrated players
+- Switch to log-centered aggregation for team ratings
+- Implement entropy-weighted loss as primary objective
+- Add bye/forfeit match filtering
+- Improve teleport vector defaults
+
 ## Features
 
 ### Core Functionality
@@ -23,6 +45,7 @@ This module provides comprehensive tournament ranking capabilities for Sendou.in
 - Tournament influence calculated based on participant skill levels
 - Multiple aggregation methods for tournament strength
 - Configurable teleport vectors and decay models
+- Bradley-Terry probability model for match predictions
 
 ## Quick Start
 

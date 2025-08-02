@@ -76,7 +76,7 @@ from rankings.evaluation import (  # Loss functions; Metrics; Cross-validation; 
     compute_spearman_correlation,
     compute_tournament_loss,
     compute_weighted_log_loss,
-    create_time_based_splits,
+    create_time_based_folds,
     cross_validate_ratings,
     evaluate_by_rating_separation,
     evaluate_on_split,
@@ -161,7 +161,7 @@ __all__ = [
     "compute_spearman_correlation",
     "compute_round_metrics",
     # Evaluation - Cross-validation
-    "create_time_based_splits",
+    "create_time_based_folds",
     "evaluate_on_split",
     "cross_validate_ratings",
     # Evaluation - Optimization

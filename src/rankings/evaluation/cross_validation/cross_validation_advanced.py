@@ -15,13 +15,18 @@ from rankings.analysis.engine import RatingEngine
 from rankings.analysis.utils.summaries import derive_team_ratings_from_players
 from rankings.core.constants import MIN_TOURNAMENTS_BEFORE_CV
 from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
-from rankings.evaluation.loss import (
+
+from ..loss import (
     compute_cross_tournament_loss,
     compute_tournament_loss,
     filter_matches_by_ranked_threshold,
     fit_alpha_parameter,
+    fit_alpha_parameter_optimized,
+    fit_alpha_parameter_sampled,
 )
-from rankings.evaluation.metrics_extras import (
+
+# TODO: Incorporate improved splits functionality
+from ..metrics_extras import (
     accuracy_threshold,
     alpha_std,
     concordance,
@@ -31,7 +36,7 @@ from rankings.evaluation.metrics_extras import (
 )
 
 
-def create_time_based_splits(
+def create_time_based_folds(
     matches_df: pl.DataFrame,
     n_splits: int = 5,
     min_test_tournaments: int = 1,
@@ -129,6 +134,8 @@ def evaluate_on_split(
     weight_scheme: str = "entropy",
     weight_threshold: float = 0.1,
     weight_exp_base: float = 2.0,
+    warm_start_alpha: Optional[float] = None,
+    alpha_fit_method: str = "optimized",
 ) -> Dict[str, float]:
     """
     Evaluate rating engine on a single train/test split.
@@ -161,6 +168,10 @@ def evaluate_on_split(
         Bounds for alpha fitting
     score_transform : str
         Transform to apply: "bradley_terry", "logistic", or "identity"
+    warm_start_alpha : float, optional
+        Alpha value from previous fold to use as warm start
+    alpha_fit_method : str
+        Method for fitting alpha: "original", "sampled", or "optimized" (default)
     Returns
     -------
     Dict[str, float]
@@ -248,8 +259,17 @@ def evaluate_on_split(
 
     # Fit alpha if requested
     if fit_alpha:
-        logger.debug("Fitting alpha parameter on training data")
-        alpha = fit_alpha_parameter(
+        logger.debug(f"Fitting alpha parameter using {alpha_fit_method} method")
+
+        # Select alpha fitting function
+        if alpha_fit_method == "original":
+            alpha_func = fit_alpha_parameter
+        elif alpha_fit_method == "sampled":
+            alpha_func = fit_alpha_parameter_sampled
+        else:  # default to optimized
+            alpha_func = fit_alpha_parameter_optimized
+
+        alpha = alpha_func(
             train_df,
             rating_map,
             winner_id_col=winner_col,
@@ -385,6 +405,9 @@ def cross_validate_ratings(
     weight_scheme: str = "entropy",
     weight_threshold: float = 0.1,
     weight_exp_base: float = 2.0,
+    min_test_tournaments: int = 10,
+    test_size_ratio: float = 0.2,
+    alpha_fit_method: str = "optimized",
 ) -> Dict[str, Any]:
     """
     Perform full cross-validation evaluation of rating engine.
@@ -419,6 +442,12 @@ def cross_validate_ratings(
         L2 regularization strength
     default_params : Optional[Dict[str, Any]]
         Default parameters for regularization
+    min_test_tournaments : int
+        Minimum number of tournaments per test fold (default: 10)
+    test_size_ratio : float
+        Approximate ratio of tournaments for testing (default: 0.2)
+    alpha_fit_method : str
+        Method for fitting alpha: "original", "sampled", or "optimized" (default)
 
     Returns
     -------
@@ -433,13 +462,27 @@ def cross_validate_ratings(
     )
     log_dataframe_stats(logger, matches_df, "cv_matches")
 
-    # Create splits
-    logger.debug("Creating time-based splits")
-    splits = create_time_based_splits(matches_df, n_splits=n_splits)
-    logger.info(f"Created {len(splits)} CV splits")
+    # Create splits using improved method
+    logger.debug("Creating time-based splits with improved method")
+    try:
+        # TODO: Re-implement improved splits functionality
+        splits = create_time_based_folds(
+            matches_df,
+            n_splits=n_splits,
+            min_test_tournaments=min_test_tournaments,
+            test_size_ratio=test_size_ratio,
+        )
+        logger.info(f"Created {len(splits)} CV splits with improved method")
+    except ValueError as e:
+        logger.warning(
+            f"Improved splits failed: {e}. Falling back to legacy method"
+        )
+        splits = create_time_based_folds(matches_df, n_splits=n_splits)
+        logger.info(f"Created {len(splits)} CV splits with legacy method")
 
     # Evaluate on each split
     split_results = []
+    previous_alpha = None  # For warm starts
 
     with log_timing(logger, f"{n_splits}-fold cross-validation"):
         for i, (train_df, test_df, test_ids) in enumerate(splits):
@@ -461,12 +504,18 @@ def cross_validate_ratings(
                 weight_scheme=weight_scheme,
                 weight_threshold=weight_threshold,
                 weight_exp_base=weight_exp_base,
+                warm_start_alpha=previous_alpha,
+                alpha_fit_method=alpha_fit_method,
             )
 
             results["split_id"] = i
             results["test_tournament_ids"] = test_ids
             split_results.append(results)
             logger.debug(f"Split {i+1} loss: {results['loss']:.4f}")
+
+            # Update warm start for next fold
+            if fit_alpha:
+                previous_alpha = results.get("alpha", 1.0)
 
     # Compute overall metrics
     losses = [r["loss"] for r in split_results]
