@@ -165,6 +165,17 @@ class PlayerGenerator:
             return params["high"] - self.rng.exponential(
                 params["scale"], n_players
             )
+        elif distribution == "lognormal":
+            # Lognormal distribution - realistic for competitive games
+            # Generate lognormal and shift/scale to desired range
+            raw_skills = self.rng.lognormal(
+                params["mean"], params["sigma"], n_players
+            )
+            # Shift and scale to get majority between -1 and 1, with long tail up to 3+
+            skills = (raw_skills - np.exp(params["mean"])) * params[
+                "scale"
+            ] + params["shift"]
+            return skills
         else:
             raise ValueError(f"Unknown distribution: {distribution}")
 
@@ -175,6 +186,12 @@ class PlayerGenerator:
             "uniform": {"low": -2.0, "high": 2.0},
             "bimodal": {"mean1": -0.5, "std1": 0.5, "mean2": 1.0, "std2": 0.5},
             "exponential": {"high": 2.0, "scale": 1.0},
+            "lognormal": {
+                "mean": 0.0,
+                "sigma": 0.8,
+                "scale": 0.8,
+                "shift": -0.5,
+            },
         }
         return defaults.get(distribution, {})
 

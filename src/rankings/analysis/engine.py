@@ -367,7 +367,7 @@ class RatingEngine:
             matches.filter(
                 pl.col("winner_team_id").is_not_null()
                 & pl.col("loser_team_id").is_not_null()
-                & ~pl.col("is_bye", default=False)
+                & ~pl.col("is_bye").fill_null(False)
             )
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)  # Default strength for unseen tournaments
@@ -418,7 +418,7 @@ class RatingEngine:
             matches.filter(
                 pl.col("winner_team_id").is_not_null()
                 & pl.col("loser_team_id").is_not_null()
-                & ~pl.col("is_bye")
+                & ~pl.col("is_bye").fill_null(False)
             )
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)

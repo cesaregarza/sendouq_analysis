@@ -82,6 +82,7 @@ class MatchSimulator:
             prob_a_wins = bt_prob(score_a, score_b, alpha=self.alpha)
 
             # Simulate game outcome
+            # Simply use the Bradley-Terry probability directly
             if self.rng.random() < prob_a_wins:
                 wins_a += 1
             else:
