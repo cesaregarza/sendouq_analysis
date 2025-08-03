@@ -6,7 +6,7 @@ skills in synthetic tournament circuits.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import polars as pl
@@ -18,9 +18,12 @@ from rankings.core.constants import (
     DEFAULT_DAMPING_FACTOR,
     DEFAULT_DECAY_RATE,
 )
-from synthetic_data.player_generator import SyntheticPlayer
-from synthetic_data.tournament_circuit import CircuitResults, TournamentCircuit
-from synthetic_data.weighted_correlation import (
+from synthetic_data.circuits.tournament_circuit import (
+    CircuitResults,
+    TournamentCircuit,
+)
+from synthetic_data.core.player_generator import SyntheticPlayer
+from synthetic_data.evaluation.weighted_correlation import (
     rank_difference_distribution,
     top_k_weighted_accuracy,
     weighted_spearman,
@@ -58,10 +61,10 @@ class PageRankEvaluation:
     convergence_error: float
 
     # Additional analysis
-    rank_by_player_id: Dict[int, int]
-    true_rank_by_player_id: Dict[int, int]
-    pagerank_scores: Dict[int, float]
-    participation_counts: Dict[int, int]
+    rank_by_player_id: dict[int, int]
+    true_rank_by_player_id: dict[int, int]
+    pagerank_scores: dict[int, float]
+    participation_counts: dict[int, int]
 
 
 class PageRankEvaluator:
@@ -222,7 +225,7 @@ class PageRankEvaluator:
 
         return matches_df
 
-    def _get_active_players(self, circuit_results: CircuitResults) -> List[int]:
+    def _get_active_players(self, circuit_results: CircuitResults) -> list[int]:
         """Get players who meet minimum participation threshold."""
         active = []
         for (
@@ -235,9 +238,9 @@ class PageRankEvaluator:
 
     def _calculate_true_rankings(
         self,
-        all_players: List[SyntheticPlayer],
-        active_player_ids: List[int],
-    ) -> Dict[int, int]:
+        all_players: list[SyntheticPlayer],
+        active_player_ids: list[int],
+    ) -> dict[int, int]:
         """Calculate true rankings based on player skills."""
         # Filter to active players
         active_players = [
@@ -259,10 +262,10 @@ class PageRankEvaluator:
     def _compute_metrics(
         self,
         rankings: pl.DataFrame,
-        true_rankings: Dict[int, int],
+        true_rankings: dict[int, int],
         circuit_results: CircuitResults,
-        active_players: List[int],
-        player_pool: List[SyntheticPlayer],
+        active_players: list[int],
+        player_pool: list[SyntheticPlayer],
     ) -> PageRankEvaluation:
         """Compute evaluation metrics."""
         # Extract PageRank results for active players
@@ -408,8 +411,8 @@ class PageRankEvaluator:
         self,
         circuit: TournamentCircuit,
         circuit_results: CircuitResults,
-        parameter_ranges: Dict[str, List[float]],
-    ) -> Dict[Tuple[str, float], PageRankEvaluation]:
+        parameter_ranges: dict[str, list[float]],
+    ) -> dict[tuple[str, float], PageRankEvaluation]:
         """
         Evaluate PageRank across different parameter settings.
 
@@ -419,7 +422,7 @@ class PageRankEvaluator:
             Tournament circuit
         circuit_results : CircuitResults
             Circuit results
-        parameter_ranges : Dict[str, List[float]]
+        parameter_ranges : dict[str, list[float]]
             Parameter names and values to test
 
         Returns

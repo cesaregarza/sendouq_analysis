@@ -6,12 +6,12 @@ completeness, and compatibility with the ranking system.
 """
 
 from collections import Counter
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
 import polars as pl
 
 from rankings.core import parse_tournaments_data
-from synthetic_data.tournament_generator import Tournament
+from synthetic_data.core.tournament_generator import Tournament
 
 
 class DataValidator:
@@ -19,8 +19,8 @@ class DataValidator:
 
     def __init__(self):
         """Initialize the data validator."""
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     def validate_tournament(self, tournament: Tournament) -> bool:
         """
@@ -51,13 +51,13 @@ class DataValidator:
 
         return len(self.errors) == 0
 
-    def validate_serialized_data(self, data: Dict[str, Any]) -> bool:
+    def validate_serialized_data(self, data: dict[str, Any]) -> bool:
         """
         Validate serialized tournament data.
 
         Parameters
         ----------
-        data : Dict[str, Any]
+        data : dict[str, Any]
             Serialized tournament data
 
         Returns
@@ -94,13 +94,13 @@ class DataValidator:
 
         return len(self.errors) == 0
 
-    def validate_with_parser(self, data: List[Dict[str, Any]]) -> bool:
+    def validate_with_parser(self, data: list[dict[str, Any]]) -> bool:
         """
         Validate data by attempting to parse it.
 
         Parameters
         ----------
-        data : List[Dict[str, Any]]
+        data : list[dict[str, Any]]
             List of serialized tournament data
 
         Returns
@@ -248,7 +248,7 @@ class DataValidator:
                     f"Match {match.match_id} has tied scores but a winner"
                 )
 
-    def _validate_data_section(self, data: Dict[str, List]):
+    def _validate_data_section(self, data: dict[str, list]):
         """Validate the data section of serialized tournament."""
         required_keys = ["stage", "group", "round", "match"]
 
@@ -267,7 +267,7 @@ class DataValidator:
                 else:
                     stage_ids.add(stage["id"])
 
-    def _validate_ctx_section(self, ctx: Dict[str, Any]):
+    def _validate_ctx_section(self, ctx: dict[str, Any]):
         """Validate the context section of serialized tournament."""
         if "id" not in ctx:
             self.errors.append("Tournament context missing ID")
@@ -291,7 +291,7 @@ class DataValidator:
                         f"Team {team.get('id', '?')} missing members"
                     )
 
-    def _validate_cross_references(self, tournament: Dict[str, Any]):
+    def _validate_cross_references(self, tournament: dict[str, Any]):
         """Validate cross-references between data sections."""
         data = tournament["data"]
         ctx = tournament["ctx"]

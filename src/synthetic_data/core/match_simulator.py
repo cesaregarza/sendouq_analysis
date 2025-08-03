@@ -5,13 +5,13 @@ This module simulates match outcomes based on player skills using the
 Bradley-Terry model from the rankings analysis.
 """
 
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
 from rankings.analysis.transforms import bt_prob
-from synthetic_data.player_generator import SyntheticPlayer
-from synthetic_data.tournament_generator import Match, Team
+from synthetic_data.core.player_generator import SyntheticPlayer
+from synthetic_data.core.tournament_generator import Match, Team
 
 
 class MatchSimulator:
@@ -95,13 +95,13 @@ class MatchSimulator:
 
         return match
 
-    def simulate_matches(self, matches: List[Match]) -> List[Match]:
+    def simulate_matches(self, matches: list[Match]) -> list[Match]:
         """
         Simulate multiple matches.
 
         Parameters
         ----------
-        matches : List[Match]
+        matches : list[Match]
             List of matches to simulate
 
         Returns

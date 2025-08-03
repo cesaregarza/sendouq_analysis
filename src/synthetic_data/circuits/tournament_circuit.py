@@ -8,13 +8,16 @@ entry criteria and formats, using a fixed population of players.
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
-from synthetic_data.match_simulator import MatchSimulator
-from synthetic_data.player_generator import PlayerGenerator, SyntheticPlayer
-from synthetic_data.tournament_generator import (
+from synthetic_data.core.match_simulator import MatchSimulator
+from synthetic_data.core.player_generator import (
+    PlayerGenerator,
+    SyntheticPlayer,
+)
+from synthetic_data.core.tournament_generator import (
     Tournament,
     TournamentFormat,
     TournamentGenerator,
@@ -54,10 +57,10 @@ class TournamentConfig:
 class CircuitResults:
     """Results from a tournament circuit simulation."""
 
-    tournaments: List[Tournament]
-    player_participation: Dict[int, List[int]]  # player_id -> [tournament_ids]
-    player_wins: Dict[int, int]  # player_id -> total wins
-    player_matches: Dict[int, int]  # player_id -> total matches
+    tournaments: list[Tournament]
+    player_participation: dict[int, list[int]]  # player_id -> [tournament_ids]
+    player_wins: dict[int, int]  # player_id -> total wins
+    player_matches: dict[int, int]  # player_id -> total matches
 
 
 class TournamentCircuit:
@@ -68,7 +71,7 @@ class TournamentCircuit:
         seed: Optional[int] = None,
         player_pool_size: int = 200,
         skill_distribution: str = "normal",
-        skill_params: Optional[Dict] = None,
+        skill_params: Optional[dict] = None,
     ):
         """
         Initialize the tournament circuit.
@@ -114,8 +117,8 @@ class TournamentCircuit:
         self,
         size: int,
         distribution: str,
-        params: Optional[Dict],
-    ) -> List[SyntheticPlayer]:
+        params: Optional[dict],
+    ) -> list[SyntheticPlayer]:
         """Generate the fixed player pool for the circuit."""
         if distribution == "realistic":
             # Create a realistic distribution with elite, competitive, and casual
@@ -134,7 +137,7 @@ class TournamentCircuit:
 
     def generate_circuit(
         self,
-        tournament_configs: List[TournamentConfig],
+        tournament_configs: list[TournamentConfig],
         start_date: Optional[datetime] = None,
     ) -> CircuitResults:
         """
@@ -142,7 +145,7 @@ class TournamentCircuit:
 
         Parameters
         ----------
-        tournament_configs : List[TournamentConfig]
+        tournament_configs : list[TournamentConfig]
             Configurations for each tournament
         start_date : datetime, optional
             Start date for the circuit
@@ -186,7 +189,7 @@ class TournamentCircuit:
 
     def _select_participants(
         self, config: TournamentConfig
-    ) -> List[SyntheticPlayer]:
+    ) -> list[SyntheticPlayer]:
         """Select players for a tournament based on its type."""
         eligible_players = self.player_pool.copy()
 
@@ -245,10 +248,10 @@ class TournamentCircuit:
 
     def _biased_selection(
         self,
-        players: List[SyntheticPlayer],
+        players: list[SyntheticPlayer],
         n_select: int,
         bias: float,
-    ) -> List[SyntheticPlayer]:
+    ) -> list[SyntheticPlayer]:
         """Select players with bias towards higher skill."""
         # Sort by skill
         sorted_players = sorted(
@@ -270,7 +273,7 @@ class TournamentCircuit:
 
     def _generate_tournament(
         self,
-        participants: List[SyntheticPlayer],
+        participants: list[SyntheticPlayer],
         config: TournamentConfig,
         start_date: datetime,
     ) -> Tournament:

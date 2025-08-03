@@ -6,12 +6,15 @@ tournament densities and structures.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 
-from synthetic_data.tournament_circuit import TournamentConfig, TournamentType
-from synthetic_data.tournament_generator import TournamentFormat
+from synthetic_data.circuits.tournament_circuit import (
+    TournamentConfig,
+    TournamentType,
+)
+from synthetic_data.core.tournament_generator import TournamentFormat
 
 
 class TournamentScheduleGenerator:
@@ -33,8 +36,8 @@ class TournamentScheduleGenerator:
         days: int = 180,
         min_team_size: int = 8,
         tournaments_per_day: tuple = (1, 5),
-        size_distribution: Optional[Dict[str, float]] = None,
-    ) -> List[TournamentConfig]:
+        size_distribution: Optional[dict[str, float]] = None,
+    ) -> list[TournamentConfig]:
         """
         Create a dense tournament schedule with multiple daily tournaments.
 
@@ -95,8 +98,8 @@ class TournamentScheduleGenerator:
     def create_weekly_series(
         self,
         weeks: int = 26,
-        series_configs: Optional[List[Dict[str, Any]]] = None,
-    ) -> List[TournamentConfig]:
+        series_configs: Optional[list[dict[str, Any]]] = None,
+    ) -> list[TournamentConfig]:
         """
         Create recurring weekly tournament series.
 
@@ -171,7 +174,7 @@ class TournamentScheduleGenerator:
         days: int = 180,
         include_weekly_series: bool = True,
         min_team_size: int = 20,
-    ) -> List[TournamentConfig]:
+    ) -> list[TournamentConfig]:
         """
         Create a realistic tournament schedule combining dense daily tournaments
         and weekly series.
@@ -215,7 +218,7 @@ class TournamentScheduleGenerator:
         days: int = 180,
         tournaments_per_week: int = 3,
         min_team_size: int = 32,
-    ) -> List[TournamentConfig]:
+    ) -> list[TournamentConfig]:
         """
         Create a sparse tournament schedule with fewer, larger tournaments.
 
@@ -266,7 +269,7 @@ class TournamentScheduleGenerator:
         day: int,
         time_slot: int,
         min_team_size: int = 8,
-        size_distribution: Optional[Dict[str, float]] = None,
+        size_distribution: Optional[dict[str, float]] = None,
         n_teams_override: Optional[int] = None,
     ) -> TournamentConfig:
         """Generate a single tournament configuration."""
@@ -371,7 +374,7 @@ class TournamentScheduleGenerator:
 
         return base_rounds
 
-    def _weighted_choice(self, weights: Dict[Any, float]) -> Any:
+    def _weighted_choice(self, weights: dict[Any, float]) -> Any:
         """Make a weighted random choice."""
         items = list(weights.keys())
         probs = list(weights.values())
@@ -381,7 +384,7 @@ class TournamentScheduleGenerator:
 # Convenience functions for common use cases
 def create_dense_schedule(
     days: int = 180, seed: Optional[int] = None
-) -> List[TournamentConfig]:
+) -> list[TournamentConfig]:
     """
     Create a dense tournament schedule with ~500 tournaments over the period.
 
@@ -403,7 +406,7 @@ def create_dense_schedule(
 
 def create_sparse_schedule(
     days: int = 180, seed: Optional[int] = None
-) -> List[TournamentConfig]:
+) -> list[TournamentConfig]:
     """
     Create a sparse tournament schedule with ~100 tournaments over the period.
 
@@ -426,7 +429,7 @@ def create_sparse_schedule(
 def create_competitive_season(
     months: int = 6,
     seed: Optional[int] = None,
-) -> List[TournamentConfig]:
+) -> list[TournamentConfig]:
     """
     Create a competitive season with major tournaments and qualifiers.
 

@@ -10,10 +10,10 @@ FIXES APPLIED:
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from synthetic_data.match_simulator import MatchSimulator
-from synthetic_data.tournament_generator import (
+from synthetic_data.core.match_simulator import MatchSimulator
+from synthetic_data.core.tournament_generator import (
     Match,
     Team,
     Tournament,
@@ -36,7 +36,7 @@ class DataSerializer:
         tournament: Tournament,
         simulate_matches: bool = True,
         match_simulator: Optional[MatchSimulator] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Serialize a tournament to Sendou.ink JSON format.
 
@@ -97,16 +97,16 @@ class DataSerializer:
 
     def serialize_tournaments(
         self,
-        tournaments: List[Tournament],
+        tournaments: list[Tournament],
         simulate_matches: bool = True,
         match_simulator: Optional[MatchSimulator] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Serialize multiple tournaments.
 
         Parameters
         ----------
-        tournaments : List[Tournament]
+        tournaments : list[Tournament]
             Tournaments to serialize
         simulate_matches : bool
             Whether to simulate match outcomes
@@ -123,7 +123,7 @@ class DataSerializer:
             for t in tournaments
         ]
 
-    def _serialize_team(self, team: Team, tournament_id: int) -> Dict[str, Any]:
+    def _serialize_team(self, team: Team, tournament_id: int) -> dict[str, Any]:
         """Serialize a team and its roster."""
         team_data = {
             "id": team.team_id,
@@ -158,7 +158,7 @@ class DataSerializer:
         self,
         stage: TournamentStage,
         tournament_id: int,
-        data_section: Dict[str, List],
+        data_section: dict[str, list],
         simulate_matches: bool,
         match_simulator: Optional[MatchSimulator],
     ):
@@ -263,7 +263,7 @@ class DataSerializer:
         round_id: int,
         match_number: int,
         group_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Serialize a single match with Unix timestamps."""
         # Determine match status
         if match.winner:
@@ -331,7 +331,7 @@ class DataSerializer:
 
     def to_json_file(
         self,
-        tournaments: List[Tournament],
+        tournaments: list[Tournament],
         filename: str,
         simulate_matches: bool = True,
         match_simulator: Optional[MatchSimulator] = None,
@@ -341,7 +341,7 @@ class DataSerializer:
 
         Parameters
         ----------
-        tournaments : List[Tournament]
+        tournaments : list[Tournament]
             Tournaments to write
         filename : str
             Output filename

@@ -5,15 +5,15 @@ Implements weighted Spearman correlation where rank differences at the top
 are weighted more heavily than differences at the bottom.
 """
 
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 from scipy import stats
 
 
 def weighted_spearman(
-    true_ranks: List[int],
-    predicted_ranks: List[int],
+    true_ranks: list[int],
+    predicted_ranks: list[int],
     weight_type: str = "exponential",
     alpha: float = 0.1,
 ) -> float:
@@ -22,9 +22,9 @@ def weighted_spearman(
 
     Parameters
     ----------
-    true_ranks : List[int]
+    true_ranks : list[int]
         True rankings (1 = best)
-    predicted_ranks : List[int]
+    predicted_ranks : list[int]
         Predicted rankings (1 = best)
     weight_type : str
         Type of weighting: "exponential", "logarithmic", "hyperbolic"
@@ -85,9 +85,9 @@ def weighted_spearman(
 
 
 def top_k_weighted_accuracy(
-    true_ranks: List[int],
-    predicted_ranks: List[int],
-    k_values: List[int] = [10, 20, 50, 100],
+    true_ranks: list[int],
+    predicted_ranks: list[int],
+    k_values: list[int] = [10, 20, 50, 100],
 ) -> dict:
     """
     Calculate top-k accuracy with exponential weighting.
@@ -133,9 +133,9 @@ def top_k_weighted_accuracy(
 
 
 def rank_difference_distribution(
-    true_ranks: List[int],
-    predicted_ranks: List[int],
-    percentiles: List[int] = [10, 25, 50, 75, 90, 95, 99],
+    true_ranks: list[int],
+    predicted_ranks: list[int],
+    percentiles: list[int] = [10, 25, 50, 75, 90, 95, 99],
 ) -> dict:
     """
     Analyze distribution of rank differences, especially at the top.

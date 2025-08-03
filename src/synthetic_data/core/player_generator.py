@@ -7,7 +7,7 @@ configurable skill distributions for tournament simulations.
 
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
@@ -65,9 +65,9 @@ class PlayerGenerator:
         self,
         n_players: int,
         skill_distribution: str = "normal",
-        skill_params: Optional[Dict] = None,
-        variance_range: Tuple[float, float] = (0.1, 0.3),
-    ) -> List[SyntheticPlayer]:
+        skill_params: Optional[dict] = None,
+        variance_range: tuple[float, float] = (0.1, 0.3),
+    ) -> list[SyntheticPlayer]:
         """
         Generate a set of synthetic players.
 
@@ -110,7 +110,7 @@ class PlayerGenerator:
 
     def generate_elite_players(
         self, n_players: int, base_skill: float = 2.0
-    ) -> List[SyntheticPlayer]:
+    ) -> list[SyntheticPlayer]:
         """
         Generate elite players with high skill levels.
 
@@ -146,7 +146,7 @@ class PlayerGenerator:
         return players
 
     def _generate_skills(
-        self, n_players: int, distribution: str, params: Dict
+        self, n_players: int, distribution: str, params: dict
     ) -> np.ndarray:
         """Generate skill values based on specified distribution."""
         if distribution == "normal":
@@ -179,7 +179,7 @@ class PlayerGenerator:
         else:
             raise ValueError(f"Unknown distribution: {distribution}")
 
-    def _get_default_params(self, distribution: str) -> Dict:
+    def _get_default_params(self, distribution: str) -> dict:
         """Get default parameters for skill distributions."""
         defaults = {
             "normal": {"mean": 0.0, "std": 1.0},
@@ -202,7 +202,7 @@ class PlayerGenerator:
 
     def create_player_pool_with_categories(
         self, n_elite: int = 50, n_competitive: int = 200, n_casual: int = 500
-    ) -> Dict[str, List[SyntheticPlayer]]:
+    ) -> dict[str, list[SyntheticPlayer]]:
         """
         Create a realistic player pool with different skill categories.
 

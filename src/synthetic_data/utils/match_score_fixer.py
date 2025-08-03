@@ -3,8 +3,8 @@ Utility to add scores to matches in tournament results.
 """
 import numpy as np
 
-from synthetic_data.tournament_circuit import CircuitResults
-from synthetic_data.tournament_generator import Tournament
+from synthetic_data.circuits.tournament_circuit import CircuitResults
+from synthetic_data.core.tournament_generator import Tournament
 
 
 def add_scores_to_circuit_results(

@@ -14,11 +14,11 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional
 
 import numpy as np
 
-from synthetic_data.player_generator import SyntheticPlayer
+from synthetic_data.core.player_generator import SyntheticPlayer
 
 
 class TournamentFormat(Enum):
@@ -37,7 +37,7 @@ class Team:
 
     team_id: int
     name: str
-    players: List[SyntheticPlayer]
+    players: list[SyntheticPlayer]
     seed: Optional[int] = None
 
     @property
@@ -76,12 +76,12 @@ class TournamentStage:
     stage_id: int
     name: str
     format: TournamentFormat
-    rounds: Dict[int, List[Match]] = field(default_factory=dict)
-    teams: List[Team] = field(default_factory=list)
+    rounds: dict[int, list[Match]] = field(default_factory=dict)
+    teams: list[Team] = field(default_factory=list)
     # Double elimination specific fields
-    winners_bracket: Dict[int, List[Match]] = field(default_factory=dict)
-    losers_bracket: Dict[int, List[Match]] = field(default_factory=dict)
-    grand_finals: List[Match] = field(default_factory=list)
+    winners_bracket: dict[int, list[Match]] = field(default_factory=dict)
+    losers_bracket: dict[int, list[Match]] = field(default_factory=dict)
+    grand_finals: list[Match] = field(default_factory=list)
 
 
 @dataclass
@@ -91,8 +91,8 @@ class Tournament:
     tournament_id: int
     name: str
     start_date: datetime
-    stages: List[TournamentStage] = field(default_factory=list)
-    all_teams: List[Team] = field(default_factory=list)
+    stages: list[TournamentStage] = field(default_factory=list)
+    all_teams: list[Team] = field(default_factory=list)
 
 
 class TournamentGenerator:
@@ -116,7 +116,7 @@ class TournamentGenerator:
 
     def generate_tournament(
         self,
-        players: List[SyntheticPlayer],
+        players: list[SyntheticPlayer],
         format: TournamentFormat,
         team_size: int = 4,
         name: Optional[str] = None,
@@ -128,7 +128,7 @@ class TournamentGenerator:
 
         Parameters
         ----------
-        players : List[SyntheticPlayer]
+        players : list[SyntheticPlayer]
             Pool of players to form teams
         format : TournamentFormat
             Tournament format to use
@@ -190,8 +190,8 @@ class TournamentGenerator:
 
     def generate_multi_stage_tournament(
         self,
-        players: List[SyntheticPlayer],
-        stages_config: List[Dict],
+        players: list[SyntheticPlayer],
+        stages_config: list[dict],
         team_size: int = 4,
         name: Optional[str] = None,
         start_date: Optional[datetime] = None,
@@ -201,9 +201,9 @@ class TournamentGenerator:
 
         Parameters
         ----------
-        players : List[SyntheticPlayer]
+        players : list[SyntheticPlayer]
             Pool of players to form teams
-        stages_config : List[Dict]
+        stages_config : list[dict]
             Configuration for each stage
         team_size : int
             Number of players per team
@@ -269,8 +269,8 @@ class TournamentGenerator:
         return tournament
 
     def _form_teams(
-        self, players: List[SyntheticPlayer], team_size: int
-    ) -> List[Team]:
+        self, players: list[SyntheticPlayer], team_size: int
+    ) -> list[Team]:
         """Form teams from player pool."""
         # Shuffle players
         shuffled_players = players.copy()
@@ -291,7 +291,7 @@ class TournamentGenerator:
         return teams
 
     def _generate_swiss_stage(
-        self, teams: List[Team], n_rounds: Optional[int] = None, **kwargs
+        self, teams: list[Team], n_rounds: Optional[int] = None, **kwargs
     ) -> TournamentStage:
         """Generate Swiss system stage with improved pairing algorithm."""
         if not teams:
@@ -316,7 +316,7 @@ class TournamentGenerator:
 
         # Track team scores and pairings
         scores = {team.team_id: 0 for team in teams}
-        played_pairs: Set[Tuple[int, int]] = set()
+        played_pairs: set[tuple[int, int]] = set()
 
         for round_num in range(1, n_rounds + 1):
             # Sort teams by score (and randomize within same score)
@@ -414,7 +414,7 @@ class TournamentGenerator:
         return stage
 
     def _generate_round_robin_stage(
-        self, teams: List[Team], double: bool = False, **kwargs
+        self, teams: list[Team], double: bool = False, **kwargs
     ) -> TournamentStage:
         """Generate Round Robin stage with corrected circle algorithm."""
         stage = TournamentStage(
@@ -495,7 +495,7 @@ class TournamentGenerator:
         return stage
 
     def _generate_single_elimination_stage(
-        self, teams: List[Team], seeded: bool = True, **kwargs
+        self, teams: list[Team], seeded: bool = True, **kwargs
     ) -> TournamentStage:
         """Generate Single Elimination bracket."""
         stage = TournamentStage(
@@ -612,7 +612,7 @@ class TournamentGenerator:
 
     def _get_loser_destination(
         self, winners_round: int, match_position: int, bracket_size: int
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """
         Determine where the loser goes in the losers bracket.
 
@@ -645,7 +645,7 @@ class TournamentGenerator:
         return 2 * (int(math.log2(bracket_size)) - 1)
 
     def _generate_double_elimination_stage(
-        self, teams: List[Team], seeded: bool = True, **kwargs
+        self, teams: list[Team], seeded: bool = True, **kwargs
     ) -> TournamentStage:
         """Generate Double Elimination bracket with winners, losers, and grand finals."""
         stage = TournamentStage(
@@ -1050,7 +1050,7 @@ class TournamentGenerator:
 
     def _generate_group_stage(
         self,
-        teams: List[Team],
+        teams: list[Team],
         n_groups: int = 4,
         advance_per_group: int = 2,
         **kwargs,
@@ -1111,7 +1111,7 @@ class TournamentGenerator:
 
     def _get_advancing_teams(
         self, stage: TournamentStage, advance_count: int
-    ) -> List[Team]:
+    ) -> list[Team]:
         """Get teams advancing from a stage."""
         # Simplified - would calculate based on match results
         teams = stage.teams.copy()
