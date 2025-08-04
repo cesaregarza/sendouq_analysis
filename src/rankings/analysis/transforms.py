@@ -12,7 +12,7 @@ def bt_prob(
     sa: float, sb: float, *, alpha: float = 1.0, eps: float = 1e-12
 ) -> float:
     """
-    Bradley–Terry win probability using PageRank scores.
+    Bradley-Terry win probability using PageRank scores.
 
     Parameters
     ----------

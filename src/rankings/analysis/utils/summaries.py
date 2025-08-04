@@ -221,6 +221,21 @@ def prepare_player_summary(
                         - pl.col(score_col_renamed).min()
                     )
                 ).alias("score_normalized"),
+                (
+                    (
+                        (
+                            (
+                                pl.col(score_col_renamed).log()
+                                - pl.col(score_col_renamed).log().min()
+                            )
+                            * 100
+                        )
+                        / (
+                            pl.col(score_col_renamed).log().max()
+                            - pl.col(score_col_renamed).log().min()
+                        )
+                    )
+                ).alias("score_log_normalized"),
                 pl.col(score_col_renamed)
                 .rank(method="min", descending=True)
                 .alias(rank_column),
@@ -235,6 +250,7 @@ def prepare_player_summary(
             "user_id",
             score_col_renamed,
             "score_normalized",
+            "score_log_normalized",
             rank_column,
             "tournament_count",
             "in_game_name",
@@ -289,6 +305,21 @@ def prepare_team_summary(
                     ((pl.col(score_column) - pl.col(score_column).min()) * 100)
                     / (pl.col(score_column).max() - pl.col(score_column).min())
                 ).alias("score_normalized"),
+                (
+                    (
+                        (
+                            (
+                                pl.col(score_column).log()
+                                - pl.col(score_column).log().min()
+                            )
+                            * 100
+                        )
+                        / (
+                            pl.col(score_column).log().max()
+                            - pl.col(score_column).log().min()
+                        )
+                    )
+                ).alias("score_log_normalized"),
                 pl.col(score_column)
                 .rank(method="min", descending=True)
                 .alias(rank_column),
@@ -302,6 +333,7 @@ def prepare_team_summary(
             "team_id",
             score_column,
             "score_normalized",
+            "score_log_normalized",
             rank_column,
             "tournament_count",
             "seed",

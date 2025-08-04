@@ -87,7 +87,7 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
 
 def get_tournament_summary(data_dir: str = "data/tournaments") -> pl.DataFrame:
     """
-    Get a summary of scraped tournaments.
+    Get a summary of scraped tournaments using the enhanced parser.
 
     Parameters
     ----------
@@ -97,29 +97,22 @@ def get_tournament_summary(data_dir: str = "data/tournaments") -> pl.DataFrame:
     Returns
     -------
     pl.DataFrame
-        Summary with tournament IDs, names, and metadata
+        Summary with comprehensive tournament metadata including organization,
+        settings, staff, and match/team counts
     """
+    from src.rankings.core.parser import parse_tournaments_data
+
     tournaments = load_scraped_tournaments(data_dir)
 
     if not tournaments:
         return pl.DataFrame([])
 
-    summary_data = []
-    for entry in tournaments:
-        tournament = entry.get("tournament", {})
-        ctx = tournament.get("ctx", {})
+    # Use the enhanced parser to get full tournament metadata
+    tables = parse_tournaments_data(tournaments)
+    tournament_df = tables.get("tournaments")
 
-        summary_data.append(
-            {
-                "tournament_id": ctx.get("id"),
-                "name": ctx.get("name", "Unknown"),
-                "start_time": ctx.get("startTime"),
-                "is_finalized": ctx.get("isFinalized", False),
-                "team_count": len(ctx.get("teams", [])),
-                "has_matches": bool(
-                    tournament.get("data", {}).get("match", [])
-                ),
-            }
-        )
+    if tournament_df is None:
+        return pl.DataFrame([])
 
-    return pl.DataFrame(summary_data)
+    # Return the comprehensive tournament metadata
+    return tournament_df

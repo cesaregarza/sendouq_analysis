@@ -19,8 +19,8 @@ def parse_tournaments_data(
 
     The raw data contains a list of tournaments. Each entry has a
     `tournament` key with nested `data` (stages, groups, rounds and
-    matches) and `ctx` (teams and participants). This function extracts
-    and normalizes this information into separate tables.
+    matches) and `ctx` (teams, participants, and tournament metadata).
+    This function extracts and normalizes this information into separate tables.
 
     Parameters
     ----------
@@ -30,12 +30,14 @@ def parse_tournaments_data(
     Returns
     -------
     dict[str, Optional[pl.DataFrame]]
-        A dictionary containing six tables: ``stages``, ``groups``,
-        ``rounds``, ``teams``, ``players`` and ``matches``.  Tables
-        without any rows are returned as ``None``.
+        A dictionary containing seven tables: ``tournaments``, ``stages``,
+        ``groups``, ``rounds``, ``teams``, ``players`` and ``matches``.
+        Tables without any rows are returned as ``None``.
 
     Notes
     -----
+    * The ``tournaments`` table contains comprehensive metadata about each
+      tournament including organization, settings, staff, and configuration.
     * Match outcomes are deduced from the ``opponent1`` and ``opponent2``
       sub-dictionaries. If neither opponent has a ``result`` of
       ``"win"``, the ``winner_team_id`` and ``loser_team_id`` columns
@@ -53,11 +55,13 @@ def parse_tournaments_data(
     >>> with open("tournament_data.json") as f:
     ...     data = json.load(f)
     >>> tables = parse_tournaments_data(data)
+    >>> tournaments_df = tables['tournaments']
     >>> matches_df = tables['matches']
     >>> teams_df = tables['teams']
     >>> players_df = tables['players']
     """
     # Prepare containers for each table
+    tournament_rows: List[Dict[str, object]] = []
     stage_rows: List[Dict[str, object]] = []
     group_rows: List[Dict[str, object]] = []
     round_rows: List[Dict[str, object]] = []
@@ -73,6 +77,150 @@ def parse_tournaments_data(
 
         # Assign a unique identifier for the tournament
         tournament_id = ctx.get("id")
+
+        # ---------- Tournament Metadata ----------
+        row = {
+            "tournament_id": tournament_id,
+            "event_id": ctx.get("eventId"),
+            "name": ctx.get("name"),
+            "description": ctx.get("description"),
+            "start_time": ctx.get("startTime"),
+            "is_finalized": ctx.get("isFinalized", False),
+            "parent_tournament_id": ctx.get("parentTournamentId"),
+            "discord_url": ctx.get("discordUrl"),
+            "logo_url": ctx.get("logoUrl"),
+            "logo_validated_at": ctx.get("logoValidatedAt"),
+            "logo_src": ctx.get("logoSrc"),
+            "map_picking_style": ctx.get("mapPickingStyle"),
+            "rules": ctx.get("rules"),
+        }
+
+        # Tags (convert comma-separated string to list)
+        tags_str = ctx.get("tags")
+        if tags_str:
+            row["tags"] = [
+                tag.strip() for tag in tags_str.split(",") if tag.strip()
+            ]
+        else:
+            row["tags"] = None
+
+        # Cast accounts (keep as list)
+        cast_accounts = ctx.get("castTwitchAccounts", []) or []
+        row["cast_twitch_accounts"] = cast_accounts if cast_accounts else None
+
+        # Organization info
+        org = ctx.get("organization")
+        if org:
+            row["org_id"] = org.get("id")
+            row["org_name"] = org.get("name")
+            row["org_slug"] = org.get("slug")
+            row["org_description"] = org.get("description")
+            row["org_url"] = org.get("url")
+            row["org_logo_url"] = org.get("logoUrl")
+            row["org_socials"] = (
+                str(org.get("socials")) if org.get("socials") else None
+            )
+        else:
+            row.update(
+                {
+                    "org_id": None,
+                    "org_name": None,
+                    "org_slug": None,
+                    "org_description": None,
+                    "org_url": None,
+                    "org_logo_url": None,
+                    "org_socials": None,
+                }
+            )
+
+        # Author info
+        author = ctx.get("author")
+        if author:
+            row["author_id"] = author.get("id")
+            row["author_username"] = author.get("username")
+            row["author_discord_id"] = author.get("discordId")
+        else:
+            row["author_id"] = None
+            row["author_username"] = None
+            row["author_discord_id"] = None
+
+        # Staff info (serialized list)
+        staff = ctx.get("staff", []) or []
+        row["staff"] = str(staff) if staff else None
+        row["staff_count"] = len(staff)
+
+        # Settings (serialized)
+        settings = ctx.get("settings", {})
+        row["settings"] = str(settings) if settings else None
+
+        # Extract specific settings
+        if settings:
+            row["settings_is_league"] = settings.get("isLeague", False)
+            row["settings_is_ranked"] = settings.get("isRanked", False)
+            row["settings_enable_no_screen"] = settings.get(
+                "enableNoScreen", False
+            )
+            row["settings_autonomous_subs"] = settings.get(
+                "autonomousSubs", False
+            )
+            row["settings_registration_cap"] = settings.get("regClosesAt")
+            row["settings_min_members_per_team"] = settings.get(
+                "minMembersPerTeam"
+            )
+            row["settings_timezone"] = settings.get("timezone")
+        else:
+            row.update(
+                {
+                    "settings_is_league": None,
+                    "settings_is_ranked": None,
+                    "settings_enable_no_screen": None,
+                    "settings_autonomous_subs": None,
+                    "settings_registration_cap": None,
+                    "settings_min_members_per_team": None,
+                    "settings_timezone": None,
+                }
+            )
+
+        # Sub counts
+        sub_counts = ctx.get("subCounts", {})
+        if sub_counts and isinstance(sub_counts, dict):
+            row["sub_count_plus_one"] = sub_counts.get("+1", 0)
+            row["sub_count_plus_two"] = sub_counts.get("+2", 0)
+        else:
+            row["sub_count_plus_one"] = 0
+            row["sub_count_plus_two"] = 0
+
+        # Casted matches info
+        casted_info = ctx.get("castedMatchesInfo", []) or []
+        row["casted_matches_count"] = len(casted_info)
+        row["casted_matches_info"] = str(casted_info) if casted_info else None
+
+        # Map pool info
+        tie_breaker_pool = ctx.get("tieBreakerMapPool", []) or []
+        to_set_pool = ctx.get("toSetMapPool", []) or []
+        row["tie_breaker_map_pool"] = (
+            str(tie_breaker_pool) if tie_breaker_pool else None
+        )
+        row["to_set_map_pool"] = str(to_set_pool) if to_set_pool else None
+
+        # Bracket progression overrides
+        bracket_overrides = ctx.get("bracketProgressionOverrides", []) or []
+        row["bracket_progression_overrides"] = (
+            str(bracket_overrides) if bracket_overrides else None
+        )
+
+        # Participated users count
+        participated_users = ctx.get("participatedUsers", []) or []
+        row["participated_users_count"] = len(participated_users)
+
+        # Team and match counts
+        row["team_count"] = len(ctx.get("teams", []))
+        row["match_count"] = len(data.get("match", []))
+        row["stage_count"] = len(data.get("stage", []))
+        row["group_count"] = len(data.get("group", []))
+        row["round_count"] = len(data.get("round", []))
+
+        tournament_rows.append(row)
 
         # ---------- Stages ----------
         for stage in data.get("stage", []) or []:
@@ -223,6 +371,11 @@ def parse_tournaments_data(
 
     # Convert to polars DataFrames with proper schema inference
     # Use infer_schema_length=None to scan all rows for consistent schema
+    tournament_df = (
+        pl.DataFrame(tournament_rows, infer_schema_length=None)
+        if tournament_rows
+        else None
+    )
     stage_df = (
         pl.DataFrame(stage_rows, infer_schema_length=None)
         if stage_rows
@@ -253,6 +406,7 @@ def parse_tournaments_data(
     )
 
     return {
+        "tournaments": tournament_df,
         "stages": stage_df,
         "groups": group_df,
         "rounds": round_df,

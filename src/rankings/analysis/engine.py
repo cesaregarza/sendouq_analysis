@@ -83,7 +83,10 @@ class RatingEngine:
     teleport : str or dict, default="volume_inverse"
         Teleport vector specification ("uniform", "volume_inverse", or dict)
     influence_agg_method : str, default="mean"
-        Method for aggregating participant ratings into tournament influence
+        Method for aggregating participant ratings into tournament influence.
+        Options: "mean", "sum", "median", "top_20_sum", "log_top_20_sum", "sqrt_top_20_sum"
+        - "log_top_20_sum" takes log(1 + top_20_sum) to compress influence range
+        - "sqrt_top_20_sum" takes sqrt of top_20_sum for moderate compression
     strength_agg : str, default="mean"
         Method for computing retrospective tournament strength
     strength_k : int, default=5
@@ -103,7 +106,14 @@ class RatingEngine:
         now: Optional[datetime] = None,
         teleport: str | dict[int, float] = TELEPORT_VOLUME_INVERSE,
         influence_agg_method: Literal[
-            "mean", "sum", "median", "top_20_sum"
+            "mean",
+            "sum",
+            "median",
+            "top_20_sum",
+            "log_top_20_sum",
+            "sqrt_top_20_sum",
+            "top_10_sum",
+            "top_20_mean",
         ] = DEFAULT_INFLUENCE_AGG_METHOD,
         strength_agg: Literal[
             "mean", "median", "trimmed_mean", "topN_sum"
@@ -675,6 +685,20 @@ class RatingEngine:
             agg_expr = pl.col("r").median()
         elif self.influence_agg_method == "top_20_sum":
             agg_expr = pl.col("r").sort(descending=True).head(20).sum()
+        elif self.influence_agg_method == "log_top_20_sum":
+            # Take log1p (log(1 + x)) of top_20_sum to compress the range
+            # log1p is numerically stable and handles small values well
+            agg_expr = pl.col("r").sort(descending=True).head(20).sum().log1p()
+        elif self.influence_agg_method == "sqrt_top_20_sum":
+            # Take square root of top_20_sum for moderate compression
+            # This provides less extreme compression than log
+            agg_expr = pl.col("r").sort(descending=True).head(20).sum().sqrt()
+        elif self.influence_agg_method == "top_10_sum":
+            # Sum of top 10 players (less extreme than top 20)
+            agg_expr = pl.col("r").sort(descending=True).head(10).sum()
+        elif self.influence_agg_method == "top_20_mean":
+            # Mean of top 20 players (normalizes for tournament size)
+            agg_expr = pl.col("r").sort(descending=True).head(20).mean()
         else:
             raise ValueError(
                 f"Unknown influence_agg_method: {self.influence_agg_method}"
@@ -684,8 +708,25 @@ class RatingEngine:
         S = (
             part_df.group_by("tournament_id")
             .agg(agg_expr.alias("S_raw"))
-            .with_columns((pl.col("S_raw") / pl.col("S_raw").mean()).alias("S"))
+            .with_columns(
+                (pl.col("S_raw") / pl.col("S_raw").mean()).alias("S_normalized")
+            )
         )
+
+        # For log_top_20_sum, apply a softer logarithmic compression
+        if self.influence_agg_method == "log_top_20_sum":
+            # Use log(1 + x) but with larger base to compress less aggressively
+            # This maintains more differentiation while still reducing extremes
+            S = S.with_columns(
+                ((pl.col("S_normalized") + 1).log() / np.log(2)).alias("S_log")
+            )
+            # Rescale to maintain mean at 1
+            S = S.with_columns(
+                (pl.col("S_log") / pl.col("S_log").mean()).alias("S")
+            )
+        else:
+            S = S.with_columns(pl.col("S_normalized").alias("S"))
+
         return dict(zip(S["tournament_id"], S["S"]))
 
     # =========================================================================
