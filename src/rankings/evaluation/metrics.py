@@ -188,7 +188,7 @@ def evaluate_tournament_predictions(
     Dict[str, any]
         Comprehensive metrics
     """
-    from .loss import compute_match_probability
+    from rankings.evaluation.loss import compute_match_probability
 
     # Compute predictions for each match
     predictions = []

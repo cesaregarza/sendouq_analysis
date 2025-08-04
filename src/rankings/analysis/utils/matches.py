@@ -248,7 +248,7 @@ def get_player_match_history(
     pl.DataFrame
         Player's match history with full context
     """
-    from .names import create_match_summary_with_names
+    from rankings.analysis.utils.names import create_match_summary_with_names
 
     # Get player's teams
     player_teams = players_df.filter(pl.col("user_id") == player_id).select(

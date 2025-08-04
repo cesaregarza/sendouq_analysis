@@ -352,7 +352,7 @@ def compute_tournament_loss(
         metrics["predictions"] = predictions
 
         # Add bucketised analysis
-        from .metrics import compute_brier_score
+        from rankings.evaluation.metrics import compute_brier_score
 
         outcomes = np.ones_like(predictions)  # All winners
         metrics["brier_score"] = compute_brier_score(predictions, outcomes)
