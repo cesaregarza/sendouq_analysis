@@ -17,6 +17,10 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import polars as pl
 
+from rankings.analysis.asymmetric_confidence import (
+    AsymmetricConfidenceCalculator,
+    AsymmetricConfidenceMetrics,
+)
 from rankings.core.constants import (
     DEFAULT_BETA,
     DEFAULT_DAMPING_FACTOR,
@@ -134,6 +138,9 @@ class RatingEngine:
         self.tournament_strength: Optional[pl.DataFrame] = None
         self.ratings_df: Optional[pl.DataFrame] = None
         self.global_prior_: Optional[float] = None
+        self.confidence_metrics_: Optional[
+            Dict[str, AsymmetricConfidenceMetrics]
+        ] = None
 
     @property
     def tournament_influence(self) -> Optional[Dict[int, float]]:
@@ -769,6 +776,237 @@ class RatingEngine:
         self.tournament_strength = strength_df.join(
             infl_df, on="tournament_id", how="left"
         ).select(["tournament_id", "influence", "strength"])
+
+    # =========================================================================
+    # Confidence calculation
+    # =========================================================================
+
+    def calculate_player_confidence(
+        self,
+        matches: pl.DataFrame,
+        players: pl.DataFrame,
+        rankings: Optional[pl.DataFrame] = None,
+        include_quality_metrics: bool = True,
+    ) -> pl.DataFrame:
+        """
+        Calculate confidence metrics for all players.
+
+        Parameters
+        ----------
+        matches : pl.DataFrame
+            Matches DataFrame
+        players : pl.DataFrame
+            Players DataFrame
+        rankings : Optional[pl.DataFrame]
+            Player rankings (uses self.ratings_df if not provided)
+        include_quality_metrics : bool
+            Whether to include detailed quality metrics
+
+        Returns
+        -------
+        pl.DataFrame
+            DataFrame with player_id and confidence metrics
+        """
+        self.logger.info("Calculating player confidence metrics")
+
+        # Use provided rankings or last computed rankings
+        if rankings is None:
+            if self.ratings_df is None:
+                raise ValueError(
+                    "No rankings available. Run rank_players first."
+                )
+            rankings = self.ratings_df
+
+        # Convert rankings to dict for fast lookup
+        player_ranks = {}
+        for i, row in enumerate(rankings.iter_rows(named=True)):
+            player_ranks[row["id"]] = i + 1
+
+        # Build match data structure for confidence calculation
+        from collections import defaultdict
+
+        player_matches = defaultdict(list)
+
+        for row in matches.iter_rows(named=True):
+            winner_team = row.get("winner_team_id")
+            loser_team = row.get("loser_team_id")
+
+            if winner_team and loser_team and not row.get("is_bye", False):
+                # Get players from both teams
+                winners = players.filter(pl.col("team_id") == winner_team)[
+                    "user_id"
+                ].to_list()
+                losers = players.filter(pl.col("team_id") == loser_team)[
+                    "user_id"
+                ].to_list()
+
+                # Create match record for each player
+                match_record = {
+                    "tournament_id": row["tournament_id"],
+                    "winners": winners,
+                    "losers": losers,
+                }
+
+                for w in winners:
+                    if w:
+                        player_matches[w].append(match_record)
+
+                for l in losers:
+                    if l:
+                        player_matches[l].append(match_record)
+
+        # Initialize confidence calculator
+        total_players = len(player_ranks)
+        calculator = AsymmetricConfidenceCalculator(
+            total_players=total_players,
+            player_ranks=player_ranks,
+        )
+
+        # Calculate confidence for all players
+        self.logger.info(
+            f"Calculating confidence for {len(player_matches)} players"
+        )
+        confidence_results = []
+        self.confidence_metrics_ = {}
+
+        for player_id, matches_list in player_matches.items():
+            metrics = calculator.calculate_asymmetric_confidence(
+                player_id=player_id,
+                matches=matches_list,
+            )
+            self.confidence_metrics_[player_id] = metrics
+
+            # Build result row
+            result = {
+                "player_id": player_id,
+                "confidence": metrics.overall_confidence,
+                "confidence_tier": metrics.confidence_tier.name,
+                "rankability": metrics.rankability,
+                "tournaments": metrics.tournament_count,
+                "matches": metrics.match_count,
+                "unique_opponents": metrics.unique_opponents,
+            }
+
+            if include_quality_metrics:
+                result.update(
+                    {
+                        "top_opponents_faced": metrics.top_opponents_faced,
+                        "top_players_beaten": metrics.top_players_beaten,
+                        "beaten_by_top": metrics.beaten_by_top,
+                        "upward_mobility": metrics.upward_mobility,
+                        "downward_pressure": metrics.downward_pressure,
+                        "incoming_edge_quality": metrics.incoming_edge_quality,
+                        "outgoing_edge_quality": metrics.outgoing_edge_quality,
+                    }
+                )
+
+            confidence_results.append(result)
+
+        # Create DataFrame
+        confidence_df = pl.DataFrame(confidence_results)
+
+        # Add player rank if available
+        if rankings is not None:
+            # Get the actual column names from rankings
+            id_col = "user_id" if "user_id" in rankings.columns else "id"
+            score_col = (
+                "player_rank" if "player_rank" in rankings.columns else "score"
+            )
+
+            if score_col in rankings.columns:
+                confidence_df = confidence_df.join(
+                    rankings.select([id_col, score_col]).rename(
+                        {id_col: "player_id", score_col: "rating"}
+                    ),
+                    on="player_id",
+                    how="left",
+                )
+
+        # Sort by confidence
+        confidence_df = confidence_df.sort("confidence", descending=True)
+
+        # Log summary statistics
+        tier_counts = confidence_df.group_by("confidence_tier").len()
+        self.logger.info("Confidence tier distribution:")
+        for row in tier_counts.iter_rows(named=True):
+            self.logger.info(
+                f"  {row['confidence_tier']}: {row['len']} players"
+            )
+
+        avg_confidence = confidence_df["confidence"].mean()
+        self.logger.info(f"Average confidence: {avg_confidence:.3f}")
+
+        return confidence_df
+
+    def rank_players_with_confidence(
+        self,
+        matches: pl.DataFrame,
+        players: pl.DataFrame,
+        return_confidence: bool = True,
+    ) -> pl.DataFrame:
+        """
+        Rank players and optionally calculate confidence metrics.
+
+        This is a convenience method that combines ranking and confidence calculation.
+
+        Parameters
+        ----------
+        matches : pl.DataFrame
+            Matches DataFrame
+        players : pl.DataFrame
+            Players DataFrame
+        return_confidence : bool
+            Whether to include confidence metrics in the result
+
+        Returns
+        -------
+        pl.DataFrame
+            Player rankings with optional confidence metrics
+        """
+        # First rank players
+        rankings = self.rank_players(matches, players)
+
+        if not return_confidence:
+            return rankings
+
+        # Calculate confidence
+        confidence_df = self.calculate_player_confidence(
+            matches, players, rankings, include_quality_metrics=False
+        )
+
+        # Merge rankings with confidence
+        # Get the ID column name from rankings
+        id_col = "user_id" if "user_id" in rankings.columns else "id"
+
+        result = rankings.join(
+            confidence_df.select(
+                [
+                    "player_id",
+                    "confidence",
+                    "confidence_tier",
+                    "rankability",
+                    "tournaments",
+                    "matches",
+                    "unique_opponents",
+                ]
+            ).rename({"player_id": id_col}),
+            on=id_col,
+            how="left",
+        )
+
+        # Fill any missing confidence values (players with no matches)
+        result = result.with_columns(
+            [
+                pl.col("confidence").fill_null(0.0),
+                pl.col("confidence_tier").fill_null("PROVISIONAL"),
+                pl.col("rankability").fill_null("unrankable"),
+                pl.col("tournaments").fill_null(0),
+                pl.col("matches").fill_null(0),
+                pl.col("unique_opponents").fill_null(0),
+            ]
+        )
+
+        return result
 
     # =========================================================================
     # Helper functions
