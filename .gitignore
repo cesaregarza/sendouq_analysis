@@ -185,3 +185,6 @@ run_dashapp.sh
 
 # Documentation images
 docs/images/*.png
+
+# Claude scripts directory
+claude_scripts/

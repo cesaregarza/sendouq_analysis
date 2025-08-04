@@ -388,7 +388,8 @@ class RatingEngine:
         df = df.with_columns(
             (
                 self._decay_expr("ts")
-                * ((pl.col("S") * influence_decay) ** self.beta)
+                * (pl.col("S") ** self.beta)
+                * influence_decay
             ).alias("w")
         )
 
@@ -435,7 +436,8 @@ class RatingEngine:
         m = m.with_columns(
             (
                 self._decay_expr("ts")
-                * ((pl.col("S") * influence_decay) ** self.beta)
+                * (pl.col("S") ** self.beta)
+                * influence_decay
             ).alias("match_w")
         )
 
@@ -671,7 +673,7 @@ class RatingEngine:
                 f"Unknown influence_agg_method: {self.influence_agg_method}"
             )
 
-        # Compute tournament influences (normalized to mean 1.0)
+        # Compute tournament influences (normalized to mean=1.0 for proper beta scaling)
         S = (
             part_df.group_by("tournament_id")
             .agg(agg_expr.alias("S_raw"))
@@ -752,10 +754,10 @@ class RatingEngine:
         else:
             raise ValueError(f"Unknown strength_agg: {self.strength_agg}")
 
-        # Normalize to mean 1.0
-        strength_df = agg_df.with_columns(
-            (pl.col("raw") / pl.col("raw").mean()).alias("strength")
-        ).select(["tournament_id", "strength"])
+        # Use raw strength values (not normalized)
+        strength_df = agg_df.rename({"raw": "strength"}).select(
+            ["tournament_id", "strength"]
+        )
 
         # Merge with influence values
         infl_df = pl.DataFrame(

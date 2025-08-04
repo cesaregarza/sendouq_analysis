@@ -64,9 +64,9 @@ DEFAULT_TOURNAMENT_STRENGTH_WEIGHT: float = 1.0
 MIN_TEAMS_FOR_STRENGTH: int = 8
 
 # Advanced engine parameters
-DEFAULT_BETA: float = 0.0  # Tournament strength exponent (0.0 = no strength weighting, 1.0 = full weighting)
+DEFAULT_BETA: float = 1.0  # Tournament strength exponent (0.0 = no strength weighting, 1.0 = full weighting)
 DEFAULT_INFLUENCE_AGG_METHOD: str = (
-    "mean"  # "mean", "sum", "median", "top_20_sum"
+    "top_20_sum"  # "mean", "sum", "median", "top_20_sum"
 )
 DEFAULT_STRENGTH_AGG: str = (
     "mean"  # "mean", "median", "trimmed_mean", "topN_sum"
