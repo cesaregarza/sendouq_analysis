@@ -34,7 +34,7 @@ def bt_prob(
     >>> bt_prob(0.6, 0.4)  # Classical Bradley-Terry
     0.6
     >>> bt_prob(0.01, 0.002, alpha=2.0)  # With temperature scaling
-    0.8807970779778824
+    0.9615384615384615
     """
     # Ensure positive scores
     sa = max(sa, eps)

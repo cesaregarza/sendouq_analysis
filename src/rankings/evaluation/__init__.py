@@ -22,6 +22,7 @@ from rankings.evaluation.loss import (
     compute_match_probability,
     compute_tournament_loss,
     compute_weighted_log_loss,
+    filter_matches_by_unrated_count,
     fit_alpha_parameter,
 )
 from rankings.evaluation.metrics import (
@@ -58,6 +59,7 @@ __all__ = [
     "compute_cross_tournament_loss",
     "compute_weighted_log_loss",
     "bucketised_metrics",
+    "filter_matches_by_unrated_count",
     "fit_alpha_parameter",
     # Metrics
     "compute_brier_score",

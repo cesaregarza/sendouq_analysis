@@ -100,7 +100,7 @@ def get_tournament_summary(data_dir: str = "data/tournaments") -> pl.DataFrame:
         Summary with comprehensive tournament metadata including organization,
         settings, staff, and match/team counts
     """
-    from src.rankings.core.parser import parse_tournaments_data
+    from rankings.core.parser import parse_tournaments_data
 
     tournaments = load_scraped_tournaments(data_dir)
 

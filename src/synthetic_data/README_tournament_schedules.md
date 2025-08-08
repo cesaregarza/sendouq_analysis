@@ -5,7 +5,7 @@ The `tournament_schedules.py` module provides utilities for generating realistic
 ## Quick Start
 
 ```python
-from synthetic_data.tournament_schedules import (
+from synthetic_data.circuits import (
     create_dense_schedule,
     create_sparse_schedule,
     create_competitive_season

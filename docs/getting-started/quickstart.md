@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 ```python
 import polars as pl
-from src.rankings.evaluation.cross_validation import cross_validate_simple
+from rankings.evaluation.cross_validation import cross_validate_simple
 
 # Load match data
 matches_df = pl.read_csv("matches.csv")
@@ -50,7 +50,7 @@ print(f"Concordance: {results['concordance']:.4f}")
 ### 3. Optimize Parameters
 
 ```python
-from src.rankings.evaluation.optimizer import optimize_rating_engine
+from rankings.evaluation.optimizer import optimize_rating_engine
 
 # Find best hyperparameters
 best_params = optimize_rating_engine(
@@ -72,8 +72,8 @@ Here's a full working example:
 
 ```python
 import polars as pl
-from src.rankings.evaluation.cross_validation import cross_validate_ratings
-from src.rankings.evaluation.optimizer import optimize_rating_engine
+from rankings.evaluation.cross_validation import cross_validate_ratings
+from rankings.evaluation.optimizer import optimize_rating_engine
 from rankings.analysis.engine import RatingEngine
 
 # 1. Load data
@@ -205,7 +205,7 @@ results = cross_validate_ratings(
 ### 3. Temporal Analysis
 
 ```python
-from src.rankings.evaluation.cross_validation import create_time_based_folds
+from rankings.evaluation.cross_validation import create_time_based_folds
 
 # Analyze performance over time
 folds = create_time_based_folds(matches_df, n_splits=10)

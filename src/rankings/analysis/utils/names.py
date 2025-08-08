@@ -160,10 +160,12 @@ def add_match_timestamps(
     """
     result = df.with_columns(
         [
-            # Convert Unix timestamp to datetime
-            pl.from_epoch(timestamp_col).alias(datetime_col),
+            # Convert Unix timestamp (seconds) to datetime
+            pl.from_epoch(pl.col(timestamp_col), unit="s").alias(datetime_col),
             # Extract just the date
-            pl.from_epoch(timestamp_col).dt.date().alias(date_col),
+            pl.from_epoch(pl.col(timestamp_col), unit="s")
+            .dt.date()
+            .alias(date_col),
         ]
     )
 

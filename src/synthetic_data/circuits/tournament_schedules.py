@@ -34,9 +34,10 @@ class TournamentScheduleGenerator:
     def create_dense_schedule(
         self,
         days: int = 180,
-        min_team_size: int = 8,
-        tournaments_per_day: tuple = (1, 5),
+        min_n_teams: Optional[int] = None,
+        tournaments_per_day: tuple[int, int] = (1, 5),
         size_distribution: Optional[dict[str, float]] = None,
+        min_team_size: Optional[int] = None,  # Deprecated, use min_n_teams
     ) -> list[TournamentConfig]:
         """
         Create a dense tournament schedule with multiple daily tournaments.
@@ -45,10 +46,12 @@ class TournamentScheduleGenerator:
         ----------
         days : int
             Number of days to generate tournaments for
-        min_team_size : int
-            Minimum number of teams per tournament
-        tournaments_per_day : tuple
+        min_n_teams : int, optional
+            Minimum number of teams per tournament (default: 8)
+        tournaments_per_day : tuple[int, int]
             (min, max) tournaments per day
+        min_team_size : int, optional
+            Deprecated alias for min_n_teams
         size_distribution : dict, optional
             Distribution of tournament sizes. Default mimics real-world distribution.
 
@@ -57,6 +60,10 @@ class TournamentScheduleGenerator:
         List[TournamentConfig]
             Generated tournament configurations
         """
+        # Handle backward compatibility
+        if min_n_teams is None:
+            min_n_teams = min_team_size if min_team_size is not None else 8
+
         if size_distribution is None:
             size_distribution = {
                 "small": 0.45,  # 20-48 teams
@@ -73,11 +80,11 @@ class TournamentScheduleGenerator:
             # More tournaments on weekends
             if is_weekend:
                 n_tournaments = self.rng.integers(
-                    max(tournaments_per_day[0], 2), tournaments_per_day[1] + 1
+                    tournaments_per_day[0], tournaments_per_day[1] + 1
                 )
             else:
                 n_tournaments = self.rng.integers(
-                    tournaments_per_day[0], min(tournaments_per_day[1], 3) + 1
+                    tournaments_per_day[0], tournaments_per_day[1] + 1
                 )
 
             # Special event days
@@ -88,7 +95,7 @@ class TournamentScheduleGenerator:
                 config = self._generate_tournament_config(
                     day=day,
                     time_slot=t_idx,
-                    min_team_size=min_team_size,
+                    min_team_size=min_n_teams,
                     size_distribution=size_distribution,
                 )
                 configs.append(config)
@@ -157,10 +164,13 @@ class TournamentScheduleGenerator:
                     format=series["format"],
                     n_teams=series["teams"],
                     start_offset_days=day + 0.5,  # Mid-day
-                    selection_bias=0.3
+                    selection_bias=0.8
                     if series["type"] == TournamentType.INVITATIONAL
-                    else 0.7,
+                    else 0.15,
                     skill_cap=series.get("skill_cap"),
+                    skill_floor=0.7
+                    if series["type"] == TournamentType.INVITATIONAL
+                    else None,
                     swiss_rounds=self._calculate_swiss_rounds(series["teams"])
                     if series["format"] == TournamentFormat.SWISS
                     else None,
@@ -173,7 +183,8 @@ class TournamentScheduleGenerator:
         self,
         days: int = 180,
         include_weekly_series: bool = True,
-        min_team_size: int = 20,
+        min_n_teams: Optional[int] = None,
+        min_team_size: Optional[int] = None,  # Deprecated, use min_n_teams
     ) -> list[TournamentConfig]:
         """
         Create a realistic tournament schedule combining dense daily tournaments
@@ -185,18 +196,24 @@ class TournamentScheduleGenerator:
             Number of days to generate
         include_weekly_series : bool
             Whether to include weekly recurring tournaments
-        min_team_size : int
-            Minimum number of teams per tournament
+        min_n_teams : int, optional
+            Minimum number of teams per tournament (default: 20)
+        min_team_size : int, optional
+            Deprecated alias for min_n_teams
 
         Returns
         -------
         List[TournamentConfig]
             Complete tournament schedule
         """
+        # Handle backward compatibility
+        if min_n_teams is None:
+            min_n_teams = min_team_size if min_team_size is not None else 20
+
         # Generate base dense schedule
         configs = self.create_dense_schedule(
             days=days,
-            min_team_size=min_team_size,
+            min_team_size=min_n_teams,
             tournaments_per_day=(1, 4),
         )
 
@@ -217,7 +234,8 @@ class TournamentScheduleGenerator:
         self,
         days: int = 180,
         tournaments_per_week: int = 3,
-        min_team_size: int = 32,
+        min_n_teams: Optional[int] = None,
+        min_team_size: Optional[int] = None,  # Deprecated, use min_n_teams
     ) -> list[TournamentConfig]:
         """
         Create a sparse tournament schedule with fewer, larger tournaments.
@@ -228,14 +246,20 @@ class TournamentScheduleGenerator:
             Number of days to generate
         tournaments_per_week : int
             Average tournaments per week
-        min_team_size : int
-            Minimum number of teams
+        min_n_teams : int, optional
+            Minimum number of teams per tournament (default: 32)
+        min_team_size : int, optional
+            Deprecated alias for min_n_teams
 
         Returns
         -------
         List[TournamentConfig]
             Sparse tournament schedule
         """
+        # Handle backward compatibility
+        if min_n_teams is None:
+            min_n_teams = min_team_size if min_team_size is not None else 32
+
         configs = []
         weeks = days // 7
 
@@ -258,7 +282,7 @@ class TournamentScheduleGenerator:
                     day=day,
                     time_slot=0,
                     n_teams_override=n_teams,
-                    min_team_size=min_team_size,
+                    min_team_size=min_n_teams,
                 )
                 configs.append(config)
 
@@ -312,6 +336,7 @@ class TournamentScheduleGenerator:
 
         # Determine type
         type_roll = self.rng.random()
+        skill_floor = None
         if type_roll < 0.50:
             tournament_type = TournamentType.SKILL_CAPPED
             # Time-based skill caps
@@ -327,6 +352,7 @@ class TournamentScheduleGenerator:
         else:
             tournament_type = TournamentType.INVITATIONAL
             skill_cap = None
+            skill_floor = 0.7  # 70th percentile - top 30% of players only
             n_teams = min(n_teams, 64)  # Invitationals are smaller
 
         return TournamentConfig(
@@ -335,10 +361,13 @@ class TournamentScheduleGenerator:
             format=format,
             n_teams=n_teams,
             start_offset_days=day + (time_slot * 0.1),
-            selection_bias=0.3
+            selection_bias=0.8
             if tournament_type == TournamentType.INVITATIONAL
-            else 0.7,
+            else 0.15,
             skill_cap=skill_cap,
+            skill_floor=skill_floor
+            if tournament_type == TournamentType.INVITATIONAL
+            else None,
             swiss_rounds=self._calculate_swiss_rounds(n_teams)
             if format == TournamentFormat.SWISS
             else None,
@@ -401,7 +430,7 @@ def create_dense_schedule(
         Dense tournament schedule
     """
     generator = TournamentScheduleGenerator(seed=seed)
-    return generator.create_realistic_schedule(days=days, min_team_size=20)
+    return generator.create_realistic_schedule(days=days, min_n_teams=20)
 
 
 def create_sparse_schedule(
@@ -451,7 +480,7 @@ def create_competitive_season(
     # Create base schedule
     configs = generator.create_dense_schedule(
         days=days,
-        min_team_size=32,
+        min_n_teams=32,
         tournaments_per_day=(2, 6),
     )
 

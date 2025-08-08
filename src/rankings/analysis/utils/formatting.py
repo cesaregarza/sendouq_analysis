@@ -125,7 +125,7 @@ def format_influential_matches(
     max_opponent_length: int = 50,
 ) -> str:
     """
-    Format influential matches for display.
+    Format influential matches for display using flux-based metrics.
 
     Parameters
     ----------
@@ -141,7 +141,7 @@ def format_influential_matches(
     Returns
     -------
     str
-        Formatted match analysis
+        Formatted match analysis with flux-based influence metrics
     """
     output = []
 
@@ -176,7 +176,26 @@ def format_influential_matches(
             output.append(
                 f"   • Score: {row.get('team1_score', '?')}-{row.get('team2_score', '?')} ({row.get('total_games', '?')} games)"
             )
-            output.append(f"   • Match Weight: {row['match_weight']:.6f}")
+
+            # Display flux-based metrics
+            if "match_flux" in row:
+                output.append(f"   • Match Flux: {row['match_flux']:.2e}")
+
+                # Show share of flux if available
+                if (
+                    "share_incoming" in row
+                    and row["share_incoming"] is not None
+                ):
+                    share_pct = row["share_incoming"] * 100
+                    output.append(
+                        f"   • Relative Importance (wins): {share_pct:.1f}%"
+                    )
+            else:
+                # Fall back to old weight if flux not available
+                output.append(
+                    f"   • Match Weight: {row.get('w_m', row.get('match_weight', 0)):.6f}"
+                )
+
             output.append(
                 f"   • Tournament Influence: {row['tournament_influence']:.3f}"
             )
@@ -211,7 +230,26 @@ def format_influential_matches(
             output.append(
                 f"   • Score: {row.get('team1_score', '?')}-{row.get('team2_score', '?')} ({row.get('total_games', '?')} games)"
             )
-            output.append(f"   • Match Weight: {row['match_weight']:.6f}")
+
+            # Display flux-based metrics
+            if "match_flux" in row:
+                output.append(f"   • Match Flux: {row['match_flux']:.2e}")
+
+                # Show share of flux if available (outgoing for losses)
+                if (
+                    "share_outgoing" in row
+                    and row["share_outgoing"] is not None
+                ):
+                    share_pct = row["share_outgoing"] * 100
+                    output.append(
+                        f"   • Relative Importance (losses): {share_pct:.1f}%"
+                    )
+            else:
+                # Fall back to old weight if flux not available
+                output.append(
+                    f"   • Match Weight: {row.get('w_m', row.get('match_weight', 0)):.6f}"
+                )
+
             output.append(
                 f"   • Tournament Influence: {row['tournament_influence']:.3f}"
             )
@@ -236,12 +274,28 @@ def format_influential_matches(
     output.append(f"   • Total influential losses shown: {total_losses}")
 
     if not influential_matches["wins"].is_empty():
-        avg_win_weight = influential_matches["wins"]["match_weight"].mean()
-        output.append(f"   • Average win influence: {avg_win_weight:.6f}")
+        if "match_flux" in influential_matches["wins"].columns:
+            avg_win_flux = influential_matches["wins"]["match_flux"].mean()
+            output.append(f"   • Average win flux: {avg_win_flux:.2e}")
+        else:
+            avg_win_weight = (
+                influential_matches["wins"].get_column("w_m").mean()
+                if "w_m" in influential_matches["wins"].columns
+                else influential_matches["wins"]["match_weight"].mean()
+            )
+            output.append(f"   • Average win influence: {avg_win_weight:.6f}")
 
     if not influential_matches["losses"].is_empty():
-        avg_loss_weight = influential_matches["losses"]["match_weight"].mean()
-        output.append(f"   • Average loss influence: {avg_loss_weight:.6f}")
+        if "match_flux" in influential_matches["losses"].columns:
+            avg_loss_flux = influential_matches["losses"]["match_flux"].mean()
+            output.append(f"   • Average loss flux: {avg_loss_flux:.2e}")
+        else:
+            avg_loss_weight = (
+                influential_matches["losses"].get_column("w_m").mean()
+                if "w_m" in influential_matches["losses"].columns
+                else influential_matches["losses"]["match_weight"].mean()
+            )
+            output.append(f"   • Average loss influence: {avg_loss_weight:.6f}")
 
     return "\n".join(output)
 

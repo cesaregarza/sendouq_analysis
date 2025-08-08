@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from src.rankings.evaluation.metrics_extras import (
+from rankings.evaluation.metrics_extras import (
     accuracy_threshold,
     alpha_std,
     concordance,

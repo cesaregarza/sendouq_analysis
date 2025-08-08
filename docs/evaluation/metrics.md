@@ -18,7 +18,7 @@ The metrics module (`src.rankings.evaluation.metrics_extras`) includes:
 Measures how well rankings preserve pairwise orderings:
 
 ```python
-from src.rankings.evaluation.metrics_extras import concordance
+from rankings.evaluation.metrics_extras import concordance
 
 # Basic concordance
 c_index = concordance(
@@ -50,7 +50,7 @@ weighted_c = concordance(
 Improvement over baseline predictors:
 
 ```python
-from src.rankings.evaluation.metrics_extras import skill_score
+from rankings.evaluation.metrics_extras import skill_score
 
 # Compare to 50-50 baseline
 ss = skill_score(
@@ -73,7 +73,7 @@ ss_fav = skill_score(
 Evaluate prediction accuracy at different confidence levels:
 
 ```python
-from src.rankings.evaluation.metrics_extras import accuracy_threshold
+from rankings.evaluation.metrics_extras import accuracy_threshold
 
 # Check if 70% confidence predictions are 70% accurate
 acc_70 = accuracy_threshold(
@@ -96,7 +96,7 @@ calibration_curve = [
 Analyze model performance on upsets:
 
 ```python
-from src.rankings.evaluation.metrics_extras import upset_oe
+from rankings.evaluation.metrics_extras import upset_oe
 
 # Observed/Expected upset ratio
 upset_ratio = upset_oe(
@@ -119,7 +119,7 @@ upset_stats = analyze_upsets(
 For tournament placement prediction:
 
 ```python
-from src.rankings.evaluation.metrics_extras import placement_spearman
+from rankings.evaluation.metrics_extras import placement_spearman
 
 # Spearman correlation between predicted and actual placements
 placement_corr = placement_spearman(
@@ -134,7 +134,7 @@ print(f"Placement correlation: {placement_corr:.3f}")
 Measure consistency of alpha parameter:
 
 ```python
-from src.rankings.evaluation.metrics_extras import alpha_std
+from rankings.evaluation.metrics_extras import alpha_std
 
 # Standard deviation of alpha across CV folds
 alpha_stability = alpha_std(

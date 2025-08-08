@@ -15,7 +15,7 @@ The optimization module (`src.rankings.evaluation.optimizer`) includes:
 ### Basic Usage
 
 ```python
-from src.rankings.evaluation.optimizer import GridSearchOptimizer
+from rankings.evaluation.optimizer import GridSearchOptimizer
 
 # Define parameter grid
 param_grid = {
@@ -101,7 +101,7 @@ optimizer.fit(matches_df=matches)
 ### Basic Usage
 
 ```python
-from src.rankings.evaluation.optimizer import BayesianOptimizer
+from rankings.evaluation.optimizer import BayesianOptimizer
 
 # Define parameter bounds
 param_bounds = {
@@ -180,7 +180,7 @@ def custom_bayesian_optimize(matches_df, param_space):
 ### Quick Optimization
 
 ```python
-from src.rankings.evaluation.optimizer import optimize_rating_engine
+from rankings.evaluation.optimizer import optimize_rating_engine
 
 # Grid search with defaults
 results = optimize_rating_engine(

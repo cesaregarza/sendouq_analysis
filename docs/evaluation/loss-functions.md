@@ -18,7 +18,7 @@ The loss module (`src.rankings.evaluation.loss`) provides:
 The primary loss function with confidence weighting:
 
 ```python
-from src.rankings.evaluation.loss import compute_weighted_log_loss
+from rankings.evaluation.loss import compute_weighted_log_loss
 
 loss = compute_weighted_log_loss(
     y_true=actuals,           # Binary outcomes (1 for win, 0 for loss)
@@ -49,7 +49,7 @@ weights = custom_weights(predictions, rating_differences)
 Evaluate predictions within tournament contexts:
 
 ```python
-from src.rankings.evaluation.loss import compute_tournament_loss
+from rankings.evaluation.loss import compute_tournament_loss
 
 tournament_loss = compute_tournament_loss(
     matches_df=tournament_matches,
@@ -66,7 +66,7 @@ tournament_loss = compute_tournament_loss(
 Aggregate loss across multiple tournaments:
 
 ```python
-from src.rankings.evaluation.loss import compute_cross_tournament_loss
+from rankings.evaluation.loss import compute_cross_tournament_loss
 
 results = compute_cross_tournament_loss(
     matches_df=all_matches,
@@ -97,7 +97,7 @@ P(A beats B) = 1 / (1 + exp(-alpha * (rating_A - rating_B)))
 Fastest method using Newton-Raphson:
 
 ```python
-from src.rankings.evaluation.loss import fit_alpha_parameter_optimized
+from rankings.evaluation.loss import fit_alpha_parameter_optimized
 
 optimal_alpha = fit_alpha_parameter_optimized(
     matches_df=matches,
@@ -113,7 +113,7 @@ optimal_alpha = fit_alpha_parameter_optimized(
 Balance between speed and accuracy:
 
 ```python
-from src.rankings.evaluation.loss import fit_alpha_parameter_sampled
+from rankings.evaluation.loss import fit_alpha_parameter_sampled
 
 optimal_alpha = fit_alpha_parameter_sampled(
     matches_df=matches,
@@ -128,7 +128,7 @@ optimal_alpha = fit_alpha_parameter_sampled(
 Most thorough but slowest:
 
 ```python
-from src.rankings.evaluation.loss import fit_alpha_parameter
+from rankings.evaluation.loss import fit_alpha_parameter
 
 optimal_alpha = fit_alpha_parameter(
     matches_df=matches,
@@ -145,7 +145,7 @@ optimal_alpha = fit_alpha_parameter(
 Focus evaluation on predictions where the model is confident:
 
 ```python
-from src.rankings.evaluation.loss import filter_matches_by_confidence
+from rankings.evaluation.loss import filter_matches_by_confidence
 
 filtered_matches = filter_matches_by_confidence(
     matches_df=matches,
@@ -165,7 +165,7 @@ loss = compute_weighted_log_loss(
 Evaluate only matches involving ranked players:
 
 ```python
-from src.rankings.evaluation.loss import filter_matches_by_ranked_threshold
+from rankings.evaluation.loss import filter_matches_by_ranked_threshold
 
 filtered_matches = filter_matches_by_ranked_threshold(
     matches_df=matches,

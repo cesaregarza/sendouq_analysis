@@ -27,7 +27,7 @@ Simple CV is designed for:
 ### Usage
 
 ```python
-from src.rankings.evaluation.cross_validation import cross_validate_simple
+from rankings.evaluation.cross_validation import cross_validate_simple
 
 results = cross_validate_simple(
     matches_df=matches,
@@ -78,7 +78,7 @@ Advanced CV provides:
 ### Usage
 
 ```python
-from src.rankings.evaluation.cross_validation import cross_validate_ratings
+from rankings.evaluation.cross_validation import cross_validate_ratings
 
 results = cross_validate_ratings(
     matches_df=matches,
@@ -125,7 +125,7 @@ When `compute_extras=True`, additional metrics are computed:
 Both CV approaches use temporal splitting:
 
 ```python
-from src.rankings.evaluation.cross_validation import create_time_based_folds
+from rankings.evaluation.cross_validation import create_time_based_folds
 
 folds = create_time_based_folds(
     matches_df=matches,
@@ -142,7 +142,7 @@ for train_df, test_df, test_tournament_ids in folds:
 ### Split Visualization
 
 ```python
-from src.rankings.evaluation.cross_validation import visualize_splits
+from rankings.evaluation.cross_validation import visualize_splits
 
 # Visualize how data is split
 fig = visualize_splits(

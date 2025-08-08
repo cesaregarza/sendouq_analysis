@@ -33,8 +33,12 @@ from rankings.core.constants import (
     DEFAULT_STRENGTH_AGG,
     DEFAULT_STRENGTH_K,
     DEFAULT_TICK_TOCK_TOLERANCE,
+    DEFAULT_VOLUME_EPSILON,
+    DEFAULT_VOLUME_MIX_ETA,
+    DEFAULT_VOLUME_MIX_GAMMA,
     TELEPORT_UNIFORM,
     TELEPORT_VOLUME_INVERSE,
+    TELEPORT_VOLUME_MIX,
 )
 from rankings.core.logging import (
     get_logger,
@@ -81,7 +85,13 @@ class RatingEngine:
     now : datetime, optional
         Reference time for decay calculation
     teleport : str or dict, default="volume_inverse"
-        Teleport vector specification ("uniform", "volume_inverse", or dict)
+        Teleport vector specification ("uniform", "volume_inverse", "volume_mix", or dict)
+    volume_mix_eta : float, default=0.3
+        Weight for volume component in volume_mix teleport (0=uniform, 1=pure volume)
+    volume_mix_gamma : float, default=0.5
+        Exponent for volume scaling in volume_mix teleport (0.5=sqrt, 1=linear)
+    volume_epsilon : float, default=1.0
+        Epsilon for smoothing zero volumes in volume_mix teleport
     influence_agg_method : str, default="mean"
         Method for aggregating participant ratings into tournament influence.
         Options: "mean", "sum", "median", "top_20_sum", "log_top_20_sum", "sqrt_top_20_sum"
@@ -105,6 +115,9 @@ class RatingEngine:
         pagerank_tol: float = DEFAULT_PAGERANK_TOLERANCE,
         now: Optional[datetime] = None,
         teleport: str | dict[int, float] = TELEPORT_VOLUME_INVERSE,
+        volume_mix_eta: float = DEFAULT_VOLUME_MIX_ETA,
+        volume_mix_gamma: float = DEFAULT_VOLUME_MIX_GAMMA,
+        volume_epsilon: float = DEFAULT_VOLUME_EPSILON,
         influence_agg_method: Literal[
             "mean",
             "sum",
@@ -138,6 +151,9 @@ class RatingEngine:
         self.pagerank_tol = pagerank_tol
         self.now = (now or DEFAULT_REFERENCE_DATE).astimezone(timezone.utc)
         self.teleport_spec = teleport
+        self.volume_mix_eta = volume_mix_eta
+        self.volume_mix_gamma = volume_mix_gamma
+        self.volume_epsilon = volume_epsilon
         self.influence_agg_method = influence_agg_method
         self.strength_agg = strength_agg
         self.strength_k = strength_k
@@ -246,6 +262,9 @@ class RatingEngine:
         Alternates between computing ratings (tick) and updating tournament
         strengths (tock) until convergence.
         """
+        # Record operating mode for downstream consumers (player vs team)
+        self.mode = "team" if node_to == "winner_team_id" else "player"
+
         self.logger.debug(
             f"Starting tick-tock loop with max_iterations={self.max_tick_tock}"
         )
@@ -380,41 +399,34 @@ class RatingEngine:
         )
 
         # Filter valid matches (exclude byes/forfeits) and join strengths
+        filter_expr = (
+            pl.col("winner_team_id").is_not_null()
+            & pl.col("loser_team_id").is_not_null()
+        )
+        # Only filter by is_bye if column exists
+        if "is_bye" in matches.columns:
+            filter_expr = filter_expr & ~pl.col("is_bye").fill_null(False)
+
         df = (
-            matches.filter(
-                pl.col("winner_team_id").is_not_null()
-                & pl.col("loser_team_id").is_not_null()
-                & ~pl.col("is_bye").fill_null(False)
-            )
+            matches.filter(filter_expr)
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)  # Default strength for unseen tournaments
         )
 
         # Add event timestamps and compute weights with influence decay
+        self._current_df_columns = df.columns
         df = df.with_columns(self._event_ts_expr().alias("ts"))
 
-        # Compute age in days
-        age_days = (
-            int(self.now.timestamp()) - pl.col("ts").cast(pl.Float64)
-        ) / 86400.0
-
-        # Apply influence decay: λ = log(2)/365 (1-year half-life for influence)
-        influence_decay_rate = math.log(2) / 365.0
-        influence_decay = (-influence_decay_rate * age_days).exp()
-
+        # Single time decay (no double decay)
         df = df.with_columns(
-            (
-                self._decay_expr("ts")
-                * (pl.col("S") ** self.beta)
-                * influence_decay
-            ).alias("w")
+            (self._decay_expr("ts") * (pl.col("S") ** self.beta)).alias("w")
         )
 
         # Aggregate and normalize edges
         grouped = df.group_by(["loser_team_id", "winner_team_id"]).agg(
             pl.col("w").sum().alias("w_sum")
         )
-        return self._row_normalize(grouped, "loser_team_id")
+        return self._row_normalize(grouped, "loser_team_id", "winner_team_id")
 
     def _build_player_edges(
         self,
@@ -432,34 +444,39 @@ class RatingEngine:
         )
 
         # Prepare matches with strengths and weights (exclude byes/forfeits)
+        filter_expr = (
+            pl.col("winner_team_id").is_not_null()
+            & pl.col("loser_team_id").is_not_null()
+        )
+        # Only filter by is_bye if column exists
+        if "is_bye" in matches.columns:
+            filter_expr = filter_expr & ~pl.col("is_bye").fill_null(False)
+
         m = (
-            matches.filter(
-                pl.col("winner_team_id").is_not_null()
-                & pl.col("loser_team_id").is_not_null()
-                & ~pl.col("is_bye").fill_null(False)
-            )
+            matches.filter(filter_expr)
             .join(s_df, on="tournament_id", how="left")
             .fill_null(1.0)
         )
+        self._current_df_columns = m.columns
         m = m.with_columns(self._event_ts_expr().alias("ts"))
 
-        # Compute age in days and apply influence decay
-        age_days = (
-            int(self.now.timestamp()) - pl.col("ts").cast(pl.Float64)
-        ) / 86400.0
-        influence_decay_rate = math.log(2) / 365.0
-        influence_decay = (-influence_decay_rate * age_days).exp()
-
+        # Single time decay (no double decay)
         m = m.with_columns(
-            (
-                self._decay_expr("ts")
-                * (pl.col("S") ** self.beta)
-                * influence_decay
-            ).alias("match_w")
+            (self._decay_expr("ts") * (pl.col("S") ** self.beta)).alias(
+                "match_w"
+            )
         )
 
-        # Player selection for joins
-        pl_sel = players.select(["tournament_id", "team_id", "user_id"])
+        # Player selection for joins (cast both sides explicitly)
+        pl_sel = players.select(
+            ["tournament_id", "team_id", "user_id"]
+        ).with_columns(
+            [
+                pl.col("tournament_id").cast(pl.Int64),
+                pl.col("team_id").cast(pl.Int64),
+                pl.col("user_id").cast(pl.Int64),
+            ]
+        )
 
         # Expand winning teams to winning players
         winners = (
@@ -510,7 +527,7 @@ class RatingEngine:
         edges = pairs.group_by(["loser_user_id", "winner_user_id"]).agg(
             pl.col("match_w").sum().alias("w_sum")
         )
-        return self._row_normalize(edges, "loser_user_id")
+        return self._row_normalize(edges, "loser_user_id", "winner_user_id")
 
     # =========================================================================
     # PageRank implementation
@@ -595,16 +612,26 @@ class RatingEngine:
                 f"PageRank reached max iterations ({self.max_pagerank_iter}) without convergence. Final delta: {delta:.2e}"
             )
 
-        # Store edge flux information for analysis
-        self.logger.debug("Computing edge flux information")
-        flux = M * r[:, None]
-        li, wi = np.nonzero(M)
-        self.edge_flux_ = pl.DataFrame(
+        # Store edge flux information for analysis (vectorized)
+        # Only include flux on REAL edges (from the provided edges DataFrame),
+        # and include the damping factor (alpha) in the link flux definition.
+        self.logger.debug(
+            "Computing edge flux information (real edges only, with alpha)"
+        )
+        node_scores = pl.DataFrame(
             {
-                node_col_from: [nodes[i] for i in li],
-                node_col_to: [nodes[j] for j in wi],
-                "flux": flux[li, wi],
+                node_col_from: nodes,
+                "r_src": r.tolist(),
             }
+        )
+        self.edge_flux_ = (
+            edges.join(node_scores, on=node_col_from, how="left")
+            .with_columns(
+                (pl.lit(alpha) * pl.col("r_src") * pl.col("norm_w")).alias(
+                    "flux"
+                )
+            )
+            .select([node_col_from, node_col_to, "flux"])
         )
 
         result = pl.DataFrame({"id": nodes, "score": r.tolist()}).sort(
@@ -686,9 +713,8 @@ class RatingEngine:
         elif self.influence_agg_method == "top_20_sum":
             agg_expr = pl.col("r").sort(descending=True).head(20).sum()
         elif self.influence_agg_method == "log_top_20_sum":
-            # Take log1p (log(1 + x)) of top_20_sum to compress the range
-            # log1p is numerically stable and handles small values well
-            agg_expr = pl.col("r").sort(descending=True).head(20).sum().log1p()
+            # Sum top 20, then apply log compression after normalization
+            agg_expr = pl.col("r").sort(descending=True).head(20).sum()
         elif self.influence_agg_method == "sqrt_top_20_sum":
             # Take square root of top_20_sum for moderate compression
             # This provides less extreme compression than log
@@ -713,16 +739,16 @@ class RatingEngine:
             )
         )
 
-        # For log_top_20_sum, apply a softer logarithmic compression
+        # For log_top_20_sum, apply logarithmic compression
         if self.influence_agg_method == "log_top_20_sum":
-            # Use log(1 + x) but with larger base to compress less aggressively
-            # This maintains more differentiation while still reducing extremes
+            # Apply log1p for numerical stability and compression
             S = S.with_columns(
-                ((pl.col("S_normalized") + 1).log() / np.log(2)).alias("S_log")
-            )
-            # Rescale to maintain mean at 1
-            S = S.with_columns(
-                (pl.col("S_log") / pl.col("S_log").mean()).alias("S")
+                (pl.col("S_normalized").log1p()).alias("S_compressed")
+            ).with_columns(
+                # Rescale to maintain mean at 1
+                (pl.col("S_compressed") / pl.col("S_compressed").mean()).alias(
+                    "S"
+                )
             )
         else:
             S = S.with_columns(pl.col("S_normalized").alias("S"))
@@ -1059,34 +1085,93 @@ class RatingEngine:
         edges: pl.DataFrame,
         node_col_from: str,
     ) -> np.ndarray:
-        """Create teleport vector based on specification."""
+        """Create teleport vector based on specification.
+
+        Supports multiple teleport strategies:
+        - uniform: Equal probability to all nodes
+        - volume_inverse: Inverse sqrt of loss count (down-weight grinders)
+        - volume_mix: Mixture of uniform and volume-weighted components
+        - dict: Custom teleport probabilities
+        """
         n = len(nodes)
+
         if isinstance(self.teleport_spec, dict):
             v = np.array([self.teleport_spec.get(node, 0.0) for node in nodes])
+
         elif self.teleport_spec == TELEPORT_VOLUME_INVERSE:
             counts = edges[node_col_from].value_counts()
             c_map = dict(zip(counts[node_col_from], counts["count"]))
             v = np.array(
                 [1.0 / math.sqrt(c_map.get(node, 1)) for node in nodes]
             )
+
+        elif self.teleport_spec == TELEPORT_VOLUME_MIX:
+            # For volume mix, we need to count the number of losses (edges from node)
+            # Since edges are already normalized, we'll use edge counts as proxy for volume
+            edge_counts = edges.group_by(node_col_from).agg(
+                pl.count().alias("edge_count")
+            )
+            count_map = dict(
+                zip(edge_counts[node_col_from], edge_counts["edge_count"])
+            )
+
+            # Volume component: (epsilon + count)^gamma
+            v_vol = np.array(
+                [
+                    (self.volume_epsilon + count_map.get(node, 0.0))
+                    ** self.volume_mix_gamma
+                    for node in nodes
+                ]
+            )
+            v_vol = v_vol / v_vol.sum()  # Normalize
+
+            # Uniform component
+            v_unif = np.ones(n) / n
+
+            # Mix components
+            v = (1 - self.volume_mix_eta) * v_unif + self.volume_mix_eta * v_vol
+
         else:  # uniform
             v = np.ones(n)
 
+        # Ensure normalization with epsilon smoothing for numerical stability
         total = v.sum()
-        if total == 0.0:
+        if total == 0.0 or not np.isfinite(total):
             v = np.ones(n) / n
         else:
-            v /= total
+            v = v / total
+            # Add small epsilon to avoid exact zeros (helps with dangling nodes)
+            epsilon = 1e-10
+            v = v * (1 - epsilon * n) + epsilon
+
         return v
 
     def _event_ts_expr(self) -> pl.Expr:
         """Create expression for event timestamp."""
-        return (
-            pl.when(pl.col("last_game_finished_at").is_not_null())
-            .then(pl.col("last_game_finished_at"))
-            .otherwise(pl.col("match_created_at"))
-            .fill_null(int(self.now.timestamp()))
-        )
+        # Check which timestamp columns are available and use them
+        # This allows flexibility in the match data format
+        if hasattr(self, "_current_df_columns"):
+            cols = self._current_df_columns
+        else:
+            # Default behavior when we don't know the columns
+            return pl.col("match_created_at").fill_null(
+                int(self.now.timestamp())
+            )
+
+        if "last_game_finished_at" in cols:
+            return (
+                pl.when(pl.col("last_game_finished_at").is_not_null())
+                .then(pl.col("last_game_finished_at"))
+                .otherwise(pl.col("match_created_at"))
+                .fill_null(int(self.now.timestamp()))
+            )
+        elif "match_created_at" in cols:
+            return pl.col("match_created_at").fill_null(
+                int(self.now.timestamp())
+            )
+        else:
+            # Fallback to current timestamp if no timestamp columns
+            return pl.lit(int(self.now.timestamp()))
 
     def _decay_expr(self, ts_col: str) -> pl.Expr:
         """Create expression for time decay."""
@@ -1100,13 +1185,26 @@ class RatingEngine:
         )
 
     @staticmethod
-    def _row_normalize(edges: pl.DataFrame, group_col: str) -> pl.DataFrame:
-        """Normalize edge weights so each source node sums to 1.0."""
+    def _row_normalize(
+        edges: pl.DataFrame, group_col: str, to_col: str | None = None
+    ) -> pl.DataFrame:
+        """Normalize edge weights so each source node sums to 1.0.
+
+        Parameters
+        ----------
+        edges : pl.DataFrame
+            Contains columns [group_col, to_col, 'w_sum']
+        group_col : str
+            Source node column (row to normalize)
+        to_col : str | None
+            Destination node column; if None, uses edges.columns[1]
+        """
         totals = edges.group_by(group_col).agg(
             pl.col("w_sum").sum().alias("tot_w")
         )
+        dest = to_col or edges.columns[1]
         return (
             edges.join(totals, on=group_col)
             .with_columns((pl.col("w_sum") / pl.col("tot_w")).alias("norm_w"))
-            .select([group_col, edges.columns[1], "norm_w"])
+            .select([group_col, dest, "norm_w"])
         )

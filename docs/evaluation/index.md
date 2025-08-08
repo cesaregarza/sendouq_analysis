@@ -58,7 +58,7 @@ Beyond simple accuracy, we evaluate:
 For quick evaluation with sensible defaults:
 
 ```python
-from src.rankings.evaluation.cross_validation import cross_validate_simple
+from rankings.evaluation.cross_validation import cross_validate_simple
 
 results = cross_validate_simple(
     matches_df=matches,
@@ -77,7 +77,7 @@ print(f"Optimal alpha: {results['alpha']:.4f}")
 For comprehensive evaluation with multiple metrics:
 
 ```python
-from src.rankings.evaluation.cross_validation import cross_validate_ratings
+from rankings.evaluation.cross_validation import cross_validate_ratings
 
 results = cross_validate_ratings(
     matches_df=matches,
@@ -100,7 +100,7 @@ print(f"Upset O/E: {results['upset_oe']:.4f}")
 Find the best parameters for your rating engine:
 
 ```python
-from src.rankings.evaluation.optimizer import optimize_rating_engine
+from rankings.evaluation.optimizer import optimize_rating_engine
 
 best_params = optimize_rating_engine(
     matches_df=matches,
@@ -174,7 +174,7 @@ for beta in [0.0, 0.25, 0.5, 0.75, 1.0]:
 
 ```python
 # Analyze performance over time
-from src.rankings.evaluation.cross_validation import create_time_based_folds
+from rankings.evaluation.cross_validation import create_time_based_folds
 
 folds = create_time_based_folds(matches, n_splits=10)
 fold_losses = []

@@ -111,6 +111,80 @@ def filter_matches_by_ranked_threshold(
     return pl.DataFrame(filtered, schema=matches_df.schema)
 
 
+def filter_matches_by_unrated_count(
+    matches_df: pl.DataFrame,
+    players_df: pl.DataFrame,
+    rating_map: dict[int, float],
+    max_unrated_per_team: int = 1,
+    winner_col: str = "winner_team_id",
+    loser_col: str = "loser_team_id",
+) -> pl.DataFrame:
+    """
+    Filter matches where both teams have at most max_unrated_per_team unrated players.
+
+    This implements the "≥2 unrated rule" from plan.md - excludes matches where
+    a team has 2 or more unrated players.
+
+    Parameters
+    ----------
+    matches_df : pl.DataFrame
+        Matches to filter
+    players_df : pl.DataFrame
+        Players dataframe with team rosters
+    rating_map : dict[int, float]
+        Mapping from entity ID to rating
+    max_unrated_per_team : int
+        Maximum number of unrated players allowed per team (default: 1)
+    winner_col : str
+        Column name for winner ID
+    loser_col : str
+        Column name for loser ID
+
+    Returns
+    -------
+    pl.DataFrame
+        Filtered matches
+    """
+    # Build a (tournament_id, team_id) -> unrated_count map
+    roster = players_df.select(["tournament_id", "team_id", "user_id"])
+
+    # Check if each player is unrated
+    is_unrated = roster["user_id"].map_elements(
+        lambda u: u not in rating_map, return_dtype=pl.Boolean
+    )
+    roster = roster.with_columns(is_unrated.alias("unrated"))
+
+    # Count unrated players per team
+    counts = roster.group_by(["tournament_id", "team_id"]).agg(
+        pl.col("unrated").sum().alias("unrated_count")
+    )
+
+    # Join counts to matches for both winner and loser teams
+    matches_with_counts = (
+        matches_df.join(
+            counts,
+            left_on=["tournament_id", winner_col],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        )
+        .rename({"unrated_count": "winner_unrated"})
+        .join(
+            counts,
+            left_on=["tournament_id", loser_col],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        )
+        .rename({"unrated_count": "loser_unrated"})
+        .fill_null(0)  # Teams with no players in roster get 0 unrated
+    )
+
+    # Filter matches where both teams have <= max_unrated_per_team
+    return matches_with_counts.filter(
+        (pl.col("winner_unrated") <= max_unrated_per_team)
+        & (pl.col("loser_unrated") <= max_unrated_per_team)
+    ).drop(["winner_unrated", "loser_unrated"])
+
+
 def compute_match_probability(
     rating_a: float,
     rating_b: float,

@@ -51,7 +51,7 @@ Based on test_tour_7.ipynb analysis, the current loss function needs improvement
 
 ```python
 import json
-from src.rankings import parse_tournaments_data, rank_players_basic, RatingEngine
+from rankings import parse_tournaments_data, RatingEngine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -250,6 +250,9 @@ The tick-tock algorithm produces mutually consistent ratings where strong tourna
 - `polars`: Fast DataFrame library
 - `numpy`: Numerical computations for PageRank
 - `zoneinfo`: Timezone handling for time decay
+- `requests`: HTTP requests for API interactions
+- `tqdm`: Progress bars for batch operations
+- `scipy`: Scientific computing (optimization and statistics)
 
 ## Utility Functions
 

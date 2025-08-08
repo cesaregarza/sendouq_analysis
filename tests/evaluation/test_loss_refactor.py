@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from src.rankings.evaluation.loss import (
+from rankings.evaluation.loss import (
     compute_tournament_loss,
     fit_alpha_parameter,
 )
@@ -32,7 +32,7 @@ class TestLossRefactor:
         )
 
         # Manual calculation of unweighted loss
-        from src.rankings.evaluation.loss import compute_match_probability
+        from rankings.evaluation.loss import compute_match_probability
 
         total_loss = 0
         for row in self.matches.iter_rows(named=True):

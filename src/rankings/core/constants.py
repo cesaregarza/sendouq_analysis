@@ -80,6 +80,16 @@ DEFAULT_STRENGTH_K: int = 5  # Parameter for trimmed_mean or topN_sum
 # Teleport vector options for PageRank
 TELEPORT_UNIFORM = "uniform"
 TELEPORT_VOLUME_INVERSE = "volume_inverse"
+TELEPORT_VOLUME_MIX = "volume_mix"
+
+# Volume mixing parameters
+DEFAULT_VOLUME_MIX_ETA = (
+    0.3  # Weight for volume component (0=uniform, 1=pure volume)
+)
+DEFAULT_VOLUME_MIX_GAMMA = (
+    0.5  # Exponent for volume scaling (0.5=sqrt, 1=linear)
+)
+DEFAULT_VOLUME_EPSILON = 1.0  # Epsilon for smoothing zero volumes
 
 # =============================================================================
 # Activity Thresholds

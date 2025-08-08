@@ -7,7 +7,10 @@ impact on player rankings.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from rankings.analysis.engine import RatingEngine
 
 import polars as pl
 
@@ -22,8 +25,9 @@ def get_most_influential_matches(
     """
     Get the most influential wins and losses for a specific player.
 
-    This function recreates the match weights using tournament influences
-    to identify which specific matches had the most impact on a player's ranking.
+    This function uses network-aware edge flux (how much PageRank mass flows through
+    an edge) and attributes it to individual matches, providing a better measure
+    of match importance than simple match weights.
 
     Parameters
     ----------
@@ -34,7 +38,7 @@ def get_most_influential_matches(
     players_df : pl.DataFrame
         Players DataFrame with user_id, team_id, tournament_id
     engine : RatingEngine
-        The RatingEngine instance that has already computed tournament influences
+        The RatingEngine instance that has already computed tournament influences and edge flux
     top_n : int, optional
         Number of top matches to return for wins and losses
 
@@ -43,7 +47,8 @@ def get_most_influential_matches(
     dict[str, pl.DataFrame]
         Dictionary with 'wins' and 'losses' DataFrames containing:
         - match details (tournament_id, opponent info, scores)
-        - match_weight (time decay * tournament strength)
+        - match_flux (network-aware influence metric)
+        - share_incoming/share_outgoing: share among the player's returned wins/losses
         - influence_rank (1 = most influential)
     """
     import math
@@ -66,7 +71,7 @@ def get_most_influential_matches(
             "tournament_id": list(tournament_influence.keys()),
             "tournament_influence": list(tournament_influence.values()),
         }
-    )
+    ).with_columns(pl.col("tournament_id").cast(pl.Int64))
 
     # Get all matches with tournament influences
     matches_with_influence = matches_df.join(
@@ -74,6 +79,12 @@ def get_most_influential_matches(
     ).fill_null(
         1.0
     )  # Default influence for unseen tournaments
+
+    # Exclude byes/forfeits to match engine filtering
+    if "is_bye" in matches_with_influence.columns:
+        matches_with_influence = matches_with_influence.filter(
+            ~pl.col("is_bye").fill_null(False)
+        )
 
     # Add time decay weight
     # First add event timestamp
@@ -96,33 +107,306 @@ def get_most_influential_matches(
         .alias("time_decay")
     )
 
-    # Calculate match weight (time decay * tournament strength^beta)
+    # Ensure column types are correct
     matches_with_influence = matches_with_influence.with_columns(
         [
-            (
-                pl.col("time_decay")
-                * (pl.col("tournament_influence") ** engine.beta)
-            ).alias("match_weight"),
-            (pl.col("tournament_id").cast(pl.Int64)),
-            (pl.col("winner_team_id").cast(pl.Int64)),
-            (pl.col("loser_team_id").cast(pl.Int64)),
+            pl.col("tournament_id").cast(pl.Int64),
+            pl.col("winner_team_id").cast(pl.Int64),
+            pl.col("loser_team_id").cast(pl.Int64),
+        ]
+    )
+
+    # Calculate raw match weight w_m (time decay * tournament strength^beta)
+    matches_with_influence = matches_with_influence.with_columns(
+        (
+            pl.col("time_decay")
+            * (pl.col("tournament_influence") ** engine.beta)
+        ).alias("w_m")
+    )
+
+    # Compute pair-level sums W_ij
+    pair_sum = matches_with_influence.group_by(
+        ["loser_team_id", "winner_team_id"]
+    ).agg(pl.col("w_m").sum().alias("W_ij"))
+
+    # Join pair sums back to matches
+    matches_with_influence = matches_with_influence.join(
+        pair_sum, on=["loser_team_id", "winner_team_id"], how="left"
+    )
+
+    # Detect engine mode (player vs team) based on what IDs were ranked
+    mode = "unknown"
+    rated_ids: set[int] = set()
+    if (
+        hasattr(engine, "ratings_df")
+        and engine.ratings_df is not None
+        and "id" in engine.ratings_df.columns
+    ):
+        rated_ids = set(engine.ratings_df["id"].to_list())
+        # Check presence of team IDs and player IDs in rated IDs
+        has_team_hits = False
+        if "winner_team_id" in matches_df.columns:
+            # Build a sample set from both team columns
+            team_ids_col = (
+                matches_df.select(["winner_team_id"])
+                .rename({"winner_team_id": "id"})
+                .vstack(
+                    matches_df.select(["loser_team_id"]).rename(
+                        {"loser_team_id": "id"}
+                    )
+                )
+                .get_column("id")
+                .drop_nulls()
+            )
+            sample_team_ids = (
+                set(team_ids_col.head(1000).to_list())
+                if matches_df.height > 0
+                else set()
+            )
+            has_team_hits = any(tid in rated_ids for tid in sample_team_ids)
+
+        has_player_hits = False
+        if "user_id" in players_df.columns:
+            sample_player_ids = (
+                set(players_df["user_id"].drop_nulls().head(2000).to_list())
+                if players_df.height > 0
+                else set()
+            )
+            has_player_hits = any(uid in rated_ids for uid in sample_player_ids)
+
+        if has_player_hits and not has_team_hits:
+            mode = "player"
+        elif has_team_hits and not has_player_hits:
+            mode = "team"
+        else:
+            # Fallback: prefer player mode if any player IDs appear
+            mode = "player" if has_player_hits else "team"
+
+    # Calculate match flux depending on detected mode
+    alpha = engine.damping_factor if hasattr(engine, "damping_factor") else 0.85
+    if mode == "player":
+        # Build player-pair rows per match
+        pl_sel = players_df.select(
+            ["tournament_id", "team_id", "user_id"]
+        ).with_columns(
+            [
+                pl.col("tournament_id").cast(pl.Int64),
+                pl.col("team_id").cast(pl.Int64),
+                pl.col("user_id").cast(pl.Int64),
+            ]
+        )
+
+        winners = (
+            matches_with_influence.select(
+                ["match_id", "tournament_id", "winner_team_id", "w_m"]
+            )  # carry w_m per match
+            .with_columns(
+                [
+                    pl.col("tournament_id").cast(pl.Int64),
+                    pl.col("winner_team_id").cast(pl.Int64),
+                ]
+            )
+            .join(
+                pl_sel,
+                left_on=["tournament_id", "winner_team_id"],
+                right_on=["tournament_id", "team_id"],
+                how="inner",
+            )
+            .rename({"user_id": "winner_user_id"})
+            .select(
+                ["match_id", "winner_user_id", "w_m"]
+            )  # keep w_m for pairing
+        )
+
+        losers = (
+            matches_with_influence.select(
+                ["match_id", "tournament_id", "loser_team_id", "w_m"]
+            )
+            .with_columns(
+                [
+                    pl.col("tournament_id").cast(pl.Int64),
+                    pl.col("loser_team_id").cast(pl.Int64),
+                ]
+            )
+            .join(
+                pl_sel,
+                left_on=["tournament_id", "loser_team_id"],
+                right_on=["tournament_id", "team_id"],
+                how="inner",
+            )
+            .rename({"user_id": "loser_user_id"})
+            .select(
+                ["match_id", "loser_user_id", "w_m"]
+            )  # keep w_m for pairing
+        )
+
+        pairs = losers.join(
+            winners, on=["match_id", "w_m"], how="inner"
+        ).select(["match_id", "loser_user_id", "winner_user_id", "w_m"])
+
+        # Compute W_out per loser user and map r_loser
+        loser_out = pairs.group_by("loser_user_id").agg(
+            pl.col("w_m").sum().alias("W_loser_total")
+        )
+
+        rating_map = {}
+        if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
+            rating_map = dict(
+                zip(engine.ratings_df["id"], engine.ratings_df["score"])
+            )
+        default_score = (
+            engine.global_prior_
+            if getattr(engine, "global_prior_", None) is not None
+            else 0.0
+        )
+
+        pairs = (
+            pairs.join(loser_out, on="loser_user_id", how="left")
+            .with_columns(
+                [
+                    pl.col("loser_user_id")
+                    .map_elements(
+                        lambda x: rating_map.get(x, default_score),
+                        return_dtype=pl.Float64,
+                    )
+                    .alias("r_loser"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("W_loser_total") > 0)
+                .then(
+                    alpha
+                    * pl.col("r_loser")
+                    * (pl.col("w_m") / pl.col("W_loser_total"))
+                )
+                .otherwise(0.0)
+                .alias("pair_flux")
+            )
+        )
+
+        # For selected player, aggregate by match as incoming and outgoing
+        wins_pairs = pairs.filter(pl.col("winner_user_id") == player_id)
+        losses_pairs = pairs.filter(pl.col("loser_user_id") == player_id)
+
+        wins_flux = wins_pairs.group_by("match_id").agg(
+            pl.col("pair_flux").sum().alias("match_flux")
+        )
+        losses_flux = losses_pairs.group_by("match_id").agg(
+            pl.col("pair_flux").sum().alias("match_flux")
+        )
+
+        # Attach to match details table
+        matches_with_influence = matches_with_influence.join(
+            wins_flux, on="match_id", how="left"
+        ).with_columns(pl.col("match_flux").fill_null(0.0))
+        # For losses, we will build a separate losses table below using join
+        losses_match_flux = (
+            matches_with_influence.select(["match_id"])
+            .join(losses_flux, on="match_id", how="left")
+            .with_columns(pl.col("match_flux").fill_null(0.0))
+        )
+    else:
+        # Team mode (existing implementation)
+        # First, get the total outgoing weight for each loser team
+        loser_total_weights = matches_with_influence.group_by(
+            "loser_team_id"
+        ).agg(pl.col("w_m").sum().alias("W_loser_total"))
+
+        matches_with_influence = matches_with_influence.join(
+            loser_total_weights, on="loser_team_id", how="left"
+        )
+
+        rating_map = {}
+        if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
+            rating_map = dict(
+                zip(engine.ratings_df["id"], engine.ratings_df["score"])
+            )
+        default_score = (
+            engine.global_prior_
+            if getattr(engine, "global_prior_", None) is not None
+            else 0.0
+        )
+
+        matches_with_influence = matches_with_influence.with_columns(
+            [
+                pl.col("loser_team_id")
+                .map_elements(
+                    lambda x: rating_map.get(x, default_score),
+                    return_dtype=pl.Float64,
+                )
+                .alias("r_loser"),
+                pl.col("winner_team_id")
+                .map_elements(
+                    lambda x: rating_map.get(x, default_score),
+                    return_dtype=pl.Float64,
+                )
+                .alias("r_winner"),
+            ]
+        )
+
+        matches_with_influence = matches_with_influence.with_columns(
+            pl.when(pl.col("W_loser_total") > 0)
+            .then(
+                alpha
+                * pl.col("r_loser")
+                * (pl.col("w_m") / pl.col("W_loser_total"))
+            )
+            .otherwise(0.0)
+            .alias("match_flux")
+        )
+
+    # Ensure types are still correct after all operations
+    matches_with_influence = matches_with_influence.with_columns(
+        [
+            pl.col("tournament_id").cast(pl.Int64),
+            pl.col("winner_team_id").cast(pl.Int64),
+            pl.col("loser_team_id").cast(pl.Int64),
         ]
     )
 
     # Get player's teams across all tournaments
-    player_teams = players_df.filter(pl.col("user_id") == player_id).select(
-        ["tournament_id", "team_id"]
+    player_teams = (
+        players_df.filter(pl.col("user_id") == player_id)
+        .select(["tournament_id", "team_id"])
+        .with_columns(
+            [
+                pl.col("tournament_id").cast(pl.Int64),
+                pl.col("team_id").cast(pl.Int64),
+            ]
+        )
     )
 
-    # Find matches where player's team won
+    # Find matches where player's team won (or where player contributed incoming flux in player mode)
     wins = matches_with_influence.join(
         player_teams,
         left_on=["tournament_id", "winner_team_id"],
         right_on=["tournament_id", "team_id"],
         how="inner",
-    ).filter(
-        pl.col("loser_team_id").is_not_null()
-    )  # Valid matches only
+    ).filter(pl.col("loser_team_id").is_not_null())
+
+    # In player mode, we may not have r_loser/r_winner present
+    if "r_loser" not in wins.columns:
+        wins = wins.with_columns(
+            [
+                pl.lit(None).alias("r_loser"),
+                pl.lit(None).alias("r_winner"),
+            ]
+        )
+
+    # Calculate share of incoming flux for wins
+    if not wins.is_empty():
+        # Calculate share relative to total flux in this result set
+        # This shows the relative importance among the player's wins
+        total_win_flux = (
+            wins["match_flux"].sum() if "match_flux" in wins.columns else 0
+        )
+
+        if total_win_flux > 0:
+            wins = wins.with_columns(
+                (pl.col("match_flux") / total_win_flux).alias("share_incoming")
+            )
+        else:
+            wins = wins.with_columns(pl.lit(0.0).alias("share_incoming"))
 
     # Find matches where player's team lost
     losses = matches_with_influence.join(
@@ -130,9 +414,51 @@ def get_most_influential_matches(
         left_on=["tournament_id", "loser_team_id"],
         right_on=["tournament_id", "team_id"],
         how="inner",
-    ).filter(
-        pl.col("winner_team_id").is_not_null()
-    )  # Valid matches only
+    ).filter(pl.col("winner_team_id").is_not_null())
+
+    # If player mode, replace match_flux for losses using the per-player losses aggregation
+    if mode == "player":
+        # Join per-player loss flux and ensure it becomes the active match_flux
+        losses = losses.join(losses_match_flux, on="match_id", how="left")
+        # Handle potential column collision from join (e.g., match_flux_right)
+        new_flux_col = (
+            pl.coalesce(
+                [
+                    pl.col("match_flux_right").alias("__tmp__"),
+                    pl.col("match_flux").alias("__tmp__"),
+                ]
+            )
+            if "match_flux_right" in losses.columns
+            else pl.col("match_flux")
+        )
+        losses = losses.with_columns(
+            new_flux_col.alias("match_flux")
+        ).with_columns(pl.col("match_flux").fill_null(0.0))
+        if "match_flux_right" in losses.columns:
+            losses = losses.drop("match_flux_right")
+
+    if "r_loser" not in losses.columns:
+        losses = losses.with_columns(
+            [
+                pl.lit(None).alias("r_loser"),
+                pl.lit(None).alias("r_winner"),
+            ]
+        )
+
+    # Calculate share of outgoing flux for losses
+    if not losses.is_empty():
+        # Calculate share relative to total flux in this result set
+        # This shows the relative importance among the player's losses
+        total_loss_flux = (
+            losses["match_flux"].sum() if "match_flux" in losses.columns else 0
+        )
+
+        if total_loss_flux > 0:
+            losses = losses.with_columns(
+                (pl.col("match_flux") / total_loss_flux).alias("share_outgoing")
+            )
+        else:
+            losses = losses.with_columns(pl.lit(0.0).alias("share_outgoing"))
 
     # Get opponent player info for wins
     if not wins.is_empty():
@@ -148,9 +474,9 @@ def get_most_influential_matches(
             how="left",
         )
 
-        # Sort by match weight and add rank
+        # Sort by match flux and add rank
         wins = (
-            wins.sort("match_weight", descending=True)
+            wins.sort("match_flux", descending=True)
             .with_columns(pl.arange(1, wins.height + 1).alias("influence_rank"))
             .select(
                 [
@@ -162,10 +488,14 @@ def get_most_influential_matches(
                     "team1_score",
                     "team2_score",
                     "total_games",
-                    "match_weight",
+                    "match_flux",
+                    "share_incoming",
+                    "w_m",
                     "tournament_influence",
                     "time_decay",
                     "event_ts",
+                    "r_loser",
+                    "r_winner",
                 ]
             )
             .head(top_n)
@@ -187,9 +517,9 @@ def get_most_influential_matches(
             how="left",
         )
 
-        # Sort by match weight and add rank
+        # Sort by match flux and add rank
         losses = (
-            losses.sort("match_weight", descending=True)
+            losses.sort("match_flux", descending=True)
             .with_columns(
                 pl.arange(1, losses.height + 1).alias("influence_rank")
             )
@@ -203,10 +533,14 @@ def get_most_influential_matches(
                     "team1_score",
                     "team2_score",
                     "total_games",
-                    "match_weight",
+                    "match_flux",
+                    "share_outgoing",
+                    "w_m",
                     "tournament_influence",
                     "time_decay",
                     "event_ts",
+                    "r_loser",
+                    "r_winner",
                 ]
             )
             .head(top_n)

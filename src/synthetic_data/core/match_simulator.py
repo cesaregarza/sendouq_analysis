@@ -5,12 +5,13 @@ This module simulates match outcomes based on player skills using the
 Bradley-Terry model from the rankings analysis.
 """
 
-from typing import Optional
+from typing import Dict, Optional
 
 import numpy as np
 
 from rankings.analysis.transforms import bt_prob
 from synthetic_data.core.player_generator import SyntheticPlayer
+from synthetic_data.core.skill_drift import OrnsteinUhlenbeckDrift
 from synthetic_data.core.tournament_generator import Match, Team
 
 
@@ -23,6 +24,8 @@ class MatchSimulator:
         alpha: float = 1.0,
         bo_games: int = 7,
         skill_weight: float = 0.8,
+        enable_skill_drift: bool = False,
+        skill_drift_params: Optional[dict] = None,
     ):
         """
         Initialize the match simulator.
@@ -37,12 +40,38 @@ class MatchSimulator:
             Best-of-N games per match (must be odd)
         skill_weight : float
             Weight for skill vs performance (0-1)
+        enable_skill_drift : bool
+            Whether to enable Ornstein-Uhlenbeck skill drift
+        skill_drift_params : dict, optional
+            Parameters for skill drift (mu, half_life_days, sigma)
         """
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.alpha = alpha
         self.bo_games = bo_games
         self.skill_weight = skill_weight
+        self.enable_skill_drift = enable_skill_drift
+
+        # Initialize skill drift if enabled
+        if enable_skill_drift:
+            drift_params = skill_drift_params or {}
+            self.skill_drift = OrnsteinUhlenbeckDrift(
+                mu=drift_params.get("mu", 0.0),
+                half_life_days=drift_params.get("half_life_days", 28.0),
+                sigma=drift_params.get("sigma", 0.08),
+                dt_days=drift_params.get("dt_days", 1.0),
+                seed=seed,
+            )
+            # Store current skills for all players
+            self.current_skills: Dict[int, float] = {}
+            # Calibrate alpha based on skill drift if not explicitly set
+            if alpha == 1.0 and "auto_calibrate_alpha" in drift_params:
+                self.alpha = self.skill_drift.alpha_for_target_prob(
+                    p_star=drift_params.get("target_p", 0.76)
+                )
+        else:
+            self.skill_drift = None
+            self.current_skills = {}
 
         if bo_games % 2 == 0:
             raise ValueError("bo_games must be odd for best-of format")
@@ -111,6 +140,38 @@ class MatchSimulator:
         """
         return [self.simulate_match(match) for match in matches]
 
+    def update_player_skills(
+        self, players: list[SyntheticPlayer], dt_days: float = 1.0
+    ):
+        """
+        Update player skills using OU drift if enabled.
+
+        Parameters
+        ----------
+        players : list[SyntheticPlayer]
+            Players to update
+        dt_days : float
+            Time step in days
+        """
+        if not self.enable_skill_drift or not self.skill_drift:
+            return
+
+        # Initialize skills for new players
+        for player in players:
+            if player.user_id not in self.current_skills:
+                self.current_skills[player.user_id] = player.true_skill
+
+        # Update all known skills
+        player_ids = list(self.current_skills.keys())
+        current_values = np.array(
+            [self.current_skills[pid] for pid in player_ids]
+        )
+        new_values = self.skill_drift.update_skills(current_values, dt_days)
+
+        # Store updated skills
+        for pid, new_skill in zip(player_ids, new_values):
+            self.current_skills[pid] = new_skill
+
     def _calculate_team_strength(self, team: Team) -> float:
         """
         Calculate overall team strength from player skills.
@@ -128,8 +189,18 @@ class MatchSimulator:
         if not team.players:
             return 0.0
 
-        # Use average skill as base strength
-        avg_skill = sum(p.true_skill for p in team.players) / len(team.players)
+        # Use current (drifted) skills if available, otherwise true_skill
+        if self.enable_skill_drift and self.current_skills:
+            skills = [
+                self.current_skills.get(p.user_id, p.true_skill)
+                for p in team.players
+            ]
+            avg_skill = sum(skills) / len(skills)
+        else:
+            # Use average skill as base strength
+            avg_skill = sum(p.true_skill for p in team.players) / len(
+                team.players
+            )
 
         # Add small bonus for team synergy based on affinity match
         affinities = [p.team_affinity for p in team.players if p.team_affinity]

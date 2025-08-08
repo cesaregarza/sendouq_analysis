@@ -91,8 +91,8 @@ sendouq_analysis/
 ## Quick Example
 
 ```python
-from src.rankings.evaluation.cross_validation import cross_validate_simple
-from src.rankings.evaluation.optimizer import optimize_rating_engine
+from rankings.evaluation.cross_validation import cross_validate_simple
+from rankings.evaluation.optimizer import optimize_rating_engine
 
 # Load your tournament data
 matches_df = load_matches()
