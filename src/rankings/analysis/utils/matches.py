@@ -192,7 +192,7 @@ def get_most_influential_matches(
             [
                 pl.col("tournament_id").cast(pl.Int64),
                 pl.col("team_id").cast(pl.Int64),
-                pl.col("user_id").cast(pl.Int64),
+                # Do not cast user_id to int; may be string IDs in synthetic data
             ]
         )
 
@@ -244,10 +244,18 @@ def get_most_influential_matches(
             winners, on=["match_id", "w_m"], how="inner"
         ).select(["match_id", "loser_user_id", "winner_user_id", "w_m"])
 
-        # Compute W_out per loser user and map r_loser
-        loser_out = pairs.group_by("loser_user_id").agg(
-            pl.col("w_m").sum().alias("W_loser_total")
-        )
+        # Map r_loser and join denominators if available
+        denom_df = None
+        if (
+            hasattr(engine, "denominators_df_")
+            and engine.denominators_df_ is not None
+        ):
+            # Expect denominators for player mode (id == loser_user_id)
+            denom_df = (
+                engine.denominators_df_.select(["id", "denom"])
+                .rename({"id": "loser_user_id"})
+                .with_columns(pl.col("loser_user_id").cast(pl.Int64))
+            )
 
         rating_map = {}
         if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
@@ -260,29 +268,58 @@ def get_most_influential_matches(
             else 0.0
         )
 
-        pairs = (
-            pairs.join(loser_out, on="loser_user_id", how="left")
-            .with_columns(
-                [
-                    pl.col("loser_user_id")
-                    .map_elements(
-                        lambda x: rating_map.get(x, default_score),
-                        return_dtype=pl.Float64,
-                    )
-                    .alias("r_loser"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("W_loser_total") > 0)
-                .then(
-                    alpha
-                    * pl.col("r_loser")
-                    * (pl.col("w_m") / pl.col("W_loser_total"))
+        if denom_df is not None:
+            pairs = (
+                pairs.join(denom_df, on="loser_user_id", how="left")
+                .with_columns(
+                    [
+                        pl.col("loser_user_id")
+                        .map_elements(
+                            lambda x: rating_map.get(x, default_score),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("r_loser"),
+                    ]
                 )
-                .otherwise(0.0)
-                .alias("pair_flux")
+                .with_columns(
+                    pl.when(pl.col("denom") > 0)
+                    .then(
+                        alpha
+                        * pl.col("r_loser")
+                        * (pl.col("w_m") / pl.col("denom"))
+                    )
+                    .otherwise(0.0)
+                    .alias("pair_flux")
+                )
             )
-        )
+        else:
+            # Fallback to row-sum denominator if engine didn't expose denoms
+            loser_out = pairs.group_by("loser_user_id").agg(
+                pl.col("w_m").sum().alias("W_loser_total")
+            )
+            pairs = (
+                pairs.join(loser_out, on="loser_user_id", how="left")
+                .with_columns(
+                    [
+                        pl.col("loser_user_id")
+                        .map_elements(
+                            lambda x: rating_map.get(x, default_score),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("r_loser"),
+                    ]
+                )
+                .with_columns(
+                    pl.when(pl.col("W_loser_total") > 0)
+                    .then(
+                        alpha
+                        * pl.col("r_loser")
+                        * (pl.col("w_m") / pl.col("W_loser_total"))
+                    )
+                    .otherwise(0.0)
+                    .alias("pair_flux")
+                )
+            )
 
         # For selected player, aggregate by match as incoming and outgoing
         wins_pairs = pairs.filter(pl.col("winner_user_id") == player_id)
@@ -306,15 +343,31 @@ def get_most_influential_matches(
             .with_columns(pl.col("match_flux").fill_null(0.0))
         )
     else:
-        # Team mode (existing implementation)
-        # First, get the total outgoing weight for each loser team
-        loser_total_weights = matches_with_influence.group_by(
-            "loser_team_id"
-        ).agg(pl.col("w_m").sum().alias("W_loser_total"))
+        # Team mode
+        denom_df = None
+        if (
+            hasattr(engine, "denominators_df_")
+            and engine.denominators_df_ is not None
+        ):
+            # Expect denominators for team mode (id == loser_team_id)
+            denom_df = (
+                engine.denominators_df_.select(["id", "denom"])
+                .rename({"id": "loser_team_id"})
+                .with_columns(pl.col("loser_team_id").cast(pl.Int64))
+            )
+        if denom_df is not None:
+            matches_with_influence = matches_with_influence.join(
+                denom_df, on="loser_team_id", how="left"
+            )
+        else:
+            # Fallback to total outgoing weight if no denominators provided
+            loser_total_weights = matches_with_influence.group_by(
+                "loser_team_id"
+            ).agg(pl.col("w_m").sum().alias("W_loser_total"))
 
-        matches_with_influence = matches_with_influence.join(
-            loser_total_weights, on="loser_team_id", how="left"
-        )
+            matches_with_influence = matches_with_influence.join(
+                loser_total_weights, on="loser_team_id", how="left"
+            )
 
         rating_map = {}
         if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
@@ -344,16 +397,28 @@ def get_most_influential_matches(
             ]
         )
 
-        matches_with_influence = matches_with_influence.with_columns(
-            pl.when(pl.col("W_loser_total") > 0)
-            .then(
-                alpha
-                * pl.col("r_loser")
-                * (pl.col("w_m") / pl.col("W_loser_total"))
+        if "denom" in matches_with_influence.columns:
+            matches_with_influence = matches_with_influence.with_columns(
+                pl.when(pl.col("denom") > 0)
+                .then(
+                    alpha
+                    * pl.col("r_loser")
+                    * (pl.col("w_m") / pl.col("denom"))
+                )
+                .otherwise(0.0)
+                .alias("match_flux")
             )
-            .otherwise(0.0)
-            .alias("match_flux")
-        )
+        else:
+            matches_with_influence = matches_with_influence.with_columns(
+                pl.when(pl.col("W_loser_total") > 0)
+                .then(
+                    alpha
+                    * pl.col("r_loser")
+                    * (pl.col("w_m") / pl.col("W_loser_total"))
+                )
+                .otherwise(0.0)
+                .alias("match_flux")
+            )
 
     # Ensure types are still correct after all operations
     matches_with_influence = matches_with_influence.with_columns(

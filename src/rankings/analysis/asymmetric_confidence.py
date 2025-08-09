@@ -87,7 +87,7 @@ class AsymmetricConfidenceCalculator:
     def __init__(
         self,
         total_players: int,
-        player_ranks: Dict[str, int],
+        player_ranks: Optional[Dict[str, int]] = None,
         top_player_percentile: float = 0.1,
         quality_weight: float = 2.0,
         tournament_winner_boost: float = 3.0,
@@ -110,27 +110,34 @@ class AsymmetricConfidenceCalculator:
         """
         self.total_players = total_players
         self.player_ranks = player_ranks
+        self.top_player_percentile = top_player_percentile
         self.top_player_threshold = int(total_players * top_player_percentile)
         self.quality_weight = quality_weight
         self.tournament_winner_boost = tournament_winner_boost
 
-        # Pre-compute top player set for O(1) lookups
-        self.top_players = {
-            p
-            for p, rank in player_ranks.items()
-            if rank <= self.top_player_threshold
-        }
+        # Pre-computed structures (initialized lazily if ranks provided later)
+        self.top_players: Set[str] = set()
+        self.player_percentiles: Dict[str, float] = {}
 
-        # Pre-compute player percentiles for faster edge quality
-        self.player_percentiles = {}
-        for player, rank in player_ranks.items():
-            self.player_percentiles[player] = 1.0 - (rank - 1) / total_players
+        if player_ranks is not None:
+            # Pre-compute top player set for O(1) lookups
+            self.top_players = {
+                p
+                for p, rank in player_ranks.items()
+                if rank <= self.top_player_threshold
+            }
+            # Pre-compute player percentiles for faster edge quality
+            for player, rank in player_ranks.items():
+                self.player_percentiles[player] = (
+                    1.0 - (rank - 1) / total_players
+                )
 
     def calculate_asymmetric_confidence(
         self,
         player_id: str,
         matches: List[Dict],
         tournament_wins: Optional[Set[str]] = None,
+        player_ranks: Optional[Dict[str, int]] = None,
     ) -> AsymmetricConfidenceMetrics:
         """
         Calculate asymmetric confidence for a player (optimized).
@@ -149,6 +156,26 @@ class AsymmetricConfidenceCalculator:
         AsymmetricConfidenceMetrics
             Detailed confidence metrics
         """
+        # Lazily initialize ranks if provided at call-time
+        if not self.player_percentiles or not self.top_players:
+            if player_ranks is None:
+                raise ValueError(
+                    "player_ranks must be provided either at initialization or call-time"
+                )
+            self.player_ranks = player_ranks
+            self.top_player_threshold = int(
+                self.total_players * self.top_player_percentile
+            )
+            self.top_players = {
+                p
+                for p, rank in player_ranks.items()
+                if rank <= self.top_player_threshold
+            }
+            self.player_percentiles = {
+                player: 1.0 - (rank - 1) / self.total_players
+                for player, rank in player_ranks.items()
+            }
+
         # Initialize tracking with better data structures
         tournaments = set()
         beaten_players = []
