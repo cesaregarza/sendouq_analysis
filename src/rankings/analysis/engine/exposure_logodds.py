@@ -47,6 +47,10 @@ class ExposureLogOddsEngine(RatingEngine):
         Small value for numerical stability
     min_exposure : Optional[float], default=None
         Minimum exposure threshold for ranking eligibility
+    score_decay_delay_days : float, default=30.0
+        Number of days of inactivity before decay starts
+    score_decay_rate : float, default=0.01
+        Daily decay rate after delay period (e.g., 0.01 = 1% per day)
     **kwargs
         Additional parameters passed to base RatingEngine
     """
@@ -60,6 +64,8 @@ class ExposureLogOddsEngine(RatingEngine):
         surprisal_iters: int = 2,
         epsilon: float = 1e-9,
         min_exposure: Optional[float] = None,
+        score_decay_delay_days: float = 30.0,
+        score_decay_rate: float = 0.01,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -69,6 +75,8 @@ class ExposureLogOddsEngine(RatingEngine):
         self.surprisal_iters = surprisal_iters
         self.epsilon = epsilon
         self.min_exposure = min_exposure
+        self.score_decay_delay_days = score_decay_delay_days
+        self.score_decay_rate = score_decay_rate
         self.logger = get_logger(__name__)
 
         self.logger.info("Initializing ExposureLogOddsEngine")
@@ -173,6 +181,50 @@ class ExposureLogOddsEngine(RatingEngine):
                         exposure[node_to_idx[p]] += w
 
             self.exposure_vector_ = exposure
+
+            # Calculate last match timestamp for each player
+            player_last_match = {}
+            for match in converted_matches:
+                # Get match timestamp (already calculated in conversion)
+                match_ts = int(self.now.timestamp())  # Default to now
+                if "timestamp" in match:
+                    match_ts = match["timestamp"]
+
+                # Update last match for all players in the match
+                for p in match["winners"]:
+                    if p in node_to_idx:
+                        player_last_match[p] = max(
+                            player_last_match.get(p, 0), match_ts
+                        )
+                for p in match["losers"]:
+                    if p in node_to_idx:
+                        player_last_match[p] = max(
+                            player_last_match.get(p, 0), match_ts
+                        )
+
+            # Apply time-based score decay
+            now_ts = int(self.now.timestamp())
+            decay_factors = np.ones(len(active_players))
+
+            for i, player_id in enumerate(active_players):
+                last_match_ts = player_last_match.get(player_id, now_ts)
+                days_inactive = (now_ts - last_match_ts) / 86400.0
+
+                # Apply decay only after the delay period
+                if days_inactive > self.score_decay_delay_days:
+                    days_to_decay = days_inactive - self.score_decay_delay_days
+                    # Exponential decay: score * (1 - rate)^days
+                    decay_factors[i] = (
+                        1 - self.score_decay_rate
+                    ) ** days_to_decay
+
+                    self.logger.debug(
+                        f"Player {player_id}: {days_inactive:.1f} days inactive, "
+                        f"decay factor: {decay_factors[i]:.3f}"
+                    )
+
+            # Apply decay to scores
+            scores = scores * decay_factors
 
             # Create result DataFrame
             result = pl.DataFrame(
@@ -368,6 +420,7 @@ class ExposureLogOddsEngine(RatingEngine):
                     "weight": weight,
                     "tournament_id": tid,
                     "match_id": row.get("match_id"),
+                    "timestamp": ts,  # Include timestamp for decay calculation
                 }
             )
 
@@ -415,6 +468,7 @@ class ExposureLogOddsEngine(RatingEngine):
                     "weight": weight,
                     "tournament_id": tid,
                     "match_id": row.get("match_id"),
+                    "timestamp": ts,  # Include timestamp for decay calculation
                 }
             )
 
@@ -685,3 +739,108 @@ class ExposureLogOddsEngine(RatingEngine):
             provisional_ratings = (score - score.mean()) / (score.std() + 1e-8)
 
         return score, s, l, rho, lambda_smooth
+
+    def post_process_rankings(
+        self,
+        rankings: pl.DataFrame,
+        players_df: pl.DataFrame,
+        min_tournaments: int = 3,
+        rank_cutoffs: Optional[List[float]] = None,
+        rank_labels: Optional[List[str]] = None,
+        score_multiplier: float = 25.0,
+    ) -> pl.DataFrame:
+        """
+        Post-process rankings with tournament filtering and grade assignment.
+
+        Parameters
+        ----------
+        rankings : pl.DataFrame
+            Raw rankings from rank_players
+        players_df : pl.DataFrame
+            Players DataFrame with tournament_id, user_id, username
+        min_tournaments : int, default=3
+            Minimum tournaments required (filters to > min_tournaments-1)
+        rank_cutoffs : Optional[List[float]], default=None
+            Score cutoffs for rank labels
+        rank_labels : Optional[List[str]], default=None
+            Labels for rank grades
+        score_multiplier : float, default=25.0
+            Multiplier for final score display
+
+        Returns
+        -------
+        pl.DataFrame
+            Processed rankings with grades and filtered players
+        """
+        if rank_cutoffs is None:
+            rank_cutoffs = [-3, -1, 0, 1, 2, 3, 4, 5]
+        if rank_labels is None:
+            rank_labels = ["A-", "A", "A+", "S-", "S", "S+", "X", "X+", "X★"]
+
+        # Add raw rank before any filtering
+        final_rankings = (
+            rankings.with_columns(pl.arange(1, pl.len() + 1).alias("raw_rank"))
+            .join(
+                players_df.group_by("user_id")
+                .agg(
+                    [
+                        pl.col("username").last(),
+                        pl.col("tournament_id")
+                        .n_unique()
+                        .alias("tournament_count"),
+                    ]
+                )
+                .select(["user_id", "username", "tournament_count"]),
+                left_on="id",
+                right_on="user_id",
+                how="left",
+            )
+            .sort("raw_rank")
+            .select(
+                "raw_rank",
+                "username",
+                pl.col("id").alias("player_id"),
+                pl.col("player_rank").alias("score"),
+                pl.col("exposure").alias("exposure"),
+                pl.col("win_pr").alias("win_pr"),
+                pl.col("loss_pr").alias("loss_pr"),
+                (pl.col("win_pr") / pl.col("loss_pr")).alias("win_loss_ratio"),
+                (pl.col("win_pr") - pl.col("loss_pr")).alias("win_loss_diff"),
+                pl.col("tournament_count"),
+            )
+            .filter(pl.col("tournament_count") >= min_tournaments)
+            .select(
+                pl.arange(1, pl.len() + 1).alias("rank"),
+                "raw_rank",
+                "username",
+                "player_id",
+                "score",
+                "exposure",
+                "win_pr",
+                "loss_pr",
+                "win_loss_ratio",
+                "win_loss_diff",
+                "tournament_count",
+            )
+        )
+
+        # Add grades
+        final_rankings_with_grades = final_rankings.with_columns(
+            pl.col("score")
+            .cut(
+                breaks=rank_cutoffs,
+                labels=rank_labels,
+            )
+            .alias("rank_label")
+        ).select(
+            "rank",
+            "rank_label",
+            "username",
+            "player_id",
+            (pl.col("score") * score_multiplier).alias("display_score"),
+            "score",
+            "win_loss_ratio",
+            "tournament_count",
+        )
+
+        return final_rankings_with_grades
