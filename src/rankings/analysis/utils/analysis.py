@@ -20,6 +20,220 @@ from rankings.analysis.utils.matches import get_most_influential_matches
 from rankings.analysis.utils.names import get_tournament_name_lookup
 
 
+def analyze_player(
+    player_id: int,
+    engine: Optional[RatingEngine] = None,
+    rankings_df: Optional[pl.DataFrame] = None,
+    matches_df: Optional[pl.DataFrame] = None,
+    players_df: Optional[pl.DataFrame] = None,
+    tournament_data: Optional[list[dict]] = None,
+    top_n_matches: int = 10,
+    print_output: bool = True,
+) -> dict:
+    """
+    Simplified player analysis function that only needs player_id.
+
+    Automatically fetches player name and all necessary data. If engine
+    is not provided, uses the data from rankings_df directly.
+
+    Parameters
+    ----------
+    player_id : int
+        The user_id of the player to analyze
+    engine : RatingEngine, optional
+        The RatingEngine instance with computed rankings
+    rankings_df : pl.DataFrame, optional
+        Pre-computed rankings DataFrame with player stats
+    matches_df : pl.DataFrame, optional
+        Matches DataFrame (required if using engine)
+    players_df : pl.DataFrame, optional
+        Players DataFrame (required if using engine)
+    tournament_data : list[dict], optional
+        Raw tournament data for name lookups
+    top_n_matches : int, optional
+        Number of top influential matches to analyze
+    print_output : bool, optional
+        Whether to print the formatted output
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - player_info: Basic player information
+        - ranking_stats: Ranking statistics
+        - match_stats: Match statistics
+        - influential_matches: Top influential wins/losses (if engine provided)
+        - formatted_output: Formatted text output
+    """
+    result = {}
+
+    # Get player name from players_df if available
+    player_name = f"Player {player_id}"
+    if players_df is not None:
+        player_names = (
+            players_df.filter(pl.col("user_id") == player_id)
+            .select("username")
+            .unique()
+        )
+        if len(player_names) > 0:
+            player_name = player_names["username"][0]
+
+    result["player_info"] = {
+        "player_id": player_id,
+        "player_name": player_name,
+    }
+
+    # Get ranking stats from rankings_df if available
+    if rankings_df is not None:
+        player_ranking = rankings_df.filter(pl.col("id") == player_id)
+
+        if len(player_ranking) > 0:
+            player_data = player_ranking.row(0, named=True)
+
+            # Find rank position
+            rankings_sorted = rankings_df.sort("player_rank", descending=True)
+            rank_position = 0
+            for i, row in enumerate(rankings_sorted.iter_rows(named=True), 1):
+                if row["id"] == player_id:
+                    rank_position = i
+                    break
+
+            # Extract all available stats
+            ranking_stats = {
+                "rank": rank_position,
+                "total_players": len(rankings_df),
+                "percentile": (1 - rank_position / len(rankings_df)) * 100,
+                "score": player_data.get("player_rank", 0),
+                "win_pr": player_data.get("win_pr", 0),
+                "loss_pr": player_data.get("loss_pr", 0),
+                "exposure": player_data.get("exposure", 0),
+            }
+
+            # Calculate win/loss ratio if PageRanks available
+            if ranking_stats["loss_pr"] > 0:
+                ranking_stats["win_loss_ratio"] = (
+                    ranking_stats["win_pr"] / ranking_stats["loss_pr"]
+                )
+            else:
+                ranking_stats["win_loss_ratio"] = (
+                    float("inf") if ranking_stats["win_pr"] > 0 else 0
+                )
+
+            result["ranking_stats"] = ranking_stats
+        else:
+            result["ranking_stats"] = {
+                "rank": None,
+                "error": f"Player {player_id} not found in rankings",
+            }
+
+    # Get match statistics if data available
+    if matches_df is not None and players_df is not None:
+        # Get player's teams
+        player_teams = players_df.filter(pl.col("user_id") == player_id)
+
+        # Count tournaments
+        num_tournaments = player_teams["tournament_id"].n_unique()
+
+        # Get all matches
+        total_wins = 0
+        total_losses = 0
+
+        for row in player_teams.iter_rows(named=True):
+            tid = row["tournament_id"]
+            team_id = row["team_id"]
+
+            # Count wins
+            wins = matches_df.filter(
+                (pl.col("tournament_id") == tid)
+                & (pl.col("winner_team_id") == team_id)
+            )
+            total_wins += len(wins)
+
+            # Count losses
+            losses = matches_df.filter(
+                (pl.col("tournament_id") == tid)
+                & (pl.col("loser_team_id") == team_id)
+            )
+            total_losses += len(losses)
+
+        total_matches = total_wins + total_losses
+        win_rate = (
+            (total_wins / total_matches * 100) if total_matches > 0 else 0
+        )
+
+        result["match_stats"] = {
+            "tournaments_played": num_tournaments,
+            "total_matches": total_matches,
+            "wins": total_wins,
+            "losses": total_losses,
+            "win_rate": win_rate,
+        }
+
+    # Get influential matches if engine provided
+    if engine is not None and matches_df is not None and players_df is not None:
+        try:
+            influential = get_most_influential_matches(
+                player_id=player_id,
+                matches_df=matches_df,
+                players_df=players_df,
+                engine=engine,
+                top_n=top_n_matches,
+            )
+            result["influential_matches"] = influential
+
+            # Get tournament names if available
+            tournament_names = {}
+            if tournament_data:
+                tournament_names = get_tournament_name_lookup(tournament_data)
+
+            # Format output
+            formatted_output = format_influential_matches(
+                influential,
+                player_name=player_name,
+                tournament_names=tournament_names,
+            )
+            result["formatted_output"] = formatted_output
+        except Exception as e:
+            result["influential_matches"] = {"error": str(e)}
+
+    # Create summary output
+    output_lines = []
+    output_lines.append("=" * 80)
+    output_lines.append(f"PLAYER ANALYSIS: {player_name} (ID: {player_id})")
+    output_lines.append("=" * 80)
+
+    if "ranking_stats" in result and result["ranking_stats"].get("rank"):
+        rs = result["ranking_stats"]
+        output_lines.append("\n📊 RANKING STATS:")
+        output_lines.append(
+            f"  Rank: #{rs['rank']} out of {rs['total_players']} (Top {rs['percentile']:.1f}%)"
+        )
+        output_lines.append(f"  Score: {rs['score']:.4f}")
+        output_lines.append(f"  Exposure: {rs['exposure']:.2f}")
+        output_lines.append(f"  Win PageRank: {rs['win_pr']:.8f}")
+        output_lines.append(f"  Loss PageRank: {rs['loss_pr']:.8f}")
+        output_lines.append(f"  Win/Loss Ratio: {rs['win_loss_ratio']:.2f}")
+
+    if "match_stats" in result:
+        ms = result["match_stats"]
+        output_lines.append("\n🎮 MATCH STATS:")
+        output_lines.append(f"  Tournaments: {ms['tournaments_played']}")
+        output_lines.append(f"  Total Matches: {ms['total_matches']}")
+        output_lines.append(f"  Record: {ms['wins']}W - {ms['losses']}L")
+        output_lines.append(f"  Win Rate: {ms['win_rate']:.1f}%")
+
+    if "formatted_output" in result:
+        output_lines.append("\n" + result["formatted_output"])
+
+    summary_output = "\n".join(output_lines)
+    result["summary"] = summary_output
+
+    if print_output:
+        print(summary_output)
+
+    return result
+
+
 def analyze_player_performance(
     player_id: int,
     player_name: str,

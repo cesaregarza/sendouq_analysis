@@ -108,6 +108,9 @@ class RatingEngine:
         Method for computing retrospective tournament strength
     strength_k : int, default=5
         Parameter for trimmed_mean or topN_sum strength aggregation
+    normalize_min_influence : float, optional
+        If set, normalizes tournament influences so minimum equals this value.
+        Default None (no normalization). Set to 1.0 to prevent ultra-low influence exploits.
     """
 
     def __init__(
@@ -144,6 +147,7 @@ class RatingEngine:
             "mean", "median", "trimmed_mean", "topN_sum"
         ] = DEFAULT_STRENGTH_AGG,
         strength_k: int = DEFAULT_STRENGTH_K,
+        normalize_min_influence: Optional[float] = None,
     ):
         self.logger = get_logger(__name__)
         self.logger.info("Initializing RatingEngine with parameters:")
@@ -153,6 +157,7 @@ class RatingEngine:
         self.logger.info(f"  tick_tock_stabilize_tol={tick_tock_stabilize_tol}")
         self.logger.info(f"  max_tick_tock={max_tick_tock}")
         self.logger.info(f"  influence_agg_method={influence_agg_method}")
+        self.logger.info(f"  normalize_min_influence={normalize_min_influence}")
         self.decay_half_life_days = decay_half_life_days
         self.decay_rate = math.log(2.0) / decay_half_life_days
         self.damping_factor = damping_factor
@@ -174,6 +179,7 @@ class RatingEngine:
         self.influence_agg_method = influence_agg_method
         self.strength_agg = strength_agg
         self.strength_k = strength_k
+        self.normalize_min_influence = normalize_min_influence
 
         # Results populated after a run
         self.edge_flux_: Optional[pl.DataFrame] = None
@@ -908,7 +914,29 @@ class RatingEngine:
         else:
             S = S.with_columns(pl.col("S_normalized").alias("S"))
 
-        return dict(zip(S["tournament_id"], S["S"]))
+        # Convert to dictionary
+        tournament_influence = dict(zip(S["tournament_id"], S["S"]))
+
+        # Apply minimum influence normalization if requested
+        if self.normalize_min_influence is not None and tournament_influence:
+            influences = list(tournament_influence.values())
+            min_influence = min(influences)
+
+            if min_influence < self.normalize_min_influence:
+                # Shift all influences up so minimum equals normalize_min_influence
+                shift = self.normalize_min_influence - min_influence
+
+                tournament_influence = {
+                    tid: influence + shift
+                    for tid, influence in tournament_influence.items()
+                }
+
+                self.logger.info(
+                    f"Normalized tournament influences: min {min_influence:.6f} → "
+                    f"{self.normalize_min_influence:.6f} (shifted by {shift:.6f})"
+                )
+
+        return tournament_influence
 
     # =========================================================================
     # Retrospective tournament strength

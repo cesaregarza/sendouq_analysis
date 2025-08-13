@@ -164,8 +164,19 @@ def format_influential_matches(
                 else f"Tournament {t_id}"
             )
 
+            # Format the match date if available
+            match_date_str = ""
+            if "event_ts" in row and row["event_ts"] is not None:
+                from datetime import datetime
+
+                try:
+                    match_date = datetime.fromtimestamp(row["event_ts"])
+                    match_date_str = f" - {match_date.strftime('%Y-%m-%d')}"
+                except:
+                    pass
+
             output.append(
-                f"\n{row['influence_rank']}. {t_name} (Match {row.get('match_id', 'Unknown')})"
+                f"\n{row['influence_rank']}. {t_name} (Match {row.get('match_id', 'Unknown')}){match_date_str}"
             )
 
             opponents = row.get("opponent_players", "Unknown")
@@ -205,7 +216,7 @@ def format_influential_matches(
 
     # Format losses
     output.append(
-        f"\n💔 Top {influential_matches['losses'].height} Most Influential LOSSES:"
+        f"\n💔 Top {influential_matches['losses'].height} Most Damaging LOSSES (worst results):"
     )
     output.append("-" * 100)
 
@@ -218,8 +229,19 @@ def format_influential_matches(
                 else f"Tournament {t_id}"
             )
 
+            # Format the match date if available
+            match_date_str = ""
+            if "event_ts" in row and row["event_ts"] is not None:
+                from datetime import datetime
+
+                try:
+                    match_date = datetime.fromtimestamp(row["event_ts"])
+                    match_date_str = f" - {match_date.strftime('%Y-%m-%d')}"
+                except:
+                    pass
+
             output.append(
-                f"\n{row['influence_rank']}. {t_name} (Match {row.get('match_id', 'Unknown')})"
+                f"\n{row['influence_rank']}. {t_name} (Match {row.get('match_id', 'Unknown')}){match_date_str}"
             )
 
             opponents = row.get("opponent_players", "Unknown")
@@ -242,7 +264,7 @@ def format_influential_matches(
                 ):
                     share_pct = row["share_outgoing"] * 100
                     output.append(
-                        f"   • Relative Importance (losses): {share_pct:.1f}%"
+                        f"   • Damage to Rating: {share_pct:.1f}% of total loss impact"
                     )
             else:
                 # Fall back to old weight if flux not available

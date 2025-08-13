@@ -269,8 +269,21 @@ def get_most_influential_matches(
         )
 
         if denom_df is not None:
+            # First get denominators for winners too (for loss flux calculation)
+            winner_denom_df = (
+                engine.denominators_df_.select(["id", "denom"])
+                .rename({"id": "winner_user_id"})
+                .with_columns(pl.col("winner_user_id").cast(pl.Int64))
+            )
+
             pairs = (
                 pairs.join(denom_df, on="loser_user_id", how="left")
+                .join(
+                    winner_denom_df,
+                    on="winner_user_id",
+                    how="left",
+                    suffix="_winner",
+                )
                 .with_columns(
                     [
                         pl.col("loser_user_id")
@@ -279,17 +292,35 @@ def get_most_influential_matches(
                             return_dtype=pl.Float64,
                         )
                         .alias("r_loser"),
+                        pl.col("winner_user_id")
+                        .map_elements(
+                            lambda x: rating_map.get(x, default_score),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("r_winner"),
                     ]
                 )
                 .with_columns(
-                    pl.when(pl.col("denom") > 0)
-                    .then(
-                        alpha
-                        * pl.col("r_loser")
-                        * (pl.col("w_m") / pl.col("denom"))
-                    )
-                    .otherwise(0.0)
-                    .alias("pair_flux")
+                    [
+                        # Win flux: from loser's rating (for when this player wins)
+                        pl.when(pl.col("denom") > 0)
+                        .then(
+                            alpha
+                            * pl.col("r_loser")
+                            * (pl.col("w_m") / pl.col("denom"))
+                        )
+                        .otherwise(0.0)
+                        .alias("win_flux"),
+                        # Loss flux: from winner's rating (for when this player loses)
+                        pl.when(pl.col("denom_winner") > 0)
+                        .then(
+                            alpha
+                            * pl.col("r_winner")
+                            * (pl.col("w_m") / pl.col("denom_winner"))
+                        )
+                        .otherwise(0.0)
+                        .alias("loss_flux"),
+                    ]
                 )
             )
         else:
@@ -297,8 +328,12 @@ def get_most_influential_matches(
             loser_out = pairs.group_by("loser_user_id").agg(
                 pl.col("w_m").sum().alias("W_loser_total")
             )
+            winner_out = pairs.group_by("winner_user_id").agg(
+                pl.col("w_m").sum().alias("W_winner_total")
+            )
             pairs = (
                 pairs.join(loser_out, on="loser_user_id", how="left")
+                .join(winner_out, on="winner_user_id", how="left")
                 .with_columns(
                     [
                         pl.col("loser_user_id")
@@ -307,17 +342,35 @@ def get_most_influential_matches(
                             return_dtype=pl.Float64,
                         )
                         .alias("r_loser"),
+                        pl.col("winner_user_id")
+                        .map_elements(
+                            lambda x: rating_map.get(x, default_score),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("r_winner"),
                     ]
                 )
                 .with_columns(
-                    pl.when(pl.col("W_loser_total") > 0)
-                    .then(
-                        alpha
-                        * pl.col("r_loser")
-                        * (pl.col("w_m") / pl.col("W_loser_total"))
-                    )
-                    .otherwise(0.0)
-                    .alias("pair_flux")
+                    [
+                        # Win flux: from loser's rating
+                        pl.when(pl.col("W_loser_total") > 0)
+                        .then(
+                            alpha
+                            * pl.col("r_loser")
+                            * (pl.col("w_m") / pl.col("W_loser_total"))
+                        )
+                        .otherwise(0.0)
+                        .alias("win_flux"),
+                        # Loss flux: from winner's rating
+                        pl.when(pl.col("W_winner_total") > 0)
+                        .then(
+                            alpha
+                            * pl.col("r_winner")
+                            * (pl.col("w_m") / pl.col("W_winner_total"))
+                        )
+                        .otherwise(0.0)
+                        .alias("loss_flux"),
+                    ]
                 )
             )
 
@@ -326,10 +379,10 @@ def get_most_influential_matches(
         losses_pairs = pairs.filter(pl.col("loser_user_id") == player_id)
 
         wins_flux = wins_pairs.group_by("match_id").agg(
-            pl.col("pair_flux").sum().alias("match_flux")
+            pl.col("win_flux").sum().alias("match_flux")
         )
         losses_flux = losses_pairs.group_by("match_id").agg(
-            pl.col("pair_flux").sum().alias("match_flux")
+            pl.col("loss_flux").sum().alias("match_flux")
         )
 
         # Attach to match details table
@@ -583,8 +636,10 @@ def get_most_influential_matches(
         )
 
         # Sort by match flux and add rank
+        # For losses in exposure log-odds: higher flux means losing to stronger opponents
+        # This is LESS damaging (expected loss), so sort ascending to show most damaging first
         losses = (
-            losses.sort("match_flux", descending=True)
+            losses.sort("match_flux", descending=False)
             .with_columns(
                 pl.arange(1, losses.height + 1).alias("influence_rank")
             )
