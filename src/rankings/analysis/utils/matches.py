@@ -257,122 +257,106 @@ def get_most_influential_matches(
                 .with_columns(pl.col("loser_user_id").cast(pl.Int64))
             )
 
-        rating_map = {}
-        if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
+        # Build PageRank maps for exposure log-odds engine
+        default_score = float(getattr(engine, "global_prior_", 0.0))
+        r_win_map = {}
+        r_loss_map = {}
+
+        # Check if this is an exposure log-odds engine with PageRank vectors
+        if (
+            hasattr(engine, "win_pagerank_")
+            and engine.win_pagerank_ is not None
+        ):
+            if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
+                player_ids = engine.ratings_df["id"].to_list()
+                for i, pid in enumerate(player_ids):
+                    if i < len(engine.win_pagerank_):
+                        r_win_map[pid] = float(engine.win_pagerank_[i])
+                    if i < len(engine.loss_pagerank_):
+                        r_loss_map[pid] = float(engine.loss_pagerank_[i])
+
+        # Fallback to using ratings if PageRanks not available
+        if (
+            not r_win_map
+            and hasattr(engine, "ratings_df")
+            and engine.ratings_df is not None
+        ):
             rating_map = dict(
                 zip(engine.ratings_df["id"], engine.ratings_df["score"])
             )
-        default_score = (
-            engine.global_prior_
-            if getattr(engine, "global_prior_", None) is not None
-            else 0.0
+            r_win_map = rating_map
+            r_loss_map = rating_map
+
+        # Always compute winner outgoing mass (for loss graph denominator)
+        winner_out = pairs.group_by("winner_user_id").agg(
+            pl.col("w_m").sum().alias("W_winner_total")
         )
+        pairs = pairs.join(winner_out, on="winner_user_id", how="left")
 
+        # For losers, use engine denominators if available, else compute
         if denom_df is not None:
-            # First get denominators for winners too (for loss flux calculation)
-            winner_denom_df = (
-                engine.denominators_df_.select(["id", "denom"])
-                .rename({"id": "winner_user_id"})
-                .with_columns(pl.col("winner_user_id").cast(pl.Int64))
+            pairs = pairs.join(denom_df, on="loser_user_id", how="left")
+            # Use denom if available, else fall back to computed total
+            loser_out = pairs.group_by("loser_user_id").agg(
+                pl.col("w_m").sum().alias("W_loser_total_computed")
             )
-
-            pairs = (
-                pairs.join(denom_df, on="loser_user_id", how="left")
-                .join(
-                    winner_denom_df,
-                    on="winner_user_id",
-                    how="left",
-                    suffix="_winner",
-                )
-                .with_columns(
-                    [
-                        pl.col("loser_user_id")
-                        .map_elements(
-                            lambda x: rating_map.get(x, default_score),
-                            return_dtype=pl.Float64,
-                        )
-                        .alias("r_loser"),
-                        pl.col("winner_user_id")
-                        .map_elements(
-                            lambda x: rating_map.get(x, default_score),
-                            return_dtype=pl.Float64,
-                        )
-                        .alias("r_winner"),
-                    ]
-                )
-                .with_columns(
-                    [
-                        # Win flux: from loser's rating (for when this player wins)
-                        pl.when(pl.col("denom") > 0)
-                        .then(
-                            alpha
-                            * pl.col("r_loser")
-                            * (pl.col("w_m") / pl.col("denom"))
-                        )
-                        .otherwise(0.0)
-                        .alias("win_flux"),
-                        # Loss flux: from winner's rating (for when this player loses)
-                        pl.when(pl.col("denom_winner") > 0)
-                        .then(
-                            alpha
-                            * pl.col("r_winner")
-                            * (pl.col("w_m") / pl.col("denom_winner"))
-                        )
-                        .otherwise(0.0)
-                        .alias("loss_flux"),
-                    ]
-                )
+            pairs = pairs.join(loser_out, on="loser_user_id", how="left")
+            pairs = pairs.with_columns(
+                pl.when(pl.col("denom").is_not_null())
+                .then(pl.col("denom"))
+                .otherwise(pl.col("W_loser_total_computed"))
+                .alias("D_loser_final")
             )
         else:
-            # Fallback to row-sum denominator if engine didn't expose denoms
+            # No engine denominators, compute from pairs
             loser_out = pairs.group_by("loser_user_id").agg(
                 pl.col("w_m").sum().alias("W_loser_total")
             )
-            winner_out = pairs.group_by("winner_user_id").agg(
-                pl.col("w_m").sum().alias("W_winner_total")
+            pairs = pairs.join(loser_out, on="loser_user_id", how="left")
+            pairs = pairs.with_columns(
+                pl.col("W_loser_total").alias("D_loser_final")
             )
-            pairs = (
-                pairs.join(loser_out, on="loser_user_id", how="left")
-                .join(winner_out, on="winner_user_id", how="left")
-                .with_columns(
-                    [
-                        pl.col("loser_user_id")
-                        .map_elements(
-                            lambda x: rating_map.get(x, default_score),
-                            return_dtype=pl.Float64,
-                        )
-                        .alias("r_loser"),
-                        pl.col("winner_user_id")
-                        .map_elements(
-                            lambda x: rating_map.get(x, default_score),
-                            return_dtype=pl.Float64,
-                        )
-                        .alias("r_winner"),
-                    ]
+
+        # Add PageRank values and compute fluxes
+        pairs = pairs.with_columns(
+            [
+                # For win flux: use loser's win PageRank (they are source in win graph)
+                pl.col("loser_user_id")
+                .map_elements(
+                    lambda x: r_win_map.get(x, default_score),
+                    return_dtype=pl.Float64,
                 )
-                .with_columns(
-                    [
-                        # Win flux: from loser's rating
-                        pl.when(pl.col("W_loser_total") > 0)
-                        .then(
-                            alpha
-                            * pl.col("r_loser")
-                            * (pl.col("w_m") / pl.col("W_loser_total"))
-                        )
-                        .otherwise(0.0)
-                        .alias("win_flux"),
-                        # Loss flux: from winner's rating
-                        pl.when(pl.col("W_winner_total") > 0)
-                        .then(
-                            alpha
-                            * pl.col("r_winner")
-                            * (pl.col("w_m") / pl.col("W_winner_total"))
-                        )
-                        .otherwise(0.0)
-                        .alias("loss_flux"),
-                    ]
+                .alias("r_loser"),
+                # For loss flux: use winner's loss PageRank (they are source in loss graph)
+                pl.col("winner_user_id")
+                .map_elements(
+                    lambda x: r_loss_map.get(x, default_score),
+                    return_dtype=pl.Float64,
                 )
-            )
+                .alias("r_winner"),
+            ]
+        ).with_columns(
+            [
+                # Win flux: loser's rating * edge weight / loser's denominator
+                pl.when(pl.col("D_loser_final") > 0)
+                .then(
+                    alpha
+                    * pl.col("r_loser")
+                    * (pl.col("w_m") / pl.col("D_loser_final"))
+                )
+                .otherwise(0.0)
+                .alias("win_flux"),
+                # Loss flux: winner's rating * edge weight / winner's OUTGOING in loss graph
+                pl.when(pl.col("W_winner_total") > 0)
+                .then(
+                    alpha
+                    * pl.col("r_winner")
+                    * (pl.col("w_m") / pl.col("W_winner_total"))
+                )
+                .otherwise(0.0)
+                .alias("loss_flux"),
+            ]
+        )
 
         # For selected player, aggregate by match as incoming and outgoing
         wins_pairs = pairs.filter(pl.col("winner_user_id") == player_id)
@@ -578,16 +562,32 @@ def get_most_influential_matches(
         else:
             losses = losses.with_columns(pl.lit(0.0).alias("share_outgoing"))
 
-    # Get opponent player info for wins
+    # Get opponent and teammate player info for wins
     if not wins.is_empty():
-        # Get losing team players
+        # Get losing team players (opponents)
         opponent_players_wins = players_df.group_by(
             ["tournament_id", "team_id"]
         ).agg(pl.col("username").str.concat(", ").alias("opponent_players"))
 
+        # Get winning team players (teammates)
+        teammate_players_wins = players_df.group_by(
+            ["tournament_id", "team_id"]
+        ).agg(
+            # Filter out the current player from teammates list
+            pl.col("username")
+            .filter(pl.col("user_id") != player_id)
+            .str.concat(", ")
+            .alias("teammate_players")
+        )
+
         wins = wins.join(
             opponent_players_wins,
             left_on=["tournament_id", "loser_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        ).join(
+            teammate_players_wins,
+            left_on=["tournament_id", "winner_team_id"],
             right_on=["tournament_id", "team_id"],
             how="left",
         )
@@ -603,6 +603,7 @@ def get_most_influential_matches(
                     "match_id",
                     "loser_team_id",
                     "opponent_players",
+                    "teammate_players",
                     "team1_score",
                     "team2_score",
                     "total_games",
@@ -621,25 +622,39 @@ def get_most_influential_matches(
     else:
         wins = pl.DataFrame()
 
-    # Get opponent player info for losses
+    # Get opponent and teammate player info for losses
     if not losses.is_empty():
-        # Get winning team players
+        # Get winning team players (opponents)
         opponent_players_losses = players_df.group_by(
             ["tournament_id", "team_id"]
         ).agg(pl.col("username").str.concat(", ").alias("opponent_players"))
+
+        # Get losing team players (teammates)
+        teammate_players_losses = players_df.group_by(
+            ["tournament_id", "team_id"]
+        ).agg(
+            # Filter out the current player from teammates list
+            pl.col("username")
+            .filter(pl.col("user_id") != player_id)
+            .str.concat(", ")
+            .alias("teammate_players")
+        )
 
         losses = losses.join(
             opponent_players_losses,
             left_on=["tournament_id", "winner_team_id"],
             right_on=["tournament_id", "team_id"],
             how="left",
+        ).join(
+            teammate_players_losses,
+            left_on=["tournament_id", "loser_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
         )
 
         # Sort by match flux and add rank
-        # For losses in exposure log-odds: higher flux means losing to stronger opponents
-        # This is LESS damaging (expected loss), so sort ascending to show most damaging first
         losses = (
-            losses.sort("match_flux", descending=False)
+            losses.sort("match_flux", descending=True)
             .with_columns(
                 pl.arange(1, losses.height + 1).alias("influence_rank")
             )
@@ -650,6 +665,7 @@ def get_most_influential_matches(
                     "match_id",
                     "winner_team_id",
                     "opponent_players",
+                    "teammate_players",
                     "team1_score",
                     "team2_score",
                     "total_games",

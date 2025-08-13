@@ -184,6 +184,13 @@ def format_influential_matches(
                 opponents = opponents[:max_opponent_length] + "..."
             output.append(f"   • Defeated: {opponents}")
 
+            # Add teammate information
+            teammates = row.get("teammate_players", "")
+            if teammates:
+                if len(teammates) > max_opponent_length:
+                    teammates = teammates[:max_opponent_length] + "..."
+                output.append(f"   • Playing with: {teammates}")
+
             output.append(
                 f"   • Score: {row.get('team1_score', '?')}-{row.get('team2_score', '?')} ({row.get('total_games', '?')} games)"
             )
@@ -248,6 +255,13 @@ def format_influential_matches(
             if len(opponents) > max_opponent_length:
                 opponents = opponents[:max_opponent_length] + "..."
             output.append(f"   • Lost to: {opponents}")
+
+            # Add teammate information
+            teammates = row.get("teammate_players", "")
+            if teammates:
+                if len(teammates) > max_opponent_length:
+                    teammates = teammates[:max_opponent_length] + "..."
+                output.append(f"   • Playing with: {teammates}")
 
             output.append(
                 f"   • Score: {row.get('team1_score', '?')}-{row.get('team2_score', '?')} ({row.get('total_games', '?')} games)"
