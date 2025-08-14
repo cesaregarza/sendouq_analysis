@@ -30,7 +30,7 @@ Comprehensive data analysis and interactive dashboard tools for tournament and p
 
 **sendouq-dashboard**: Interactive dashboard (Dash/Plotly) for visualizing player and tournament statistics, powered by a PostgreSQL backend.
 
-**rankings**: Advanced tournament ranking module implementing both basic PageRank algorithms and sophisticated iterative rating engines with tournament strength modeling for Sendou.ink data.
+**rankings**: Advanced tournament ranking module. Recommended default is the Exposure Log-Odds Engine which removes volume bias; the core tick-tock engine remains available for comparison.
 
 ---
 
@@ -133,12 +133,13 @@ Explore and analyze data interactively using the provided notebooks (e.g., `test
 
 ### Tournament Rankings
 
-The rankings module provides comprehensive tournament ranking capabilities:
+The rankings module provides comprehensive tournament ranking capabilities. Recommended engine: Exposure Log-Odds (volume-bias free).
 
 #### Quick Start
 ```python
 import json
-from rankings import parse_tournaments_data, RatingEngine
+from rankings import parse_tournaments_data
+from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -148,11 +149,11 @@ tables = parse_tournaments_data(raw_data)
 matches_df = tables["matches"]
 players_df = tables["players"]
 
-# Advanced engine with tournament strength
-engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
+# Recommended: Exposure Log-Odds player rankings
+engine = ExposureLogOddsEngine(beta=1.0)
 player_rankings = engine.rank_players(matches_df, players_df)
 
-# Access tournament strength data
+# Access tournament influence/strength
 tournament_influence = engine.tournament_influence
 tournament_strength = engine.tournament_strength
 ```
@@ -176,7 +177,7 @@ calendar_results = scrape_tournaments_from_calendar()
 - **Team & Player Rankings**: Rank both teams and individual players
 - **Time Decay**: Exponential decay weighting for match age (configurable half-life)
 - **Tournament Strength**: Dynamic tournament importance calculation
-- **Multiple Algorithms**: Basic PageRank and advanced tick-tock iterative algorithm
+- **Engines**: Exposure Log-Odds (recommended) and core tick-tock engine
 - **Scraping Support**: Built-in tournament discovery and batch scraping from Sendou.ink
 
 ---

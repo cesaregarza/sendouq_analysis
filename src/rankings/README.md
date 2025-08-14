@@ -1,6 +1,10 @@
 # Sendou.ink Tournament Rankings
 
-This module provides comprehensive tournament ranking capabilities for Sendou.ink data, implementing both basic PageRank algorithms and advanced iterative rating engines with tournament strength modeling.
+This module provides comprehensive tournament ranking capabilities for Sendou.ink data.
+
+Key engines:
+- **ExposureLogOddsEngine (Recommended)**: log-odds PageRank on mirrored graphs that removes volume bias ("grinding") and focuses on conversion quality.
+- **RatingEngine (Core)**: tick-tock PageRank with tournament strength modeling.
 
 ## Current Status (v0.2.0)
 
@@ -40,18 +44,24 @@ Based on test_tour_7.ipynb analysis, the current loss function needs improvement
 - Optional tournament strength weighting based on participant count
 - Fast and simple for most use cases
 
-#### 2. Advanced Rating Engine (`advanced_rankings.py`)
-- Sophisticated tick-tock algorithm that iteratively refines ratings and tournament strengths
+#### 2. Exposure Log-Odds Engine (`analysis/engine/exposure_logodds.py`)
+- Removes volume bias by computing separate win/loss PageRanks with the same exposure-based teleport, then taking smoothed log-ratios
+- Optional surprisal weighting to reward upsets
+- Time decay and tournament strength weighting via inherited parameters
+- Outputs win PR, loss PR, exposure, and log-odds score
+
+#### 3. Advanced Rating Engine (`analysis/engine/core.py`)
+- Tick-tock algorithm that iteratively refines ratings and tournament strengths
 - Tournament influence calculated based on participant skill levels
 - Multiple aggregation methods for tournament strength
 - Configurable teleport vectors and decay models
-- Bradley-Terry probability model for match predictions
 
 ## Quick Start
 
 ```python
 import json
-from rankings import parse_tournaments_data, RatingEngine
+from rankings import parse_tournaments_data
+from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -61,46 +71,25 @@ tables = parse_tournaments_data(raw_data)
 matches_df = tables["matches"]
 players_df = tables["players"]
 
-# Basic player rankings
-basic_rankings = rank_players_basic(matches_df, players_df)
+# Recommended: Exposure Log-Odds player rankings (volume-bias free)
+engine = ExposureLogOddsEngine(beta=1.0)
+rankings = engine.rank_players(matches_df, players_df)
 
-# Advanced engine with tournament strength
-engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
-advanced_rankings = engine.rank_players(matches_df, players_df)
-
-# Convenience functions for adding names
-from rankings.analysis.utils import (
-    add_player_names,
-    add_tournament_names,
-    get_most_influential_matches,
-    get_player_match_history
+# Optionally post-process (min tournaments, grades, display score)
+final = engine.post_process_rankings(
+    rankings,
+    players_df,
+    min_tournaments=3,
 )
 
-# Add player names to rankings
-rankings_with_names = add_player_names(advanced_rankings, players_df, "id", "username")
-
-# Get a player's most influential matches
-influential = get_most_influential_matches(
-    player_id=123,
-    matches_df=matches_df,
-    players_df=players_df,
-    engine=engine,
-    top_n=10
-)
-
-# Get complete match history with names
-history = get_player_match_history(
-    player_id=123,
-    matches_df=matches_df,
-    players_df=players_df,
-    teams_df=tables["teams"],
-    tournament_data=raw_data,
-    limit=50
-)
-
-# Access tournament strength data
+# Access tournament influence/strength computed during initialization run
 tournament_influence = engine.tournament_influence
 tournament_strength = engine.tournament_strength
+
+# Core alternative: tick-tock engine
+# from rankings import RatingEngine
+# engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
+# rankings = engine.rank_players(matches_df, players_df)
 ```
 
 ## API Reference
@@ -132,24 +121,33 @@ Enhanced team rankings with tournament strength weighting.
 #### `rank_players_with_strength(matches_df, players_df, teams_df, base_weight=1.0, **kwargs) -> pl.DataFrame`
 Enhanced player rankings with tournament strength weighting.
 
-### Advanced Engine
+### Exposure Log-Odds Engine (Recommended)
+
+#### `class ExposureLogOddsEngine(RatingEngine)`
+
+Inherits core parameters (time decay, damping, beta, influence aggregation) and adds:
+
+**Key Parameters:**
+- `lambda_smooth`: Optional smoothing tied to exposure teleport (auto-tuned if None)
+- `use_surprisal`: Whether to add upset-aware weighting
+- `surprisal_T`: Temperature for surprisal
+- `surprisal_iters`: Iterations of surprisal refinement
+- `min_exposure`: Minimum exposure to be included in final rankings
+- `score_decay_delay_days` / `score_decay_rate`: Post-ranking inactivity decay
+
+**Methods:**
+- `rank_players(matches_df, players_df) -> pl.DataFrame`: Columns: `id`, `player_rank`, `win_pr`, `loss_pr`, `exposure`
+- `rank_teams(matches_df) -> pl.DataFrame`: Columns: `id`, `team_rank`, `win_pr`, `loss_pr`, `exposure`
+- `post_process_rankings(rankings, players_df, ...) -> pl.DataFrame`: Grades and display scores
+
+**Stored Attributes (after run):**
+- `win_pagerank_`, `loss_pagerank_`, `exposure_teleport_`, `logodds_scores_`, `lambda_used_`
+
+### Core Engine (Alternative)
 
 #### `class RatingEngine`
 
-**Key Parameters:**
-- `decay_half_life_days`: Time decay half-life (default: 30 days)
-- `damping_factor`: PageRank damping factor (default: 0.85)
-- `beta`: Tournament strength exponent (default: 0.0, range: 0.0-1.0)
-- `influence_agg_method`: How to aggregate participant ratings ("mean", "sum", "median", "top_20_sum")
-- `teleport`: Teleport vector type ("uniform", "volume_inverse", or custom dict)
-
-**Methods:**
-- `rank_teams(matches_df) -> pl.DataFrame`: Rank teams
-- `rank_players(matches_df, players_df) -> pl.DataFrame`: Rank players
-
-**Properties:**
-- `tournament_influence`: Dict of tournament ID to influence values
-- `tournament_strength`: DataFrame with retroactive tournament strength metrics
+Tick-tock PageRank with tournament strength modeling.
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 # Tournament Rankings Evaluation Module
 
-This module implements the cross-validated loss function and optimization framework described in `plan.md`. It provides tools for evaluating and optimizing tournament rating systems using probabilistic predictions.
+This module implements the cross-validated loss function and optimization framework described in `plan.md`. It provides tools for evaluating and optimizing tournament rating systems using probabilistic predictions. You can evaluate both the core `RatingEngine` and the recommended `ExposureLogOddsEngine`.
 
 ## Key Components
 
@@ -37,18 +37,22 @@ from rankings import (
     optimize_rating_engine,
     cross_validate_ratings
 )
+from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
 
 # Load and parse tournament data
 tournaments = load_scraped_tournaments("data/tournaments")
 tables = parse_tournaments_data(tournaments)
 
-# Quick evaluation with default parameters
+# Quick evaluation with Exposure Log-Odds (recommended)
 cv_results = cross_validate_ratings(
-    engine_class=RatingEngine,
+    engine_class=ExposureLogOddsEngine,
     engine_params={
         "decay_half_life_days": 30.0,
         "damping_factor": 0.85,
-        "beta": 1.0
+        "beta": 1.0,
+        # Exposure Log-Odds specific knobs
+        "lambda_smooth": None,  # auto-tuned
+        "use_surprisal": False,
     },
     matches_df=tables["matches"],
     teams_df=tables["teams"],
@@ -57,16 +61,19 @@ cv_results = cross_validate_ratings(
 
 print(f"Average loss: {cv_results['avg_loss']:.4f}")
 
-# Full hyperparameter optimization
+# Full hyperparameter optimization (example search)
 best_params = optimize_rating_engine(
     matches_df=tables["matches"],
     teams_df=tables["teams"],
     method="grid",
     param_space={
-        "decay_half_life_days": [7, 14, 30, 60],
+        "decay_half_life_days": [14, 30, 60],
         "damping_factor": [0.8, 0.85, 0.9],
-        "beta": [0.0, 0.5, 1.0]
-    }
+        "beta": [0.5, 1.0],
+        "lambda_smooth": [None, 0.0, 1e-6],
+        "use_surprisal": [False, True],
+    },
+    engine_class=ExposureLogOddsEngine,
 )
 
 print(f"Best parameters: {best_params['best_params']}")
