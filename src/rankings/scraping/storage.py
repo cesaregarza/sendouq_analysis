@@ -62,13 +62,19 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
         return []
 
     all_tournaments = []
-    json_files = list(data_path.glob("tournament_*.json"))
+
+    # Load both regular tournament files and continuous scraping files
+    regular_files = list(data_path.glob("tournament_*.json"))
+    continuous_files = list(data_path.glob("tournaments_continuous_*.json"))
+    json_files = regular_files + continuous_files
 
     if not json_files:
         print(f"No tournament JSON files found in {data_dir}")
         return []
 
-    print(f"Loading {len(json_files)} tournament files...")
+    print(
+        f"Loading {len(json_files)} tournament files ({len(regular_files)} regular, {len(continuous_files)} continuous)..."
+    )
 
     for json_file in tqdm(sorted(json_files), desc="Loading files"):
         try:

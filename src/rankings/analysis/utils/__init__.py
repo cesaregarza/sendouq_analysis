@@ -8,6 +8,7 @@ This module is organized into submodules:
 - matches: Functions for match analysis
 - names: Functions for adding human-readable names
 - analysis: Higher-level analysis functions
+- tournament_filters: Functions for filtering ranked tournaments
 """
 
 # Probability model functions
@@ -58,11 +59,24 @@ from rankings.analysis.utils.summaries import (
     prepare_tournament_summary,
 )
 
+# Tournament filtering functions
+from rankings.analysis.utils.tournament_filters import (
+    apply_ranked_filter,
+    filter_ranked_tournaments,
+    get_ranked_stats,
+    get_ranked_tournament_ids,
+)
+
 __all__ = [
     # Higher-level analysis
     "analyze_player_performance",
     "compare_player_performances",
     "generate_tournament_report",
+    # Tournament filtering
+    "filter_ranked_tournaments",
+    "get_ranked_tournament_ids",
+    "apply_ranked_filter",
+    "get_ranked_stats",
     # Probability models
     "bt_prob",
     # Summaries

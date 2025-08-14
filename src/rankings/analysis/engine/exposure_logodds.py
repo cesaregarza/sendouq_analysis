@@ -748,6 +748,7 @@ class ExposureLogOddsEngine(RatingEngine):
         rank_cutoffs: Optional[List[float]] = None,
         rank_labels: Optional[List[str]] = None,
         score_multiplier: float = 25.0,
+        score_offset: float = 0.0,
     ) -> pl.DataFrame:
         """
         Post-process rankings with tournament filtering and grade assignment.
@@ -766,6 +767,8 @@ class ExposureLogOddsEngine(RatingEngine):
             Labels for rank grades
         score_multiplier : float, default=25.0
             Multiplier for final score display
+        score_offset : float, default=0.0
+            Offset to add to scores before applying multiplier
 
         Returns
         -------
@@ -837,7 +840,9 @@ class ExposureLogOddsEngine(RatingEngine):
             "rank_label",
             "username",
             "player_id",
-            (pl.col("score") * score_multiplier).alias("display_score"),
+            ((pl.col("score") + score_offset) * score_multiplier).alias(
+                "display_score"
+            ),
             "score",
             "win_loss_ratio",
             "tournament_count",

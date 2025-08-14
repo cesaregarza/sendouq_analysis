@@ -103,11 +103,39 @@ def analyze_player(
                 "rank": rank_position,
                 "total_players": len(rankings_df),
                 "percentile": (1 - rank_position / len(rankings_df)) * 100,
-                "score": player_data.get("player_rank", 0),
+                "score": player_data.get(
+                    "score", player_data.get("player_rank", 0)
+                ),
                 "win_pr": player_data.get("win_pr", 0),
                 "loss_pr": player_data.get("loss_pr", 0),
                 "exposure": player_data.get("exposure", 0),
             }
+
+            # If we have the engine, get the actual values from it
+            if (
+                engine is not None
+                and hasattr(engine, "win_pagerank_")
+                and hasattr(engine, "loss_pagerank_")
+            ):
+                if hasattr(engine, "active_players_"):
+                    try:
+                        player_idx = engine.active_players_.index(player_id)
+                        if player_idx < len(engine.win_pagerank_):
+                            ranking_stats["win_pr"] = float(
+                                engine.win_pagerank_[player_idx]
+                            )
+                        if player_idx < len(engine.loss_pagerank_):
+                            ranking_stats["loss_pr"] = float(
+                                engine.loss_pagerank_[player_idx]
+                            )
+                        if hasattr(
+                            engine, "exposure_teleport_"
+                        ) and player_idx < len(engine.exposure_teleport_):
+                            ranking_stats["exposure"] = float(
+                                engine.exposure_teleport_[player_idx]
+                            )
+                    except (ValueError, IndexError):
+                        pass  # Player not found in active players
 
             # Calculate win/loss ratio if PageRanks available
             if ranking_stats["loss_pr"] > 0:
@@ -134,27 +162,46 @@ def analyze_player(
         # Count tournaments
         num_tournaments = player_teams["tournament_id"].n_unique()
 
-        # Get all matches
+        # Get all matches and tournament data
         total_wins = 0
         total_losses = 0
+        tournament_stats = []
 
-        for row in player_teams.iter_rows(named=True):
-            tid = row["tournament_id"]
-            team_id = row["team_id"]
+        # Group by tournament to get stats
+        tournament_ids = player_teams["tournament_id"].unique().to_list()
+
+        for tid in tournament_ids:
+            # Get team_id for this tournament
+            team_rows = player_teams.filter(pl.col("tournament_id") == tid)
+            if len(team_rows) == 0:
+                continue
+            team_id = team_rows["team_id"][0]
 
             # Count wins
             wins = matches_df.filter(
                 (pl.col("tournament_id") == tid)
                 & (pl.col("winner_team_id") == team_id)
             )
-            total_wins += len(wins)
+            win_count = len(wins)
+            total_wins += win_count
 
             # Count losses
             losses = matches_df.filter(
                 (pl.col("tournament_id") == tid)
                 & (pl.col("loser_team_id") == team_id)
             )
-            total_losses += len(losses)
+            loss_count = len(losses)
+            total_losses += loss_count
+
+            # Store tournament stats
+            if win_count > 0 or loss_count > 0:
+                tournament_stats.append(
+                    {
+                        "tournament_id": tid,
+                        "wins": win_count,
+                        "losses": loss_count,
+                    }
+                )
 
         total_matches = total_wins + total_losses
         win_rate = (
@@ -168,6 +215,29 @@ def analyze_player(
             "losses": total_losses,
             "win_rate": win_rate,
         }
+
+        # Get last 3 tournaments
+        if tournament_stats and tournament_data:
+            # Get tournament start times for sorting
+            tournament_dates = {}
+            for t in tournament_data:
+                if "id" in t:
+                    tournament_dates[t["id"]] = t.get("startTime", 0)
+
+            # Sort by tournament start time (most recent first)
+            tournament_stats.sort(
+                key=lambda x: tournament_dates.get(
+                    x["tournament_id"], x["tournament_id"]
+                ),
+                reverse=True,
+            )
+            result["last_tournaments"] = tournament_stats[:3]
+        elif tournament_stats:
+            # If no tournament data, sort by tournament_id (most recent usually have higher ids)
+            tournament_stats.sort(
+                key=lambda x: x["tournament_id"], reverse=True
+            )
+            result["last_tournaments"] = tournament_stats[:3]
 
     # Get influential matches if engine provided
     if engine is not None and matches_df is not None and players_df is not None:
@@ -204,23 +274,35 @@ def analyze_player(
 
     if "ranking_stats" in result and result["ranking_stats"].get("rank"):
         rs = result["ranking_stats"]
-        output_lines.append("\n📊 RANKING STATS:")
+        output_lines.append("\nRANKING STATS:")
         output_lines.append(
-            f"  Rank: #{rs['rank']} out of {rs['total_players']} (Top {rs['percentile']:.1f}%)"
+            f"  Rank: #{int(rs['rank'])} out of {int(rs['total_players'])} (Top {rs['percentile']:.1f}%)"
         )
         output_lines.append(f"  Score: {rs['score']:.4f}")
-        output_lines.append(f"  Exposure: {rs['exposure']:.2f}")
-        output_lines.append(f"  Win PageRank: {rs['win_pr']:.8f}")
-        output_lines.append(f"  Loss PageRank: {rs['loss_pr']:.8f}")
-        output_lines.append(f"  Win/Loss Ratio: {rs['win_loss_ratio']:.2f}")
 
     if "match_stats" in result:
         ms = result["match_stats"]
-        output_lines.append("\n🎮 MATCH STATS:")
-        output_lines.append(f"  Tournaments: {ms['tournaments_played']}")
-        output_lines.append(f"  Total Matches: {ms['total_matches']}")
-        output_lines.append(f"  Record: {ms['wins']}W - {ms['losses']}L")
+        output_lines.append("\nMATCH STATS:")
+        output_lines.append(f"  Tournaments: {int(ms['tournaments_played'])}")
+        output_lines.append(f"  Total Matches: {int(ms['total_matches'])}")
+        output_lines.append(
+            f"  Record: {int(ms['wins'])}W - {int(ms['losses'])}L"
+        )
         output_lines.append(f"  Win Rate: {ms['win_rate']:.1f}%")
+
+    if "last_tournaments" in result:
+        output_lines.append("\nLAST 3 TOURNAMENTS:")
+        tournament_names = {}
+        if tournament_data:
+            tournament_names = get_tournament_name_lookup(tournament_data)
+
+        for i, t_stat in enumerate(result["last_tournaments"], 1):
+            tid = t_stat["tournament_id"]
+            t_name = tournament_names.get(tid, f"Tournament {tid}")
+            output_lines.append(f"  {i}. {t_name}")
+            output_lines.append(
+                f"     Record: {int(t_stat['wins'])}W - {int(t_stat['losses'])}L"
+            )
 
     if "formatted_output" in result:
         output_lines.append("\n" + result["formatted_output"])

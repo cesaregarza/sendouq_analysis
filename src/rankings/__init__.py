@@ -45,6 +45,14 @@ from rankings.analysis import (
     prepare_tournament_summary,
 )
 
+# Continuous scraping
+from rankings.continuous import (
+    ContinuousScraper,
+    ScrapingStrategy,
+    TournamentState,
+    TournamentStateTracker,
+)
+
 # Core functionality
 from rankings.core import parse_tournaments_data
 
@@ -125,6 +133,11 @@ __all__ = [
     # Scraping - Storage
     "load_scraped_tournaments",
     "get_tournament_summary",
+    # Continuous scraping
+    "ContinuousScraper",
+    "TournamentState",
+    "TournamentStateTracker",
+    "ScrapingStrategy",
     # Analysis - Engine
     "RatingEngine",
     # Analysis - Probability models
