@@ -45,6 +45,14 @@ from rankings.analysis import (
     prepare_tournament_summary,
 )
 
+# Calibration functionality
+from rankings.calibration import (
+    AdaptiveCalibrator,
+    CalibrationResult,
+    MatchCalibrator,
+    calibrate_tournament_predictions,
+)
+
 # Continuous scraping
 from rankings.continuous import (
     ContinuousScraper,
@@ -183,6 +191,11 @@ __all__ = [
     "GridSearchOptimizer",
     "BayesianOptimizer",
     "optimize_rating_engine",
+    # Calibration
+    "AdaptiveCalibrator",
+    "CalibrationResult",
+    "MatchCalibrator",
+    "calibrate_tournament_predictions",
     # Constants
     "DEFAULT_BETA",
     "DEFAULT_DECAY_HALF_LIFE_DAYS",

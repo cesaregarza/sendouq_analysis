@@ -1,5 +1,6 @@
 """Tournament filtering utilities for analyzing ranked tournaments."""
 
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 import polars as pl
@@ -12,6 +13,8 @@ def filter_ranked_tournaments(
     min_matches: int = 10,
     exclude_test_patterns: bool = True,
     exclusions: Optional[List[int]] = None,
+    tournament_before_id: Optional[int] = None,
+    buffer_weeks: float = 0,
 ) -> Dict[str, pl.DataFrame]:
     """
     Filter tournament data to include only ranked tournaments.
@@ -30,6 +33,10 @@ def filter_ranked_tournaments(
         min_matches: Minimum number of matches required (default: 10)
         exclude_test_patterns: Whether to exclude test/debug/demo tournaments (default: True)
         exclusions: List of tournament IDs to always include regardless of other criteria (default: None)
+        tournament_before_id: If provided, only include tournaments that occurred before this tournament ID
+            chronologically (default: None)
+        buffer_weeks: Number of weeks to buffer before the reference tournament. For example, if buffer_weeks=2,
+            tournaments within 2 weeks before the reference tournament will be excluded (default: 0)
 
     Returns:
         Dictionary with filtered tables containing only ranked tournament data.
@@ -39,9 +46,48 @@ def filter_ranked_tournaments(
         >>> tables = parse_tournaments_data(tournaments)
         >>> ranked_tables = filter_ranked_tournaments(tables, exclusions=[1902, 1903])
         >>> print(f"Ranked matches: {ranked_tables['matches'].height:,}")
+
+        >>> # Get all tournaments before tournament 2000 with a 2-week buffer
+        >>> ranked_tables = filter_ranked_tournaments(
+        ...     tables,
+        ...     tournament_before_id=2000,
+        ...     buffer_weeks=2
+        ... )
     """
     if "tournaments" not in tables:
         raise ValueError("tables must contain 'tournaments' key")
+
+    tournaments_df = tables["tournaments"]
+
+    # Apply chronological filtering if tournament_before_id is provided
+    if tournament_before_id is not None:
+        # Get the reference tournament's start date
+        ref_tournament = tournaments_df.filter(
+            pl.col("tournament_id") == tournament_before_id
+        )
+
+        if ref_tournament.height == 0:
+            raise ValueError(f"Tournament ID {tournament_before_id} not found")
+
+        ref_start_timestamp = (
+            ref_tournament.select("start_time").unique().item()
+        )
+
+        # Convert timestamp to datetime for buffer calculation
+        ref_start_date = datetime.fromtimestamp(ref_start_timestamp)
+
+        # Apply buffer if specified
+        cutoff_date = ref_start_date
+        if buffer_weeks > 0:
+            cutoff_date = ref_start_date - timedelta(weeks=buffer_weeks)
+
+        # Convert back to timestamp for filtering
+        cutoff_timestamp = int(cutoff_date.timestamp())
+
+        # Filter tournaments to only include those before the cutoff date
+        tournaments_df = tournaments_df.filter(
+            pl.col("start_time") < cutoff_timestamp
+        )
 
     # Build filter conditions
     filter_conditions = [
@@ -56,20 +102,17 @@ def filter_ranked_tournaments(
             ~pl.col("name").str.contains("(?i)test|debug|demo|practice")
         )
 
-    # Apply filter to tournaments
-    filtered_by_criteria = (
-        tables["tournaments"]
-        .filter(pl.all_horizontal(filter_conditions))
-        .select("tournament_id")
-    )
+    # Apply filter to tournaments (use the potentially filtered tournaments_df)
+    filtered_by_criteria = tournaments_df.filter(
+        pl.all_horizontal(filter_conditions)
+    ).select("tournament_id")
 
     # Add exclusions if provided (tournaments to always include)
+    # Note: exclusions should also respect the chronological filter
     if exclusions:
-        excluded_tournaments = (
-            tables["tournaments"]
-            .filter(pl.col("tournament_id").is_in(exclusions))
-            .select("tournament_id")
-        )
+        excluded_tournaments = tournaments_df.filter(
+            pl.col("tournament_id").is_in(exclusions)
+        ).select("tournament_id")
         # Combine filtered tournaments with exclusions
         ranked_tournaments = pl.concat(
             [filtered_by_criteria, excluded_tournaments]

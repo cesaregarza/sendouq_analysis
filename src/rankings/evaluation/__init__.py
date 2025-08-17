@@ -10,9 +10,13 @@ from rankings.evaluation.cross_validation import (
 )
 from rankings.evaluation.dashboards import (
     format_metrics_table,
+    format_seeding_comparison,
     format_split_summary,
     format_tournament_metrics,
+    format_tournament_prediction_table,
+    format_upset_analysis,
     print_evaluation_dashboard,
+    print_tournament_prediction_dashboard,
 )
 from rankings.evaluation.loss import (
     analyze_exclusion_impact,
@@ -48,6 +52,18 @@ from rankings.evaluation.optimizer import (
     BayesianOptimizer,
     GridSearchOptimizer,
     optimize_rating_engine,
+)
+from rankings.evaluation.tournament_metrics import (
+    calibration_error,
+    confidence_interval_coverage,
+    kendall_tau_distance,
+    mcnemar_test,
+    mean_absolute_seed_error,
+    ndcg_at_k,
+    pairwise_agreement,
+    tournament_prediction_summary,
+    upset_rate_analysis,
+    weighted_spearman_correlation,
 )
 
 __all__ = [

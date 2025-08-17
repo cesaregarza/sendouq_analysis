@@ -19,6 +19,15 @@ from rankings.evaluation.cross_validation.simple_splits import (
     get_split_info,
     visualize_splits,
 )
+from rankings.evaluation.cross_validation.tournament_prediction_cv import (
+    TournamentPredictionSplit,
+    aggregate_cv_results,
+    compare_models_cv,
+    create_tournament_prediction_splits,
+    cross_validate_tournament_predictions,
+    evaluate_tournament_prediction,
+    print_cv_summary,
+)
 
 __all__ = [
     # Simple CV
@@ -31,4 +40,12 @@ __all__ = [
     "create_simple_time_splits",
     "visualize_splits",
     "get_split_info",
+    # Tournament prediction CV
+    "TournamentPredictionSplit",
+    "aggregate_cv_results",
+    "compare_models_cv",
+    "create_tournament_prediction_splits",
+    "cross_validate_tournament_predictions",
+    "evaluate_tournament_prediction",
+    "print_cv_summary",
 ]

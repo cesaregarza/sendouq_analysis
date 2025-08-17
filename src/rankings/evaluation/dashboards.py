@@ -5,12 +5,18 @@ This module provides clean tabular summaries of the metrics suite
 described in plan.md.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import polars as pl
 
 from rankings.evaluation.metrics_extras import reliability_diagram
+from rankings.evaluation.tournament_metrics import (
+    mean_absolute_seed_error,
+    ndcg_at_k,
+    pairwise_agreement,
+    upset_rate_analysis,
+)
 
 
 def format_metrics_table(
@@ -369,3 +375,342 @@ def print_evaluation_dashboard(
         if all_tournaments:
             print("\n")
             print(format_tournament_metrics(all_tournaments))
+
+
+def format_tournament_prediction_table(
+    results: Dict[str, Any],
+    metrics: Optional[List[Tuple[str, str]]] = None,
+    precision: int = 4,
+) -> str:
+    """
+    Format tournament prediction results as a pretty table.
+
+    Parameters
+    ----------
+    results : Dict[str, Any]
+        Results from tournament prediction evaluation
+    metrics : Optional[List[Tuple[str, str]]]
+        List of (display_name, key) tuples for metrics to show
+    precision : int
+        Number of decimal places
+
+    Returns
+    -------
+    str
+        Formatted table string
+    """
+    if metrics is None:
+        metrics = [
+            ("NDCG@4", "ndcg_at_4"),
+            ("NDCG@8", "ndcg_at_8"),
+            ("NDCG (Full)", "ndcg_full"),
+            ("Spearman Corr", "spearman_correlation"),
+            ("MAE (All)", "mae_all"),
+            ("MAE (Top 4)", "mae_top4"),
+            ("Match Accuracy", "match_accuracy"),
+            ("Match Log Loss", "match_log_loss"),
+            ("Calibration Error", "expected_calibration_error"),
+            ("Manual Agreement", "manual_pairwise_agreement"),
+        ]
+
+    # Build table data
+    rows = []
+    metrics_dict = results.get("metrics", {})
+
+    for display_name, key in metrics:
+        if key in metrics_dict:
+            stats = metrics_dict[key]
+            row = {
+                "Metric": display_name,
+                "Mean": f"{stats.get('mean', 0):.{precision}f}",
+                "Std": f"{stats.get('std', 0):.{precision}f}",
+                "Median": f"{stats.get('median', 0):.{precision}f}",
+            }
+
+            # Add confidence interval if available
+            if "ci_95" in stats:
+                ci_lower, ci_upper = stats["ci_95"]
+                row[
+                    "95% CI"
+                ] = f"[{ci_lower:.{precision}f}, {ci_upper:.{precision}f}]"
+            else:
+                row["95% CI"] = "--"
+
+            rows.append(row)
+
+    if not rows:
+        return "No tournament prediction metrics available"
+
+    # Create DataFrame for pretty printing
+    df = pl.DataFrame(rows)
+
+    # Format as string table
+    table_lines = []
+
+    # Header
+    table_lines.append(
+        "┌"
+        + "─" * 18
+        + "┬"
+        + "─" * 10
+        + "┬"
+        + "─" * 10
+        + "┬"
+        + "─" * 10
+        + "┬"
+        + "─" * 20
+        + "┐"
+    )
+    table_lines.append(
+        f"│ {'Metric':<16} │ {'Mean':^8} │ {'Std':^8} │ "
+        f"{'Median':^8} │ {'95% CI':^18} │"
+    )
+    table_lines.append(
+        "├"
+        + "─" * 18
+        + "┼"
+        + "─" * 10
+        + "┼"
+        + "─" * 10
+        + "┼"
+        + "─" * 10
+        + "┼"
+        + "─" * 20
+        + "┤"
+    )
+
+    # Data rows
+    for row in rows:
+        table_lines.append(
+            f"│ {row['Metric']:<16} │ {row['Mean']:>8} │ {row['Std']:>8} │ "
+            f"{row['Median']:>8} │ {row['95% CI']:>18} │"
+        )
+
+    # Footer
+    table_lines.append(
+        "└"
+        + "─" * 18
+        + "┴"
+        + "─" * 10
+        + "┴"
+        + "─" * 10
+        + "┴"
+        + "─" * 10
+        + "┴"
+        + "─" * 20
+        + "┘"
+    )
+
+    return "\n".join(table_lines)
+
+
+def format_seeding_comparison(
+    model_seeds: List[Tuple[int, float, float]],
+    manual_seeds: Optional[Dict[int, int]] = None,
+    final_placements: Optional[Dict[int, int]] = None,
+    top_k: int = 10,
+) -> str:
+    """
+    Format seeding comparison table.
+
+    Parameters
+    ----------
+    model_seeds : List[Tuple[int, float, float]]
+        List of (team_id, rating, confidence) from model
+    manual_seeds : Optional[Dict[int, int]]
+        Manual seeds for comparison
+    final_placements : Optional[Dict[int, int]]
+        Actual final placements
+    top_k : int
+        Number of top seeds to show
+
+    Returns
+    -------
+    str
+        Formatted comparison table
+    """
+    rows = []
+
+    for i, (team_id, rating, confidence) in enumerate(model_seeds[:top_k]):
+        seed = i + 1
+        row = {
+            "Seed": seed,
+            "Team ID": team_id,
+            "Rating": f"{rating:.3f}",
+            "Confidence": f"{confidence:.2%}",
+        }
+
+        if manual_seeds and team_id in manual_seeds:
+            row["Manual Seed"] = manual_seeds[team_id]
+            row["Diff"] = seed - manual_seeds[team_id]
+        else:
+            row["Manual Seed"] = "--"
+            row["Diff"] = "--"
+
+        if final_placements and team_id in final_placements:
+            row["Final"] = final_placements[team_id]
+            row["Error"] = abs(seed - final_placements[team_id])
+        else:
+            row["Final"] = "--"
+            row["Error"] = "--"
+
+        rows.append(row)
+
+    if not rows:
+        return "No seeding data available"
+
+    # Format as table
+    table_lines = []
+    table_lines.append("Tournament Seeding Comparison")
+    table_lines.append("=" * 70)
+    table_lines.append(
+        f"{'Seed':<6} {'Team':<8} {'Rating':<10} {'Conf':<8} "
+        f"{'Manual':<8} {'Diff':<6} {'Final':<7} {'Error':<6}"
+    )
+    table_lines.append("-" * 70)
+
+    for row in rows:
+        table_lines.append(
+            f"{row['Seed']:<6} {row['Team ID']:<8} {row['Rating']:<10} "
+            f"{row['Confidence']:<8} {row['Manual Seed']:<8} "
+            f"{row['Diff']:<6} {row['Final']:<7} {row['Error']:<6}"
+        )
+
+    return "\n".join(table_lines)
+
+
+def format_upset_analysis(
+    upset_rates: Dict[str, Dict[str, float]],
+    precision: int = 3,
+) -> str:
+    """
+    Format upset rate analysis table.
+
+    Parameters
+    ----------
+    upset_rates : Dict[str, Dict[str, float]]
+        Upset analysis by probability bucket
+    precision : int
+        Number of decimal places
+
+    Returns
+    -------
+    str
+        Formatted upset analysis table
+    """
+    if not upset_rates:
+        return "No upset rate data available"
+
+    table_lines = []
+    table_lines.append("Upset Rate Analysis by Probability")
+    table_lines.append("=" * 60)
+    table_lines.append(
+        f"{'Prob Range':<12} {'N':<6} {'Expected':<10} "
+        f"{'Actual':<10} {'Diff':<10} {'Upset %':<10}"
+    )
+    table_lines.append("-" * 60)
+
+    for bucket_name, stats in sorted(upset_rates.items()):
+        n_matches = stats.get("n_matches", 0)
+        expected = stats.get("expected_win_rate", 0)
+        actual = stats.get("actual_win_rate", 0)
+        diff = stats.get("calibration_diff", 0)
+        upset_rate = stats.get("upset_rate", 0)
+
+        table_lines.append(
+            f"{bucket_name:<12} {n_matches:<6} "
+            f"{expected:.{precision}f}".ljust(10)
+            + " "
+            + f"{actual:.{precision}f}".ljust(10)
+            + " "
+            + f"{diff:+.{precision}f}".ljust(10)
+            + " "
+            + f"{upset_rate:.1%}".ljust(10)
+        )
+
+    return "\n".join(table_lines)
+
+
+def print_tournament_prediction_dashboard(
+    results: Dict[str, Any],
+    show_seeding: bool = True,
+    show_upsets: bool = True,
+    show_comparison: bool = True,
+) -> None:
+    """
+    Print comprehensive tournament prediction dashboard.
+
+    Parameters
+    ----------
+    results : Dict[str, Any]
+        Tournament prediction evaluation results
+    show_seeding : bool
+        Show seeding comparison table
+    show_upsets : bool
+        Show upset analysis
+    show_comparison : bool
+        Show model comparison if available
+    """
+    print("\n" + "=" * 70)
+    print("TOURNAMENT PREDICTION EVALUATION DASHBOARD")
+    print("=" * 70)
+
+    # Overall metrics
+    print("\nOverall Performance Metrics:")
+    print("-" * 70)
+    print(format_tournament_prediction_table(results))
+
+    # Seeding comparison
+    if show_seeding and "example_seeds" in results:
+        print("\n\nExample Seeding Comparison (Latest Tournament):")
+        print("-" * 70)
+        print(
+            format_seeding_comparison(
+                results["example_seeds"],
+                results.get("example_manual_seeds"),
+                results.get("example_placements"),
+            )
+        )
+
+    # Upset analysis
+    if show_upsets and "upset_analysis" in results:
+        print("\n\nCalibration and Upset Analysis:")
+        print("-" * 70)
+        print(format_upset_analysis(results["upset_analysis"]))
+
+    # Model comparison
+    if show_comparison and "model_comparison" in results:
+        print("\n\nModel Comparison vs Manual Seeding:")
+        print("-" * 70)
+        comparison = results["model_comparison"]
+
+        print(
+            f"Pairwise Agreement: {comparison.get('pairwise_agreement', 0):.1%}"
+        )
+        print(
+            f"Better than Manual: {comparison.get('better_than_manual_pct', 0):.1%}"
+        )
+
+        if "mcnemar_p_value" in comparison:
+            p_val = comparison["mcnemar_p_value"]
+            sig = (
+                "***"
+                if p_val < 0.001
+                else "**"
+                if p_val < 0.01
+                else "*"
+                if p_val < 0.05
+                else ""
+            )
+            print(f"McNemar Test p-value: {p_val:.4f} {sig}")
+
+    # Work saved metrics
+    if "work_saved" in results:
+        print("\n\nPotential Work Saved for Organizers:")
+        print("-" * 70)
+        work = results["work_saved"]
+        print(f"Automated Decisions: {work.get('automated_pct', 0):.1%}")
+        print(f"Borderline Teams: {work.get('borderline_teams', 0):.0f}")
+        print(f"Est. Time Saved: {work.get('time_saved_hours', 0):.1f} hours")
+
+    print("\n" + "=" * 70)
