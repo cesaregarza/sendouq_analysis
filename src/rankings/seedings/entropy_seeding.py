@@ -1,11 +1,12 @@
 """
-Entropy-controlled division assignment system.
+Entropy-controlled tournament seeding and division assignment system.
 
-This module implements a parameter-free approach to team division assignment
-using Shannon entropy to measure team balance and adjust ratings accordingly.
+This module implements a parameter-free approach to tournament seeding and division
+assignment using Shannon entropy to measure team balance and adjust ratings accordingly.
+Suitable for any tournament structure with skill-based groupings.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import polars as pl
@@ -130,7 +131,10 @@ def compute_entropy_controlled_rating(
 def assign_divisions(
     teams: pl.DataFrame,
     rating_column: str = "entropy_rating",
-    division_sizes: Optional[Dict[str, int]] = None,
+    division_config: Optional[
+        Union[List[Tuple[str, int]], Dict[str, int]]
+    ] = None,
+    overflow_division: Optional[str] = None,
 ) -> pl.DataFrame:
     """
     Assign teams to divisions based on their entropy-controlled ratings.
@@ -138,24 +142,25 @@ def assign_divisions(
     Args:
         teams: Polars DataFrame with team information and ratings
         rating_column: Column name containing the ratings
-        division_sizes: Optional dict mapping division names to sizes
-                       Default: {'X': 12, '1': 24, '2': 24, ...}
+        division_config: Either:
+                        - List of (name, size) tuples defining divisions in order
+                        - Dict mapping division names to sizes (will be sorted by key)
+                        E.g., [('Premier', 8), ('Division 1', 16), ('Division 2', 32)]
+        overflow_division: Name of division for overflow teams. If None, uses last division.
 
     Returns:
         DataFrame with division assignments added
     """
-    if division_sizes is None:
-        division_sizes = {
-            "X": 12,
-            "1": 24,
-            "2": 24,
-            "3": 24,
-            "4": 48,
-            "5": 48,
-            "6": 48,
-            "7": 48,
-            "8": 48,
-        }
+    if division_config is None:
+        # Provide a flexible default structure
+        division_config = [
+            ("Division 1", 16),
+            ("Division 2", 32),
+            ("Division 3", 64),
+        ]
+    elif isinstance(division_config, dict):
+        # Convert dict to list of tuples, sorted by key
+        division_config = [(k, v) for k, v in sorted(division_config.items())]
 
     # Sort teams by rating (descending)
     teams_sorted = teams.sort(rating_column, descending=True)
@@ -164,11 +169,7 @@ def assign_divisions(
     divisions = []
     current_idx = 0
 
-    for div_name in ["X", "1", "2", "3", "4", "5", "6", "7", "8"]:
-        if div_name not in division_sizes:
-            continue
-
-        div_size = division_sizes[div_name]
+    for div_name, div_size in division_config:
         end_idx = min(current_idx + div_size, len(teams_sorted))
 
         for i in range(current_idx, end_idx):
@@ -180,8 +181,13 @@ def assign_divisions(
             break
 
     # Handle any remaining teams
+    if overflow_division is None:
+        overflow_division = (
+            division_config[-1][0] if division_config else "Open"
+        )
+
     while len(divisions) < len(teams_sorted):
-        divisions.append("8")
+        divisions.append(overflow_division)
 
     # Add division column
     teams_with_divs = teams_sorted.with_columns(
@@ -191,19 +197,25 @@ def assign_divisions(
     return teams_with_divs
 
 
-class EntropyDivisionAssigner:
+class EntropySeedingSystem:
     """
-    Main class for entropy-controlled division assignment.
+    Main class for entropy-controlled tournament seeding and division assignment.
+
+    This system can be used for any tournament structure where teams/players
+    need to be seeded based on skill ratings with entropy-based adjustments
+    for team balance.
     """
 
-    def __init__(self, top_n: int = 4):
+    def __init__(self, top_n: int = 4, entropy_variant: str = "linear"):
         """
-        Initialize the division assigner.
+        Initialize the seeding system.
 
         Args:
-            top_n: Number of top players to consider for each team
+            top_n: Number of top players to consider for each team/group
+            entropy_variant: 'linear' or 'effective' for entropy calculation
         """
         self.top_n = top_n
+        self.entropy_variant = entropy_variant
         self.teams_data = None
         self.division_assignments = None
 
@@ -324,13 +336,18 @@ class EntropyDivisionAssigner:
         return self.teams_data
 
     def assign_divisions(
-        self, division_sizes: Optional[Dict[str, int]] = None
+        self,
+        division_config: Optional[
+            Union[List[Tuple[str, int]], Dict[str, int]]
+        ] = None,
+        overflow_division: Optional[str] = None,
     ) -> pl.DataFrame:
         """
         Assign teams to divisions based on computed ratings.
 
         Args:
-            division_sizes: Optional custom division sizes
+            division_config: List of (name, size) tuples or dict defining divisions
+            overflow_division: Name for overflow teams
 
         Returns:
             Polars DataFrame with division assignments
@@ -339,7 +356,10 @@ class EntropyDivisionAssigner:
             raise ValueError("Must compute team ratings first")
 
         self.division_assignments = assign_divisions(
-            self.teams_data, "entropy_rating", division_sizes
+            self.teams_data,
+            "entropy_rating",
+            division_config,
+            overflow_division,
         )
 
         return self.division_assignments
@@ -401,9 +421,31 @@ class EntropyDivisionAssigner:
             how="inner",
         )
 
-        # Convert division names to numbers for comparison
+        # Create division ordinal mapping for both assigned and actual
+        all_divs = set(
+            comparison["assigned_division"].unique().to_list()
+            + comparison[actual_div_col].unique().to_list()
+        )
+
+        # Sort divisions (attempt numeric sort for numeric names, then alphabetical)
+        def sort_key(x):
+            # Try to extract numeric part for sorting
+            if x.isdigit():
+                return (0, int(x))
+            # Check for patterns like "Division 1", "Div 2", etc.
+            import re
+
+            match = re.search(r"\d+", x)
+            if match:
+                return (1, int(match.group()))
+            # Alphabetical for others
+            return (2, x)
+
+        sorted_divs = sorted(all_divs, key=sort_key)
+        div_to_ordinal = {div: i for i, div in enumerate(sorted_divs)}
+
         def div_to_num(div):
-            return 0 if div == "X" else int(div) if div.isdigit() else 9
+            return div_to_ordinal.get(div, len(div_to_ordinal))
 
         comparison = comparison.with_columns(
             [
@@ -438,3 +480,96 @@ class EntropyDivisionAssigner:
             "correct_within_1": within_1,
             "correct_within_2": within_2,
         }
+
+    def get_seeding_order(self) -> pl.DataFrame:
+        """
+        Get teams in seeding order with their rankings.
+
+        Returns:
+            DataFrame sorted by entropy rating (highest first)
+        """
+        if self.teams_data is None:
+            raise ValueError("Must compute team ratings first")
+
+        return self.teams_data.sort(
+            "entropy_rating", descending=True
+        ).with_columns(pl.Series("seed", range(1, len(self.teams_data) + 1)))
+
+    def create_brackets(
+        self, bracket_sizes: List[int], naming_pattern: str = "Bracket {}"
+    ) -> pl.DataFrame:
+        """
+        Create tournament brackets of specified sizes.
+
+        Args:
+            bracket_sizes: List of bracket sizes (e.g., [8, 8, 16, 16, 32])
+            naming_pattern: Pattern for bracket names with {} for number
+
+        Returns:
+            DataFrame with bracket assignments
+        """
+        if self.teams_data is None:
+            raise ValueError("Must compute team ratings first")
+
+        # Sort teams by rating
+        teams_sorted = self.teams_data.sort("entropy_rating", descending=True)
+
+        # Assign to brackets
+        brackets = []
+        current_idx = 0
+
+        for i, size in enumerate(bracket_sizes, 1):
+            bracket_name = naming_pattern.format(i)
+            end_idx = min(current_idx + size, len(teams_sorted))
+
+            for _ in range(current_idx, end_idx):
+                brackets.append(bracket_name)
+
+            current_idx = end_idx
+            if current_idx >= len(teams_sorted):
+                break
+
+        # Handle overflow
+        while len(brackets) < len(teams_sorted):
+            brackets.append(naming_pattern.format(len(bracket_sizes) + 1))
+
+        return teams_sorted.with_columns(pl.Series("bracket", brackets))
+
+    def apply_manual_adjustments(
+        self,
+        adjustments: Dict[str, float],
+        adjustment_column: str = "manual_adjustment",
+    ) -> pl.DataFrame:
+        """
+        Apply manual rating adjustments to specific teams.
+
+        Args:
+            adjustments: Dict mapping team_id to adjustment value
+            adjustment_column: Name for the adjustment column
+
+        Returns:
+            Updated DataFrame with adjusted ratings
+        """
+        if self.teams_data is None:
+            raise ValueError("Must compute team ratings first")
+
+        # Add adjustment column
+        adj_values = [
+            adjustments.get(tid, 0.0)
+            for tid in self.teams_data["team_id"].to_list()
+        ]
+
+        self.teams_data = self.teams_data.with_columns(
+            [
+                pl.Series(adjustment_column, adj_values),
+                (pl.col("entropy_rating") + pl.Series(adj_values)).alias(
+                    "adjusted_rating"
+                ),
+            ]
+        )
+
+        return self.teams_data
+
+
+# Backward compatibility alias
+EntropyDivisionAssigner = EntropySeedingSystem
