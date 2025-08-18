@@ -1,9 +1,10 @@
 """
-Exposure Log-Odds Ranking Implementation.
+Exposure Log-Odds ranking mode implementation.
 
-This module implements the exposure log-odds ranking system that removes volume bias
-by using two PageRanks on mirrored graphs with the same exposure baseline, then
-taking a log-ratio so volume cancels and only conversion quality remains.
+This module implements the exposure log-odds mode of the unified ranking system.
+This mode removes volume bias by using two PageRanks on mirrored graphs with the 
+same exposure baseline, then taking a log-ratio so volume cancels and only 
+conversion quality remains.
 
 Based on the corrected specification in plan.md with fixes for:
 1. Matrix orientation (A[dst, src] with column-stochastic normalization)
@@ -27,11 +28,11 @@ from rankings.core.logging import get_logger, log_dataframe_stats, log_timing
 
 class ExposureLogOddsEngine(RatingEngine):
     """
-    Exposure log-odds rating engine that eliminates volume bias.
+    Exposure log-odds ranking mode that eliminates volume bias.
 
-    This engine computes two PageRanks (win and loss) with the same exposure-based
-    teleport vector, then uses the log-ratio to produce rankings that depend on
-    conversion quality rather than play volume.
+    This mode of the unified ranking system computes two PageRanks (win and loss) 
+    with the same exposure-based teleport vector, then uses the log-ratio to produce 
+    rankings that depend on conversion quality rather than play volume.
 
     Parameters
     ----------

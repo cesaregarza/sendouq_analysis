@@ -2,9 +2,14 @@
 
 This module provides comprehensive tournament ranking capabilities for Sendou.ink data.
 
-Key engines:
-- **ExposureLogOddsEngine (Recommended)**: log-odds PageRank on mirrored graphs that removes volume bias ("grinding") and focuses on conversion quality.
-- **RatingEngine (Core)**: tick-tock PageRank with tournament strength modeling.
+## Unified Ranking System
+
+The rankings module provides a **unified ranking system** with two selectable modes:
+
+- **Exposure Log-Odds Mode (Recommended)**: log-odds PageRank on mirrored graphs that removes volume bias ("grinding") and focuses on conversion quality.
+- **Tick-Tock Mode**: traditional PageRank with tournament strength modeling and iterative refinement.
+
+> **📖 For detailed mathematical documentation**, see [engine/README.md](analysis/engine/README.md)
 
 ## Current Status (v0.2.0)
 
@@ -37,31 +42,35 @@ Based on test_tour_7.ipynb analysis, the current loss function needs improvement
 - **Tournament Strength**: Dynamic tournament importance calculation
 - **Multiple Algorithms**: Basic PageRank and advanced tick-tock algorithm
 
-### Algorithms
+### Ranking Modes
 
-#### 1. Basic PageRank (`basic_rankings.py`)
-- Straightforward PageRank implementation
-- Optional tournament strength weighting based on participant count
-- Fast and simple for most use cases
+The unified ranking system provides two modes through a single interface:
 
-#### 2. Exposure Log-Odds Engine (`analysis/engine/exposure_logodds.py`)
+#### 1. Exposure Log-Odds Mode (`analysis/engine/exposure_logodds.py`)
+- **Recommended mode** for public-facing rankings
 - Removes volume bias by computing separate win/loss PageRanks with the same exposure-based teleport, then taking smoothed log-ratios
 - Optional surprisal weighting to reward upsets
-- Time decay and tournament strength weighting via inherited parameters
+- Time decay and tournament strength weighting via shared parameters
 - Outputs win PR, loss PR, exposure, and log-odds score
 
-#### 3. Advanced Rating Engine (`analysis/engine/core.py`)
+#### 2. Tick-Tock Mode (`analysis/engine/core.py`)
+- Traditional PageRank mode with explicit tournament strength modeling
 - Tick-tock algorithm that iteratively refines ratings and tournament strengths
 - Tournament influence calculated based on participant skill levels
 - Multiple aggregation methods for tournament strength
 - Configurable teleport vectors and decay models
+
+#### 3. Legacy: Basic PageRank (`basic_rankings.py`)
+- Straightforward PageRank implementation for compatibility
+- Optional tournament strength weighting based on participant count
+- Fast and simple for most use cases
 
 ## Quick Start
 
 ```python
 import json
 from rankings import parse_tournaments_data
-from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
+from rankings.analysis.engine import build_ranking_engine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -71,8 +80,12 @@ tables = parse_tournaments_data(raw_data)
 matches_df = tables["matches"]
 players_df = tables["players"]
 
-# Recommended: Exposure Log-Odds player rankings (volume-bias free)
-engine = ExposureLogOddsEngine(beta=1.0)
+# Recommended: Exposure Log-Odds mode (volume-bias free)
+engine = build_ranking_engine(mode="exposure_logodds", beta=1.0)
+rankings = engine.rank_players(matches_df, players_df)
+
+# Alternative: Tick-Tock mode (explicit tournament strength modeling)
+engine = build_ranking_engine(mode="tick_tock", beta=1.0, influence_agg_method="top_20_sum")
 rankings = engine.rank_players(matches_df, players_df)
 
 # Optionally post-process (min tournaments, grades, display score)
@@ -82,14 +95,9 @@ final = engine.post_process_rankings(
     min_tournaments=3,
 )
 
-# Access tournament influence/strength computed during initialization run
+# Access tournament influence/strength computed during ranking
 tournament_influence = engine.tournament_influence
 tournament_strength = engine.tournament_strength
-
-# Core alternative: tick-tock engine
-# from rankings import RatingEngine
-# engine = RatingEngine(beta=1.0, influence_agg_method="top_20_sum")
-# rankings = engine.rank_players(matches_df, players_df)
 ```
 
 ## API Reference

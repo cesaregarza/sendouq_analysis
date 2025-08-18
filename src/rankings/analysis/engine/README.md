@@ -1,11 +1,11 @@
-# Rankings Engines: Mathematical and Implementation Guide
+# Unified Ranking System: Mathematical and Implementation Guide
 
-This document explains the two engines in `rankings.analysis.engine` in both conceptual and implementation detail, with careful attention to mathematical conventions and normalization:
+This document explains the unified ranking system in `rankings.analysis.engine` which provides two ranking modes within a single framework:
 
-- Exposure Log-Odds Engine (`exposure_logodds.py`) — recommended, volume-bias resistant
-- Core Tick–Tock Engine (`core.py`) — PageRank with tournament-strength feedback
+- **Exposure Log-Odds Mode** (`exposure_logodds.py`) — recommended, volume-bias resistant
+- **Tick-Tock Mode** (`core.py`) — PageRank with tournament-strength feedback
 
-Both engines share core ideas: graphs from match outcomes, time decay, tournament-strength weighting, and custom teleport vectors.
+Both modes share the same core pipeline: graphs from match outcomes, time decay, tournament-strength weighting, and custom teleport vectors. They differ primarily in their final scoring calculation and bias correction approaches.
 
 ---
 
@@ -70,7 +70,7 @@ After construction, add \(\varepsilon>0\) and renormalize \(\rho\) to avoid zero
 
 ---
 
-## Core Engine (Tick–Tock) — `core.py`
+## Tick-Tock Mode — `core.py`
 
 ### High-level algorithm
 
@@ -135,7 +135,7 @@ Separately compute a strength score for each tournament by aggregating \(r_i\) w
 
 ---
 
-## Exposure Log-Odds Engine — `exposure_logodds.py`
+## Exposure Log-Odds Mode — `exposure_logodds.py`
 
 ### Goal
 
@@ -266,15 +266,61 @@ Two PageRanks of similar size plus preprocessing; overall similar to the core en
 
 ---
 
-## Practical guidance
+## Mode Selection Guide
 
-- Start with Exposure Log-Odds for public-facing rankings; set \(\beta \in [0.5, 1]\), keep default \(\alpha\approx 0.85\), and use auto \(\mu\).
-- Use surprisal when you want to highlight upsets; keep iterations small (e.g., 2).
-- For the core engine, prefer wins-proportional smoothing with a small \(\gamma\) and a reasonable cap ratio to stabilize low-activity nodes.
+- **Exposure Log-Odds Mode**: Recommended for public-facing rankings where volume bias is a concern. Set \(\beta \in [0.5, 1]\), keep default \(\alpha\approx 0.85\), and use auto \(\mu\).
+- **Tick-Tock Mode**: Useful when you need explicit tournament strength modeling and want to see the iterative refinement process. Prefer wins-proportional smoothing with a small \(\gamma\) and a reasonable cap ratio to stabilize low-activity nodes.
+- Use surprisal weighting (available in both modes) when you want to highlight upsets; keep iterations small (e.g., 2).
 - Aggregation `top_20_sum` is a good default for tournament influence; normalize minimum influence if you observe extreme lows.
 
 ---
 
-## Minimal examples
+## Quick Start: Mode Selection
 
-Exposure Log-Odds (players):
+The unified ranking system provides a single entry point with mode selection:
+
+```python
+from rankings.analysis.engine import build_ranking_engine
+
+# Recommended: Exposure Log-Odds mode (volume-bias resistant)
+engine = build_ranking_engine(mode="exposure_logodds", beta=1.0)
+rankings = engine.rank_players(matches_df, players_df)
+
+# Alternative: Tick-Tock mode (explicit tournament strength modeling)
+engine = build_ranking_engine(mode="tick_tock", beta=1.0, max_tick_tock=5)
+rankings = engine.rank_players(matches_df, players_df)
+```
+
+## Detailed Examples
+
+### Exposure Log-Odds Mode (Players)
+
+```python
+from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
+
+engine = ExposureLogOddsEngine(
+    beta=1.0,                    # Tournament strength exponent
+    lambda_smooth=None,          # Auto-tune smoothing
+    use_surprisal=False,         # No upset weighting
+    min_exposure=None            # No minimum exposure filter
+)
+
+player_rankings = engine.rank_players(matches_df, players_df)
+# Returns: id, player_rank (log-odds), win_pr, loss_pr, exposure
+```
+
+### Tick-Tock Mode (Teams)
+
+```python
+from rankings.analysis.engine.core import RatingEngine
+
+engine = RatingEngine(
+    beta=1.0,                           # Tournament strength exponent
+    influence_agg_method="top_20_sum",  # Tournament influence calculation
+    max_tick_tock=10,                   # Maximum iterations
+    teleport_spec="volume_inverse"      # Teleport vector type
+)
+
+team_rankings = engine.rank_teams(matches_df)
+# Returns: id, rating, tournament_influence_, tournament_strength_
+```

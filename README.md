@@ -30,7 +30,7 @@ Comprehensive data analysis and interactive dashboard tools for tournament and p
 
 **sendouq-dashboard**: Interactive dashboard (Dash/Plotly) for visualizing player and tournament statistics, powered by a PostgreSQL backend.
 
-**rankings**: Advanced tournament ranking module. Recommended default is the Exposure Log-Odds Engine which removes volume bias; the core tick-tock engine remains available for comparison.
+**rankings**: Advanced tournament ranking module with a unified system providing two modes: Exposure Log-Odds Mode (recommended, removes volume bias) and Tick-Tock Mode (traditional PageRank with tournament strength modeling).
 
 ---
 
@@ -133,13 +133,17 @@ Explore and analyze data interactively using the provided notebooks (e.g., `test
 
 ### Tournament Rankings
 
-The rankings module provides comprehensive tournament ranking capabilities. Recommended engine: Exposure Log-Odds (volume-bias free).
+The rankings module provides a **unified ranking system** with two selectable modes:
+- **Exposure Log-Odds Mode** (recommended): Volume-bias resistant rankings
+- **Tick-Tock Mode**: Traditional PageRank with tournament strength modeling
+
+> **📖 For detailed documentation**, see [src/rankings/README.md](src/rankings/README.md)
 
 #### Quick Start
 ```python
 import json
 from rankings import parse_tournaments_data
-from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
+from rankings.analysis.engine import build_ranking_engine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -149,13 +153,13 @@ tables = parse_tournaments_data(raw_data)
 matches_df = tables["matches"]
 players_df = tables["players"]
 
-# Recommended: Exposure Log-Odds player rankings
-engine = ExposureLogOddsEngine(beta=1.0)
+# Recommended: Exposure Log-Odds mode
+engine = build_ranking_engine(mode="exposure_logodds", beta=1.0)
 player_rankings = engine.rank_players(matches_df, players_df)
 
-# Access tournament influence/strength
-tournament_influence = engine.tournament_influence
-tournament_strength = engine.tournament_strength
+# Alternative: Tick-Tock mode
+engine = build_ranking_engine(mode="tick_tock", beta=1.0)
+player_rankings = engine.rank_players(matches_df, players_df)
 ```
 
 #### Scraping Tournament Data

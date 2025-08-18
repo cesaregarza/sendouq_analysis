@@ -1,9 +1,10 @@
 """
-Core rating engine implementation.
+Tick-Tock ranking mode implementation.
 
-This module contains the main RatingEngine class that implements a sophisticated
-rating system using a tick-tock algorithm for iterative refinement of ratings
-and tournament strengths.
+This module contains the RatingEngine class that implements the tick-tock mode
+of the unified ranking system. This mode uses a tick-tock algorithm for iterative
+refinement of ratings and tournament strengths, providing explicit tournament
+strength modeling.
 """
 
 from __future__ import annotations
@@ -50,9 +51,10 @@ from rankings.core.logging import (
 
 class RatingEngine:
     """
-    Advanced rating engine with tournament strength calculation.
+    Tick-Tock ranking mode with tournament strength calculation.
 
-    This engine implements a tick-tock algorithm that alternates between:
+    This mode of the unified ranking system implements a tick-tock algorithm that 
+    alternates between:
     1. **Tick**: Computing ratings given current tournament strengths
     2. **Tock**: Recomputing tournament strengths based on updated ratings
 
