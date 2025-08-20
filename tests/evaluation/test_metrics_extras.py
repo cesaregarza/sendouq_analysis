@@ -59,7 +59,7 @@ class TestConcordance:
     def test_missing_ratings(self):
         """Test with missing rating entries (should default to 0)."""
         matches = pl.DataFrame(
-            {"winner_team_id": [1, 3], "loser_team_id": [2, 1]}
+            {"winner_team_id": [1, 1], "loser_team_id": [2, 3]}
         )
         ratings = {1: 1500}  # Missing ratings for 2, 3
 

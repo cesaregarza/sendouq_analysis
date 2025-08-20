@@ -208,8 +208,11 @@ class TestWeightingLogic:
                 "loser_team_id": [2, 3],  # Different losers
             }
         )
-        # Ratings chosen to give specific probabilities
-        self.ratings = {1: 0, 2: -np.log(3), 3: -np.log(9)}  # p ≈ 0.75, 0.9
+        # Ratings chosen to give specific probabilities with Bradley-Terry
+        # For BT: P(A beats B) = s_A / (s_A + s_B)
+        # To get P = 0.75: s_A/s_B = 3, so s_A = 3*s_B
+        # To get P = 0.9: s_A/s_B = 9, so s_A = 9*s_B
+        self.ratings = {1: 0.9, 2: 0.3, 3: 0.1}  # p ≈ 0.75, 0.9
 
     def test_variance_weighting_logic(self):
         """Test that variance weighting emphasizes uncertain matches."""
