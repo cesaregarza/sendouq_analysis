@@ -195,38 +195,91 @@ class ExposureLogOddsEngine(RatingEngine):
             self.lambda_used_ = lambda_used
 
             # Compute raw exposure for reporting
-            node_to_idx = {p: i for i, p in enumerate(active_players)}
-            exposure = np.zeros(len(active_players))
-            for match in converted_matches:
-                w = match["weight"]
-                for p in match["winners"]:
-                    if p in node_to_idx:
-                        exposure[node_to_idx[p]] += w
-                for p in match["losers"]:
-                    if p in node_to_idx:
-                        exposure[node_to_idx[p]] += w
+            if use_optimized:
+                # For optimized path, compute exposure from matches_df
+                node_to_idx = {p: i for i, p in enumerate(active_players)}
+                exposure = np.zeros(len(active_players))
+
+                # Explode winners and losers with their weights
+                winners_exp = (
+                    matches_df.select(["winners", "weight"])
+                    .explode("winners")
+                    .rename({"winners": "id"})
+                )
+
+                losers_exp = (
+                    matches_df.select(["losers", "weight"])
+                    .explode("losers")
+                    .rename({"losers": "id"})
+                )
+
+                exp_df = (
+                    pl.concat([winners_exp, losers_exp])
+                    .group_by("id")
+                    .agg(pl.col("weight").sum().alias("e"))
+                )
+
+                for row in exp_df.iter_rows(named=True):
+                    if row["id"] in node_to_idx:
+                        exposure[node_to_idx[row["id"]]] = row["e"]
+            else:
+                # Original path for non-optimized
+                node_to_idx = {p: i for i, p in enumerate(active_players)}
+                exposure = np.zeros(len(active_players))
+                for match in converted_matches:
+                    w = match["weight"]
+                    for p in match["winners"]:
+                        if p in node_to_idx:
+                            exposure[node_to_idx[p]] += w
+                    for p in match["losers"]:
+                        if p in node_to_idx:
+                            exposure[node_to_idx[p]] += w
 
             self.exposure_vector_ = exposure
 
             # Calculate last match timestamp for each player
             player_last_match = {}
-            for match in converted_matches:
-                # Get match timestamp (already calculated in conversion)
-                match_ts = self.now_ts  # Default to now
-                if "timestamp" in match:
-                    match_ts = match["timestamp"]
+            if use_optimized:
+                # For optimized path, compute from matches_df
+                winners_ts = (
+                    matches_df.select(["winners", "ts"])
+                    .explode("winners")
+                    .rename({"winners": "id"})
+                )
 
-                # Update last match for all players in the match
-                for p in match["winners"]:
-                    if p in node_to_idx:
-                        player_last_match[p] = max(
-                            player_last_match.get(p, 0), match_ts
-                        )
-                for p in match["losers"]:
-                    if p in node_to_idx:
-                        player_last_match[p] = max(
-                            player_last_match.get(p, 0), match_ts
-                        )
+                losers_ts = (
+                    matches_df.select(["losers", "ts"])
+                    .explode("losers")
+                    .rename({"losers": "id"})
+                )
+
+                ts_df = (
+                    pl.concat([winners_ts, losers_ts])
+                    .group_by("id")
+                    .agg(pl.col("ts").max().alias("last_ts"))
+                )
+
+                for row in ts_df.iter_rows(named=True):
+                    player_last_match[row["id"]] = row["last_ts"]
+            else:
+                # Original path
+                for match in converted_matches:
+                    # Get match timestamp (already calculated in conversion)
+                    match_ts = self.now_ts  # Default to now
+                    if "timestamp" in match:
+                        match_ts = match["timestamp"]
+
+                    # Update last match for all players in the match
+                    for p in match["winners"]:
+                        if p in node_to_idx:
+                            player_last_match[p] = max(
+                                player_last_match.get(p, 0), match_ts
+                            )
+                    for p in match["losers"]:
+                        if p in node_to_idx:
+                            player_last_match[p] = max(
+                                player_last_match.get(p, 0), match_ts
+                            )
 
             # Apply time-based score decay
             now_ts = self.now_ts
@@ -391,69 +444,151 @@ class ExposureLogOddsEngine(RatingEngine):
         matches: pl.DataFrame,
         players: pl.DataFrame,
         tournament_influence: Dict[int, float],
+        *,
+        rosters: pl.DataFrame | None = None,
+        include_share: bool = True,
+        streaming: bool = False,
     ) -> pl.DataFrame:
         """
-        Return a DataFrame with columns:
-        [match_id, tournament_id, winners(list[u]), losers(list[u]), weight(float), timestamp(int)]
+        Build a compact matches table with winners/losers roster lists and weights.
+
+        Returns columns:
+          [match_id, tournament_id, winners(list[user_id]), losers(list[user_id]), weight(float), ts(int)]
+        If include_share=True, also returns:
+          [wlen, llen, share]
         """
-        # Roster lists per (tournament_id, team_id)
-        rosters = players.group_by(["tournament_id", "team_id"]).agg(
-            pl.col("user_id").alias("roster")
-        )
 
-        # Valid matches + influence + decay
-        s_df = pl.DataFrame(
-            {
-                "tournament_id": list(tournament_influence.keys()),
-                "S": list(tournament_influence.values()),
-            }
-        )
-        now_ts = self.now_ts
+        # ---- constants & guards (avoid repeated Python work) ----
+        now_ts = getattr(self, "now_ts", None) or int(self.now.timestamp())
+        decay_rate = self.decay_rate
+        beta = float(self.beta)
 
-        filter_expr = (
+        # ---- select only what we need from matches ----
+        needed = [
+            "match_id",
+            "tournament_id",
+            "winner_team_id",
+            "loser_team_id",
+        ]
+        if "last_game_finished_at" in matches.columns:
+            needed.append("last_game_finished_at")
+        if "match_created_at" in matches.columns:
+            needed.append("match_created_at")
+        if "is_bye" in matches.columns:
+            needed.append("is_bye")
+
+        m = matches.select([c for c in needed if c in matches.columns])
+
+        # ---- filter out byes / null teams as early as possible ----
+        filt = (
             pl.col("winner_team_id").is_not_null()
             & pl.col("loser_team_id").is_not_null()
             & (
                 ~pl.col("is_bye").fill_null(False)
-                if "is_bye" in matches.columns
+                if "is_bye" in m.columns
                 else True
             )
         )
+        m = m.filter(filt)
+
+        # ---- fast timestamp via coalesce: last_game_finished_at -> match_created_at -> now_ts ----
+        ts_exprs = []
+        if "last_game_finished_at" in m.columns:
+            ts_exprs.append(pl.col("last_game_finished_at"))
+        if "match_created_at" in m.columns:
+            ts_exprs.append(pl.col("match_created_at"))
+        ts_exprs.append(pl.lit(now_ts))
+        ts_expr = pl.coalesce(ts_exprs).cast(pl.Int64)
+
+        # ---- add ts and S (tournament influence) ----
+        # Option A: vectorized join to add S
+        m = m.with_columns(ts_expr.alias("ts"))
+
+        if tournament_influence:
+            s_df = pl.DataFrame(
+                {
+                    "tournament_id": list(tournament_influence.keys()),
+                    "S": list(tournament_influence.values()),
+                }
+            )
+            m = m.join(s_df, on="tournament_id", how="left").with_columns(
+                pl.col("S").fill_null(1.0)
+            )
+        else:
+            # If no tournament influence provided, use 1.0 for all
+            m = m.with_columns(pl.lit(1.0).alias("S"))
+
+        # ---- compute weight: exp(-decay_rate * age_days) * (S ** beta) ----
+        time_decay = (
+            ((pl.lit(now_ts) - pl.col("ts").cast(pl.Float64)) / 86400.0)
+            .mul(-decay_rate)
+            .exp()
+        )
+        if beta == 0.0:
+            weight_expr = time_decay  # S^0 == 1
+        else:
+            weight_expr = time_decay * (pl.col("S") ** beta)
+
+        m = m.with_columns(weight_expr.alias("weight"))
+
+        # ---- rosters: shrink before grouping to reduce work ----
+        if rosters is None:
+            used_teams = (
+                pl.concat(
+                    [
+                        m.select(
+                            pl.col("tournament_id"),
+                            pl.col("winner_team_id").alias("team_id"),
+                        ),
+                        m.select(
+                            pl.col("tournament_id"),
+                            pl.col("loser_team_id").alias("team_id"),
+                        ),
+                    ]
+                )
+                .unique()
+                .with_columns(
+                    [
+                        pl.col("team_id").cast(pl.Int64),
+                        pl.col("tournament_id").cast(pl.Int64),
+                    ]
+                )
+            )
+
+            # Only keep players for used (tournament_id, team_id) pairs
+            rosters = (
+                players.select(["tournament_id", "team_id", "user_id"])
+                .with_columns(
+                    [
+                        pl.col("tournament_id").cast(pl.Int64),
+                        pl.col("team_id").cast(pl.Int64),
+                    ]
+                )
+                .join(used_teams, on=["tournament_id", "team_id"], how="semi")
+                .group_by(["tournament_id", "team_id"])
+                .agg(pl.col("user_id").alias("roster"))
+            )
+        else:
+            # Ensure expected dtypes for joins
+            rosters = rosters.with_columns(
+                [
+                    pl.col("tournament_id").cast(pl.Int64),
+                    pl.col("team_id").cast(pl.Int64),
+                ]
+            )
+
+        # ---- two hash joins to attach winner/loser rosters ----
+        # Cast once to aligned integer types to avoid implicit casts per row
+        m = m.with_columns(
+            [
+                pl.col("tournament_id").cast(pl.Int64),
+                pl.col("winner_team_id").cast(pl.Int64),
+                pl.col("loser_team_id").cast(pl.Int64),
+            ]
+        )
+
         m = (
-            matches.filter(filter_expr)
-            .join(s_df, on="tournament_id", how="left")
-            .with_columns(pl.col("S").fill_null(1.0))
-            .with_columns(
-                pl.when(pl.col("last_game_finished_at").is_not_null())
-                .then(pl.col("last_game_finished_at"))
-                .otherwise(pl.col("match_created_at").fill_null(now_ts))
-                .alias("ts")
-            )
-            .with_columns(
-                (
-                    ((now_ts - pl.col("ts").cast(pl.Float64)) / 86400.0)
-                    .mul(-self.decay_rate)
-                    .exp()
-                    * (pl.col("S") ** self.beta)
-                ).alias("weight")
-            )
-            .select(
-                [
-                    "match_id",
-                    "tournament_id",
-                    "winner_team_id",
-                    "loser_team_id",
-                    "weight",
-                    "ts",
-                ]
-            )
-            .with_columns(
-                [
-                    pl.col("winner_team_id").cast(pl.Int64),
-                    pl.col("loser_team_id").cast(pl.Int64),
-                ]
-            )
-            .join(
+            m.join(
                 rosters,
                 left_on=["tournament_id", "winner_team_id"],
                 right_on=["tournament_id", "team_id"],
@@ -477,16 +612,25 @@ class ExposureLogOddsEngine(RatingEngine):
                     "ts",
                 ]
             )
-            .with_columns(
+        )
+
+        # ---- optionally add per‑match pair share (for later pair expansion) ----
+        if include_share:
+            m = m.with_columns(
                 [
                     pl.col("winners").list.len().alias("wlen"),
                     pl.col("losers").list.len().alias("llen"),
-                    (
-                        pl.col("weight") / (pl.col("wlen") * pl.col("llen"))
-                    ).alias("share"),
                 ]
+            ).with_columns(
+                (pl.col("weight") / (pl.col("wlen") * pl.col("llen"))).alias(
+                    "share"
+                )
             )
-        )
+
+        # ---- allow streaming on the final collect for large pipelines ----
+        if streaming and isinstance(m, pl.LazyFrame):
+            return m.collect(streaming=True)
+
         return m
 
     def _convert_matches_format(
@@ -827,17 +971,23 @@ class ExposureLogOddsEngine(RatingEngine):
 
         # Exposure teleport rho from per-player total match weights (no Python loops)
         # winners+losers exposure per player
+        # Use share (per-pair weight) for correct exposure calculation
+        winners_exp = (
+            matches_df.select(["winners", "share"])
+            .explode("winners")
+            .rename({"winners": "id"})
+        )
+
+        losers_exp = (
+            matches_df.select(["losers", "share"])
+            .explode("losers")
+            .rename({"losers": "id"})
+        )
+
         exp_df = (
-            matches_df.select(
-                [pl.col("winners").list.explode().alias("id"), "weight"]
-            )
-            .vstack(
-                matches_df.select(
-                    [pl.col("losers").list.explode().alias("id"), "weight"]
-                )
-            )
+            pl.concat([winners_exp, losers_exp])
             .group_by("id")
-            .agg(pl.col("weight").sum().alias("e"))
+            .agg(pl.col("share").sum().alias("e"))
             .join(pl.DataFrame({"id": active_nodes}), on="id", how="right")
             .fill_null(0.0)
             .select("e")
