@@ -173,16 +173,16 @@ def scrape_missing_tournaments(
     # Limit the number to scrape
     if len(missing_ids) > max_tournaments:
         if verbose:
-            print(f"Limiting to {max_tournaments} tournaments")
+            logger.info(f"Limiting to {max_tournaments} tournaments")
         missing_ids = missing_ids[:max_tournaments]
 
     if not missing_ids:
         if verbose:
-            print("No tournaments to scrape!")
+            logger.info("No tournaments to scrape!")
         return 0, []
 
     if verbose:
-        print(
+        logger.info(
             f"Will scrape tournament IDs: {missing_ids[:10]}{'...' if len(missing_ids) > 10 else ''}"
         )
 
@@ -192,7 +192,9 @@ def scrape_missing_tournaments(
 
     for i, tid in enumerate(missing_ids):
         if verbose:
-            print(f"\n[{i+1}/{len(missing_ids)}] Scraping tournament {tid}...")
+            logger.info(
+                f"\n[{i+1}/{len(missing_ids)}] Scraping tournament {tid}..."
+            )
 
         try:
             # Use the scrape_tournament function
@@ -205,7 +207,7 @@ def scrape_missing_tournaments(
                     json.dump(tournament_data, f, indent=2)
 
                 if verbose:
-                    print(f"  ✓ Saved to {output_file}")
+                    logger.info(f"  ✓ Saved to {output_file}")
                 scraped_count += 1
 
                 # Check if it's ranked
@@ -218,12 +220,12 @@ def scrape_missing_tournaments(
                     settings = tournament.get("settings", {})
                     is_ranked = settings.get("isRanked", False)
                     name = tournament.get("name", "Unknown")
-                    print(
+                    logger.info(
                         f"  → {'RANKED' if is_ranked else 'Not ranked'}: {name[:60]}"
                     )
             else:
                 if verbose:
-                    print(f"  ✗ No data returned")
+                    logger.info(f"  ✗ No data returned")
                 errors.append((tid, "No data returned"))
 
         except Exception as e:
@@ -231,9 +233,9 @@ def scrape_missing_tournaments(
             if verbose:
                 # Don't print full error for 404s (tournament doesn't exist)
                 if "404" in error_msg:
-                    print(f"  ✗ Tournament does not exist (404)")
+                    logger.info(f"  ✗ Tournament does not exist (404)")
                 else:
-                    print(f"  ✗ Error: {error_msg}")
+                    logger.info(f"  ✗ Error: {error_msg}")
             errors.append((tid, error_msg))
 
         # Rate limiting - be nice to the server
@@ -242,9 +244,9 @@ def scrape_missing_tournaments(
 
     # Summary
     if verbose:
-        print(f"\n{'='*60}")
-        print(f"Scraping complete!")
-        print(
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Scraping complete!")
+        logger.info(
             f"  Successfully scraped: {scraped_count}/{len(missing_ids)} tournaments"
         )
 
@@ -254,13 +256,13 @@ def scrape_missing_tournaments(
             other_errors = [e for e in errors if "404" not in e[1]]
 
             if not_found:
-                print(f"  Not found (404): {len(not_found)} tournaments")
+                logger.info(f"  Not found (404): {len(not_found)} tournaments")
 
             if other_errors:
-                print(f"\nOther errors ({len(other_errors)}):")
+                logger.info(f"\nOther errors ({len(other_errors)}):")
                 for tid, error in other_errors[:10]:
-                    print(f"  Tournament {tid}: {error}")
+                    logger.info(f"  Tournament {tid}: {error}")
                 if len(other_errors) > 10:
-                    print(f"  ... and {len(other_errors) - 10} more")
+                    logger.info(f"  ... and {len(other_errors) - 10} more")
 
     return scraped_count, errors

@@ -8,12 +8,15 @@ for interacting with the Sendou.ink tournament API.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 from rankings.core.constants import (
     DEFAULT_BACKOFF_FACTOR,
@@ -75,7 +78,7 @@ def scrape_tournament(
         except (requests.RequestException, json.JSONDecodeError) as e:
             if attempt < max_retries - 1:
                 wait_time = backoff_factor**attempt
-                print(
+                logger.warning(
                     f"Attempt {attempt + 1} failed for tournament {tournament_id}, "
                     f"retrying in {wait_time:.1f}s: {e}"
                 )

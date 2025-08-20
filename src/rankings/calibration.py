@@ -253,9 +253,11 @@ class MatchCalibrator:
                 logger.info(
                     f"Format '{fmt}': β={format_betas[fmt]:.4f} (n={len(y_fmt)})"
                 )
-            except:
+            except Exception as e:
                 format_betas[fmt] = base_beta
-                logger.warning(f"Failed to fit format '{fmt}', using base β")
+                logger.warning(
+                    f"Failed to fit format '{fmt}', using base β: {e}"
+                )
 
         return format_betas
 

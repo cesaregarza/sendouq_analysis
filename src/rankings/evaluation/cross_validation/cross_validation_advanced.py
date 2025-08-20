@@ -322,7 +322,8 @@ def evaluate_on_split(
                 winner_col=winner_col,
                 loser_col=loser_col,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to compute concordance: {e}")
             metrics["c_stat"] = np.nan
 
         try:
@@ -334,14 +335,16 @@ def evaluate_on_split(
                 winner_col=winner_col,
                 loser_col=loser_col,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to compute skill score: {e}")
             metrics["skill_score"] = np.nan
 
         try:
             predictions = metrics.get("predictions", np.array([]))
             metrics["upset_oe"] = upset_oe(predictions)
             metrics["acc_conf"] = accuracy_threshold(predictions, 0.65)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to compute upset_oe/acc_conf: {e}")
             metrics["upset_oe"] = np.nan
             metrics["acc_conf"] = np.nan
 

@@ -7,9 +7,12 @@ functions for common analysis tasks.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from rankings.analysis.engine import RatingEngine
 from rankings.analysis.utils.formatting import (
@@ -264,6 +267,7 @@ def analyze_player(
             )
             result["formatted_output"] = formatted_output
         except Exception as e:
+            logger.error(f"Failed to get influential matches: {e}")
             result["influential_matches"] = {"error": str(e)}
 
     # Create summary output

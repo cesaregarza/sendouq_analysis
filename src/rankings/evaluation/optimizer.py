@@ -5,6 +5,7 @@ This module provides optimization routines for finding the best hyperparameters
 using cross-validation loss as the objective function.
 """
 
+import logging
 from itertools import product
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
@@ -13,6 +14,8 @@ import polars as pl
 
 from rankings.analysis.engine import RatingEngine
 from rankings.evaluation.cross_validation import cross_validate_ratings
+
+logger = logging.getLogger(__name__)
 
 
 class GridSearchOptimizer:
@@ -147,7 +150,7 @@ class GridSearchOptimizer:
                     )
 
             except Exception as e:
-                print(f"Error with params {params}: {e}")
+                logger.error(f"Error with params {params}: {e}")
                 self.results_.append({"params": params, "error": str(e)})
 
         if self.verbose:
@@ -317,7 +320,7 @@ class BayesianOptimizer:
                 return score
 
             except Exception as e:
-                print(f"Error: {e}")
+                logger.error(f"Error during optimization: {e}")
                 return np.inf
 
         # Run optimization

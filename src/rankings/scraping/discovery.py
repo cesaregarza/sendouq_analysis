@@ -7,10 +7,13 @@ Sendou.ink calendar system.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import List, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 from rankings.core.constants import CALENDAR_URL, DEFAULT_TIMEOUT
 
@@ -45,15 +48,17 @@ def discover_tournaments_from_calendar(
 
         if tournament_ids:
             max_id = max(tournament_ids)
-            print(f"Discovered {len(tournament_ids)} tournaments from calendar")
-            print(f"Highest tournament ID: {max_id}")
+            logger.info(
+                f"Discovered {len(tournament_ids)} tournaments from calendar"
+            )
+            logger.info(f"Highest tournament ID: {max_id}")
         else:
-            print("No tournament IDs found in calendar")
+            logger.warning("No tournament IDs found in calendar")
 
         return sorted(set(tournament_ids))  # Remove duplicates and sort
 
     except requests.RequestException as e:
-        print(f"Failed to fetch calendar: {e}")
+        logger.error(f"Failed to fetch calendar: {e}")
         return []
 
 

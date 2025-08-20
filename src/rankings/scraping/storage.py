@@ -8,11 +8,14 @@ across different storage formats and locations.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List
 
 import polars as pl
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def save_tournament_batch(
@@ -39,7 +42,7 @@ def save_tournament_batch(
     with open(batch_path, "w") as f:
         json.dump(batch_data, f, indent=2)
 
-    print(f"Saved {len(batch_data)} tournaments to {batch_filename}")
+    logger.info(f"Saved {len(batch_data)} tournaments to {batch_filename}")
 
 
 def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
@@ -58,7 +61,7 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
     """
     data_path = Path(data_dir)
     if not data_path.exists():
-        print(f"Data directory {data_dir} does not exist")
+        logger.warning(f"Data directory {data_dir} does not exist")
         return []
 
     all_tournaments = []
@@ -69,10 +72,10 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
     json_files = regular_files + continuous_files
 
     if not json_files:
-        print(f"No tournament JSON files found in {data_dir}")
+        logger.warning(f"No tournament JSON files found in {data_dir}")
         return []
 
-    print(
+    logger.info(
         f"Loading {len(json_files)} tournament files ({len(regular_files)} regular, {len(continuous_files)} continuous)..."
     )
 
@@ -85,9 +88,9 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
                 else:
                     all_tournaments.append(tournaments)
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Failed to load {json_file}: {e}")
+            logger.error(f"Failed to load {json_file}: {e}")
 
-    print(f"Loaded {len(all_tournaments)} tournaments total")
+    logger.info(f"Loaded {len(all_tournaments)} tournaments total")
     return all_tournaments
 
 

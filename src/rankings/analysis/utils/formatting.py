@@ -6,9 +6,12 @@ This module provides functions to format DataFrames and results for display.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 
 def format_top_rankings(
@@ -172,7 +175,8 @@ def format_influential_matches(
                 try:
                     match_date = datetime.fromtimestamp(row["event_ts"])
                     match_date_str = f" - {match_date.strftime('%Y-%m-%d')}"
-                except:
+                except Exception as e:
+                    logger.debug(f"Failed to parse date: {e}")
                     pass
 
             output.append(
@@ -244,7 +248,8 @@ def format_influential_matches(
                 try:
                     match_date = datetime.fromtimestamp(row["event_ts"])
                     match_date_str = f" - {match_date.strftime('%Y-%m-%d')}"
-                except:
+                except Exception as e:
+                    logger.debug(f"Failed to parse date: {e}")
                     pass
 
             output.append(

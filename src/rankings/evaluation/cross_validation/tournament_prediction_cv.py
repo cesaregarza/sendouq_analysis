@@ -5,11 +5,14 @@ This module extends the cross-validation framework to evaluate
 tournament prediction capabilities using proper temporal validation.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import polars as pl
+
+logger = logging.getLogger(__name__)
 
 from rankings.evaluation.tournament_metrics import (
     mean_absolute_seed_error,
@@ -291,13 +294,13 @@ def cross_validate_tournament_predictions(
         splits = splits[:n_splits]
 
     if verbose:
-        print(f"Evaluating {len(splits)} tournament prediction splits...")
+        logger.info(f"Evaluating {len(splits)} tournament prediction splits...")
 
     # Evaluate each split
     split_results = []
     for i, split in enumerate(splits):
         if verbose and i % 10 == 0:
-            print(f"  Split {i+1}/{len(splits)}...")
+            logger.info(f"  Split {i+1}/{len(splits)}...")
 
         # Get player ratings for this split
         # Use ratings from just before the test tournament
@@ -317,7 +320,7 @@ def cross_validate_tournament_predictions(
     aggregated = aggregate_cv_results(split_results)
 
     if verbose:
-        print(f"Completed evaluation of {len(split_results)} tournaments")
+        logger.info(f"Completed evaluation of {len(split_results)} tournaments")
         print_cv_summary(aggregated)
 
     return aggregated
@@ -443,7 +446,7 @@ def compare_models_cv(
     comparison = {}
 
     if baseline_name not in model_results:
-        print(f"Warning: Baseline model '{baseline_name}' not found")
+        logger.warning(f"Baseline model '{baseline_name}' not found")
         return comparison
 
     baseline = model_results[baseline_name]

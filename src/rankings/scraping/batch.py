@@ -7,11 +7,14 @@ different data storage backends.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import requests
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 from rankings.core.constants import (
     CALENDAR_URL,
@@ -67,7 +70,7 @@ def scrape_tournament_batch(
         batch = tournament_ids[batch_idx : batch_idx + batch_size]
         batch_data = []
 
-        print(
+        logger.info(
             f"Processing batch {batch_idx // batch_size + 1} "
             f"(tournaments {batch[0]}-{batch[-1]})"
         )
@@ -82,13 +85,15 @@ def scrape_tournament_batch(
                 consecutive_failures = 0
 
             except Exception as e:
-                print(f"Failed to scrape tournament {tournament_id}: {e}")
+                logger.error(
+                    f"Failed to scrape tournament {tournament_id}: {e}"
+                )
                 failed += 1
                 failed_ids.append(tournament_id)
                 consecutive_failures += 1
 
                 if consecutive_failures >= max_failures:
-                    print(
+                    logger.info(
                         f"Stopping due to {max_failures} consecutive failures"
                     )
                     break
@@ -167,10 +172,12 @@ def scrape_tournaments_from_calendar(
     tournament_ids = discover_tournaments_from_calendar(calendar_url)
 
     if not tournament_ids:
-        print("No tournaments discovered from calendar")
+        logger.info("No tournaments discovered from calendar")
         return {"scraped": 0, "failed": 0, "failed_ids": []}
 
-    print(f"Discovered {len(tournament_ids)} tournaments, starting scrape...")
+    logger.info(
+        f"Discovered {len(tournament_ids)} tournaments, starting scrape..."
+    )
 
     return scrape_tournament_batch(
         tournament_ids=tournament_ids,
@@ -207,14 +214,14 @@ def scrape_latest_tournaments(
     latest_id = get_latest_tournament_id()
 
     if latest_id is None:
-        print("Could not determine latest tournament ID")
+        logger.error("Could not determine latest tournament ID")
         return {"scraped": 0, "failed": 0, "failed_ids": []}
 
     # Work backwards from latest ID
     start_id = max(1, latest_id - count + 1)
     end_id = latest_id
 
-    print(f"Scraping {count} latest tournaments: {start_id} to {end_id}")
+    logger.info(f"Scraping {count} latest tournaments: {start_id} to {end_id}")
 
     return scrape_tournament_range(
         start_id=start_id,
@@ -262,7 +269,7 @@ def scrape_to_database(
         start_value = min(tournament_ids)
         end_value = max(tournament_ids)
 
-        print(
+        logger.info(
             f"Scraping tournaments {start_value}-{end_value} to database {db_path}"
         )
 
@@ -281,6 +288,6 @@ def scrape_to_database(
         }
 
     except ImportError as e:
-        print(f"Database scraper not available: {e}")
-        print("Falling back to JSON scraping...")
+        logger.warning(f"Database scraper not available: {e}")
+        logger.info("Falling back to JSON scraping...")
         return scrape_tournament_batch(tournament_ids)
