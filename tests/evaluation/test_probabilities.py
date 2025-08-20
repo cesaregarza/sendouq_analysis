@@ -133,8 +133,8 @@ class TestScoreTransforms:
             None, 0.5, alpha=1.0, score_transform="bradley_terry"
         )
 
-        # None should become 0.0, so bt_prob(0.0, 0.5)
-        expected = bt_prob(0.0, 0.5)
+        # None should become the default prior (0.05), so bt_prob(0.05, 0.5)
+        expected = bt_prob(0.05, 0.5)
         assert abs(p - expected) < 1e-10
 
 

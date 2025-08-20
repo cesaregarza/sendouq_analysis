@@ -108,10 +108,12 @@ class TestUpsetOE:
 
     def test_perfect_calibration(self):
         """Test perfectly calibrated predictions."""
-        # If p=0.7 for all matches, expect 30% upsets, should observe 30%
-        predictions = np.array(
-            [0.7, 0.7, 0.7, 0.3]
-        )  # 1 upset expected and observed
+        # For perfect calibration, observed upset rate should match expected
+        # If we have predictions [0.7, 0.7, 0.3, 0.3]:
+        # - Observed upsets: 2/4 = 0.5 (two 0.3 values)
+        # - Expected upsets: mean([0.3, 0.3, 0.7, 0.7]) = 2.0/4 = 0.5
+        # - O/E = 0.5/0.5 = 1.0
+        predictions = np.array([0.7, 0.7, 0.3, 0.3])
 
         result = upset_oe(predictions)
         assert (
@@ -120,13 +122,16 @@ class TestUpsetOE:
 
     def test_overconfident_model(self):
         """Test overconfident model (fewer upsets than expected)."""
-        # Model predicts high probabilities but upsets still happen
+        # Overconfident model: predicts extreme probabilities
+        # These are actual winner probabilities, so mostly high values
         predictions = np.array(
             [0.9, 0.9, 0.9, 0.1]
-        )  # Expect ~0.5 upsets, observe 1
+        )  # Few upsets observed (1/4) vs expected (0.3)
 
         result = upset_oe(predictions)
-        assert result > 1.0, "More upsets than expected should give O/E > 1"
+        assert (
+            result < 1.0
+        ), "Overconfident model should have O/E < 1 (fewer upsets than expected)"
 
     def test_underconfident_model(self):
         """Test underconfident model (more upsets than expected)."""
@@ -230,7 +235,7 @@ class TestPlacementSpearman:
 
         result = placement_spearman(ratings, placements)
         assert (
-            result == 1.0
+            abs(result - 1.0) < 1e-10
         ), "Overlapping teams should show perfect correlation"
 
     def test_insufficient_data(self):
