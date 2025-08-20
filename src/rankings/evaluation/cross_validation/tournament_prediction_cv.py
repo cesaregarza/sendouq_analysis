@@ -20,7 +20,7 @@ from rankings.evaluation.tournament_metrics import (
     pairwise_agreement,
     tournament_prediction_summary,
 )
-from rankings.tournament_predictor import (
+from rankings.tournament_prediction import (
     MatchPredictor,
     MonteCarloSimulator,
     TeamRatingConfig,
