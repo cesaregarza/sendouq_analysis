@@ -46,7 +46,7 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def main():
+def main() -> None:
     """Main entry point for the continuous scraper CLI."""
     parser = argparse.ArgumentParser(
         description="Continuous tournament scraper for Sendou.ink",

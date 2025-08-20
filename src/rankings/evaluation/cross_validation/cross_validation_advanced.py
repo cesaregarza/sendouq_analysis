@@ -23,8 +23,6 @@ from rankings.evaluation.loss import (
     fit_alpha_parameter_optimized,
     fit_alpha_parameter_sampled,
 )
-
-# TODO: Incorporate improved splits functionality
 from rankings.evaluation.metrics_extras import (
     accuracy_threshold,
     alpha_std,
@@ -464,10 +462,9 @@ def cross_validate_ratings(
     )
     log_dataframe_stats(logger, matches_df, "cv_matches")
 
-    # Create splits using improved method
-    logger.debug("Creating time-based splits with improved method")
+    # Create splits
+    logger.debug("Creating time-based splits")
     try:
-        # TODO: Re-implement improved splits functionality
         splits = create_time_based_folds(
             matches_df,
             n_splits=n_splits,
