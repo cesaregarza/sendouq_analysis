@@ -69,6 +69,10 @@ def parse_tournaments_data(
     player_rows: List[Dict[str, object]] = []
     match_rows: List[Dict[str, object]] = []
 
+    # Track seen match IDs and tournament IDs to avoid duplicates
+    seen_match_ids: set = set()
+    seen_tournament_ids: set = set()
+
     # Iterate through each tournament entry
     for entry in tournaments:
         tournament = entry.get("tournament", {})
@@ -279,13 +283,38 @@ def parse_tournaments_data(
                     "created_at": team.get("createdAt"),
                 }
             )
-            # Parse roster
-            for member in team.get("members", []) or []:
+
+            # Parse roster - use activeRosterUserIds if available, otherwise all members
+            active_roster_ids = team.get("activeRosterUserIds")
+            members = team.get("members", []) or []
+
+            # Create a set to track which user IDs we've already added (deduplication)
+            added_user_ids = set()
+
+            # If activeRosterUserIds is specified, only include those members
+            if active_roster_ids:
+                # Convert to set for efficient lookup
+                active_ids_set = set(active_roster_ids)
+                members_to_add = [
+                    m for m in members if m.get("userId") in active_ids_set
+                ]
+            else:
+                # Include all members if no active roster specified
+                members_to_add = members
+
+            # Add members, deduplicating by user_id
+            for member in members_to_add:
+                user_id = member.get("userId")
+                # Skip if we've already added this user to this team
+                if user_id in added_user_ids:
+                    continue
+                added_user_ids.add(user_id)
+
                 player_rows.append(
                     {
                         "tournament_id": tournament_id,
                         "team_id": team_id,
-                        "user_id": member.get("userId"),
+                        "user_id": user_id,
                         "username": member.get("username"),
                         "discord_id": member.get("discordId"),
                         "in_game_name": member.get("inGameName"),
@@ -299,6 +328,12 @@ def parse_tournaments_data(
         # ---------- Matches ----------
         for match in data.get("match", []) or []:
             match_id = match.get("id")
+
+            # Skip duplicate match IDs
+            if match_id in seen_match_ids:
+                continue
+            seen_match_ids.add(match_id)
+
             # Basic identifiers and meta
             row = {
                 "tournament_id": tournament_id,

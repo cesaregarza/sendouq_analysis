@@ -31,6 +31,13 @@ from rankings.scraping.discovery import (
     get_latest_tournament_id,
 )
 
+# Missing tournament utilities
+from rankings.scraping.missing import (
+    find_missing_tournament_ids,
+    get_existing_tournament_ids,
+    scrape_missing_tournaments,
+)
+
 # Storage and data management
 from rankings.scraping.storage import (
     get_tournament_summary,
@@ -55,4 +62,8 @@ __all__ = [
     # Storage
     "load_scraped_tournaments",
     "get_tournament_summary",
+    # Missing tournaments
+    "get_existing_tournament_ids",
+    "find_missing_tournament_ids",
+    "scrape_missing_tournaments",
 ]

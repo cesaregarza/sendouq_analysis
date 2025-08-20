@@ -749,6 +749,7 @@ class ExposureLogOddsEngine(RatingEngine):
         rank_labels: Optional[List[str]] = None,
         score_multiplier: float = 25.0,
         score_offset: float = 0.0,
+        tournaments_df: Optional[pl.DataFrame] = None,
     ) -> pl.DataFrame:
         """
         Post-process rankings with tournament filtering and grade assignment.
@@ -769,6 +770,9 @@ class ExposureLogOddsEngine(RatingEngine):
             Multiplier for final score display
         score_offset : float, default=0.0
             Offset to add to scores before applying multiplier
+        tournaments_df : Optional[pl.DataFrame], default=None
+            Tournaments DataFrame with tournament_id and start_time columns
+            If provided, adds last_active date for each player
 
         Returns
         -------
@@ -780,52 +784,97 @@ class ExposureLogOddsEngine(RatingEngine):
         if rank_labels is None:
             rank_labels = ["A-", "A", "A+", "S-", "S", "S+", "X", "X+", "X★"]
 
-        # Add raw rank before any filtering
-        final_rankings = (
-            rankings.with_columns(pl.arange(1, pl.len() + 1).alias("raw_rank"))
-            .join(
-                players_df.group_by("user_id")
+        # Prepare player aggregations
+        player_agg_cols = [
+            pl.col("username").last(),
+            pl.col("tournament_id").n_unique().alias("tournament_count"),
+        ]
+
+        # If tournaments_df is provided, calculate last_active date
+        if tournaments_df is not None:
+            # Join players with tournaments to get tournament dates
+            players_with_dates = players_df.join(
+                tournaments_df.select(["tournament_id", "start_time"]),
+                on="tournament_id",
+                how="left",
+            )
+
+            # Group by user and get the latest tournament date
+            player_stats = (
+                players_with_dates.group_by("user_id")
                 .agg(
                     [
                         pl.col("username").last(),
                         pl.col("tournament_id")
                         .n_unique()
                         .alias("tournament_count"),
+                        pl.col("start_time").max().alias("last_active"),
                     ]
                 )
-                .select(["user_id", "username", "tournament_count"]),
+                .select(
+                    ["user_id", "username", "tournament_count", "last_active"]
+                )
+            )
+        else:
+            # Original aggregation without last_active
+            player_stats = (
+                players_df.group_by("user_id")
+                .agg(player_agg_cols)
+                .select(["user_id", "username", "tournament_count"])
+            )
+
+        # Add raw rank before any filtering
+        final_rankings = (
+            rankings.with_columns(pl.arange(1, pl.len() + 1).alias("raw_rank"))
+            .join(
+                player_stats,
                 left_on="id",
                 right_on="user_id",
                 how="left",
             )
             .sort("raw_rank")
-            .select(
-                "raw_rank",
-                "username",
-                pl.col("id").alias("player_id"),
-                pl.col("player_rank").alias("score"),
-                pl.col("exposure").alias("exposure"),
-                pl.col("win_pr").alias("win_pr"),
-                pl.col("loss_pr").alias("loss_pr"),
-                (pl.col("win_pr") / pl.col("loss_pr")).alias("win_loss_ratio"),
-                (pl.col("win_pr") - pl.col("loss_pr")).alias("win_loss_diff"),
-                pl.col("tournament_count"),
-            )
-            .filter(pl.col("tournament_count") >= min_tournaments)
-            .select(
-                pl.arange(1, pl.len() + 1).alias("rank"),
-                "raw_rank",
-                "username",
-                "player_id",
-                "score",
-                "exposure",
-                "win_pr",
-                "loss_pr",
-                "win_loss_ratio",
-                "win_loss_diff",
-                "tournament_count",
-            )
         )
+
+        # Build select columns based on whether we have last_active
+        select_cols = [
+            "raw_rank",
+            "username",
+            pl.col("id").alias("player_id"),
+            pl.col("player_rank").alias("score"),
+            pl.col("exposure").alias("exposure"),
+            pl.col("win_pr").alias("win_pr"),
+            pl.col("loss_pr").alias("loss_pr"),
+            (pl.col("win_pr") / pl.col("loss_pr")).alias("win_loss_ratio"),
+            (pl.col("win_pr") - pl.col("loss_pr")).alias("win_loss_diff"),
+            pl.col("tournament_count"),
+        ]
+
+        if tournaments_df is not None:
+            select_cols.append("last_active")
+
+        final_rankings = final_rankings.select(select_cols).filter(
+            pl.col("tournament_count") >= min_tournaments
+        )
+
+        # Build final select columns
+        final_select_cols = [
+            pl.arange(1, pl.len() + 1).alias("rank"),
+            "raw_rank",
+            "username",
+            "player_id",
+            "score",
+            "exposure",
+            "win_pr",
+            "loss_pr",
+            "win_loss_ratio",
+            "win_loss_diff",
+            "tournament_count",
+        ]
+
+        if tournaments_df is not None:
+            final_select_cols.append("last_active")
+
+        final_rankings = final_rankings.select(final_select_cols)
 
         # Add grades
         final_rankings_with_grades = final_rankings.with_columns(
@@ -835,7 +884,10 @@ class ExposureLogOddsEngine(RatingEngine):
                 labels=rank_labels,
             )
             .alias("rank_label")
-        ).select(
+        )
+
+        # Build final output columns
+        output_cols = [
             "rank",
             "rank_label",
             "username",
@@ -846,6 +898,13 @@ class ExposureLogOddsEngine(RatingEngine):
             "score",
             "win_loss_ratio",
             "tournament_count",
+        ]
+
+        if tournaments_df is not None:
+            output_cols.append("last_active")
+
+        final_rankings_with_grades = final_rankings_with_grades.select(
+            output_cols
         )
 
         return final_rankings_with_grades

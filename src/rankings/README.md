@@ -75,11 +75,13 @@ players_df = tables["players"]
 engine = ExposureLogOddsEngine(beta=1.0)
 rankings = engine.rank_players(matches_df, players_df)
 
-# Optionally post-process (min tournaments, grades, display score)
+# Optionally post-process (min tournaments, grades, display score, last active)
+tournaments_df = tables["tournaments"]
 final = engine.post_process_rankings(
     rankings,
     players_df,
     min_tournaments=3,
+    tournaments_df=tournaments_df  # Optional: adds last_active field
 )
 
 # Access tournament influence/strength computed during initialization run
@@ -138,7 +140,11 @@ Inherits core parameters (time decay, damping, beta, influence aggregation) and 
 **Methods:**
 - `rank_players(matches_df, players_df) -> pl.DataFrame`: Columns: `id`, `player_rank`, `win_pr`, `loss_pr`, `exposure`
 - `rank_teams(matches_df) -> pl.DataFrame`: Columns: `id`, `team_rank`, `win_pr`, `loss_pr`, `exposure`
-- `post_process_rankings(rankings, players_df, ...) -> pl.DataFrame`: Grades and display scores
+- `post_process_rankings(rankings, players_df, min_tournaments=3, tournaments_df=None) -> pl.DataFrame`: 
+  - Filters by minimum tournament count
+  - Adds rank grades (A-, A, A+, S-, S, S+, X, X+, X★)
+  - Computes display scores
+  - Optionally adds `last_active` field showing last tournament date when `tournaments_df` is provided
 
 **Stored Attributes (after run):**
 - `win_pagerank_`, `loss_pagerank_`, `exposure_teleport_`, `logodds_scores_`, `lambda_used_`
@@ -183,6 +189,38 @@ engine = RatingEngine(influence_agg_method="mean")
 # Sum of top 20 participant ratings
 engine = RatingEngine(influence_agg_method="top_20_sum")
 ```
+
+## Tournament Data Scraping
+
+The `scraping` module provides comprehensive tournament data collection:
+
+### Quick Start
+```python
+from rankings.scraping import scrape_missing_tournaments, scrape_tournament
+
+# Scrape missing tournaments (automatically finds gaps and new tournaments)
+scraped, errors = scrape_missing_tournaments(
+    max_tournaments=50,  # Limit to 50 tournaments
+    data_dir="data/tournaments",
+    verbose=True
+)
+
+# Scrape a specific tournament
+tournament_data = scrape_tournament(2414)
+
+# Find what tournaments are missing
+from rankings.scraping import find_missing_tournament_ids
+missing = find_missing_tournament_ids()  # Returns list of IDs to scrape
+```
+
+### Available Functions
+- `scrape_tournament(id)`: Scrape a single tournament by ID
+- `scrape_missing_tournaments()`: Automatically find and scrape missing tournaments
+- `scrape_latest_tournaments(count)`: Scrape the N most recent tournaments
+- `scrape_tournament_range(start, end)`: Scrape a range of tournament IDs
+- `discover_tournaments_from_calendar()`: Find tournaments from sendou.ink calendar
+- `get_existing_tournament_ids()`: Get list of already scraped tournament IDs
+- `find_missing_tournament_ids()`: Find gaps in scraped data
 
 ## Utilities
 

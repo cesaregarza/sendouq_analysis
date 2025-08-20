@@ -17,10 +17,12 @@ def filter_ranked_tournaments(
     buffer_weeks: float = 0,
 ) -> Dict[str, pl.DataFrame]:
     """
-    Filter tournament data to include only ranked tournaments.
+    Filter tournament data to include only ranked tournaments and clean data issues.
 
-    This function filters tournaments based on ranking settings and applies
-    the filter to related tables (matches, players, teams).
+    This function filters tournaments based on ranking settings, applies
+    the filter to related tables (matches, players, teams), and also
+    performs data cleaning by removing any duplicate entries that may
+    exist in the source data.
 
     Args:
         tables: Dictionary containing tournament data tables with keys:
@@ -131,9 +133,24 @@ def filter_ranked_tournaments(
     # Filter other tables if they exist
     for table_name in ["matches", "players", "teams"]:
         if table_name in tables:
-            result[table_name] = tables[table_name].join(
+            filtered_table = tables[table_name].join(
                 ranked_tournaments, on="tournament_id", how="inner"
             )
+
+            # Additional data cleaning - remove any duplicates that may still exist
+            # Note: The parser should handle this, but we add this as a safety measure
+            if table_name == "matches":
+                # Keep only unique match_ids (first occurrence)
+                filtered_table = filtered_table.unique(subset=["match_id"])
+
+            elif table_name == "players":
+                # Keep first occurrence of each player-tournament-team combination
+                # This handles any remaining duplicate roster entries
+                filtered_table = filtered_table.unique(
+                    subset=["user_id", "tournament_id", "team_id"]
+                )
+
+            result[table_name] = filtered_table
 
     return result
 
