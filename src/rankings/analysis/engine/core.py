@@ -17,6 +17,12 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import polars as pl
 
+# Try to import scipy for sparse matrix operations
+try:
+    import scipy.sparse as sp
+except Exception:
+    sp = None
+
 from rankings.analysis.asymmetric_confidence import (
     AsymmetricConfidenceCalculator,
     AsymmetricConfidenceMetrics,
@@ -148,6 +154,7 @@ class RatingEngine:
         ] = DEFAULT_STRENGTH_AGG,
         strength_k: int = DEFAULT_STRENGTH_K,
         normalize_min_influence: Optional[float] = None,
+        compute_edge_flux: bool = False,
     ):
         self.logger = get_logger(__name__)
         self.logger.info("Initializing RatingEngine with parameters:")
@@ -167,6 +174,7 @@ class RatingEngine:
         self.max_pagerank_iter = max_pagerank_iter
         self.pagerank_tol = pagerank_tol
         self.now = (now or DEFAULT_REFERENCE_DATE).astimezone(timezone.utc)
+        self.now_ts = int(self.now.timestamp())  # Precompute for performance
         self.teleport_spec = teleport
         self.volume_mix_eta = volume_mix_eta
         self.volume_mix_gamma = volume_mix_gamma
@@ -180,6 +188,7 @@ class RatingEngine:
         self.strength_agg = strength_agg
         self.strength_k = strength_k
         self.normalize_min_influence = normalize_min_influence
+        self.compute_edge_flux = compute_edge_flux
 
         # Results populated after a run
         self.edge_flux_: Optional[pl.DataFrame] = None
@@ -217,7 +226,8 @@ class RatingEngine:
             Team rankings with columns: team_id, team_rank
         """
         self.logger.info("Starting team ranking calculation")
-        log_dataframe_stats(self.logger, matches, "team_matches")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, matches, "team_matches")
 
         with log_timing(self.logger, "team ranking calculation"):
             result = self._tick_tock_loop(
@@ -227,7 +237,8 @@ class RatingEngine:
                 node_to="winner_team_id",
             )
 
-        log_dataframe_stats(self.logger, result, "team_rankings_result")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, result, "team_rankings_result")
         self.logger.info(
             f"Team ranking completed: {result.height} teams ranked"
         )
@@ -252,8 +263,9 @@ class RatingEngine:
             Player rankings with columns: user_id, player_rank
         """
         self.logger.info("Starting player ranking calculation")
-        log_dataframe_stats(self.logger, matches, "matches")
-        log_dataframe_stats(self.logger, players, "players")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, matches, "matches")
+            log_dataframe_stats(self.logger, players, "players")
 
         with log_timing(self.logger, "player ranking calculation"):
             result = self._tick_tock_loop(
@@ -263,7 +275,8 @@ class RatingEngine:
                 node_to="winner_user_id",
             )
 
-        log_dataframe_stats(self.logger, result, "player_rankings_result")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, result, "player_rankings_result")
         self.logger.info(
             f"Player ranking completed: {result.height} players ranked"
         )
@@ -293,9 +306,10 @@ class RatingEngine:
         self.logger.debug(
             f"Starting tick-tock loop with max_iterations={self.max_tick_tock}"
         )
-        log_dataframe_stats(self.logger, matches, "tick_tock_matches")
-        if players is not None:
-            log_dataframe_stats(self.logger, players, "tick_tock_players")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, matches, "tick_tock_matches")
+            if players is not None:
+                log_dataframe_stats(self.logger, players, "tick_tock_players")
 
         # Initialize tournament influences to 1.0
         tournament_influence = {
@@ -306,6 +320,14 @@ class RatingEngine:
         )
         prev_influence = {}
         rating_df = pl.DataFrame([])
+
+        # Precompute participants once (they don't change during tick-tock)
+        participants_df = self._participants_by_tournament(
+            matches, players, node_to
+        )
+        self.logger.debug(
+            f"Precomputed {participants_df.height} participant-tournament pairs"
+        )
 
         with log_timing(self.logger, "tick-tock iterations"):
             for i in range(self.max_tick_tock):
@@ -329,12 +351,13 @@ class RatingEngine:
                             matches, players, tournament_influence
                         )
 
-                log_dataframe_stats(
-                    self.logger,
-                    edges,
-                    f"edges_iteration_{i + 1}",
-                    logging.DEBUG,
-                )
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    log_dataframe_stats(
+                        self.logger,
+                        edges,
+                        f"edges_iteration_{i + 1}",
+                        logging.DEBUG,
+                    )
 
                 with log_timing(
                     self.logger, f"tick step {i + 1} - PageRank", logging.DEBUG
@@ -343,12 +366,13 @@ class RatingEngine:
                         edges, node_col_from=node_from, node_col_to=node_to
                     )
 
-                log_dataframe_stats(
-                    self.logger,
-                    rating_df,
-                    f"ratings_iteration_{i + 1}",
-                    logging.DEBUG,
-                )
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    log_dataframe_stats(
+                        self.logger,
+                        rating_df,
+                        f"ratings_iteration_{i + 1}",
+                        logging.DEBUG,
+                    )
 
                 # TOCK: Recompute tournament strengths from fresh ratings
                 with log_timing(
@@ -357,7 +381,7 @@ class RatingEngine:
                     logging.DEBUG,
                 ):
                     tournament_influence = self._compute_tournament_influence(
-                        rating_df, matches, players, node_to
+                        rating_df, matches, players, node_to, participants_df
                     )
 
                 # Check convergence
@@ -389,7 +413,12 @@ class RatingEngine:
         self.tournament_influence_ = tournament_influence
         self.logger.debug("Computing retrospective tournament strengths")
         self._compute_retro_strength(
-            rating_df, matches, players, node_to, tournament_influence
+            rating_df,
+            matches,
+            players,
+            node_to,
+            tournament_influence,
+            participants_df,
         )
         self.ratings_df = rating_df
 
@@ -401,7 +430,8 @@ class RatingEngine:
             score_name, descending=True
         )
 
-        log_dataframe_stats(self.logger, result, "final_tick_tock_result")
+        if self.logger.isEnabledFor(logging.DEBUG):
+            log_dataframe_stats(self.logger, result, "final_tick_tock_result")
         self.logger.info(
             f"Tick-tock loop completed, returning {result.height} ranked entities"
         )
@@ -692,6 +722,42 @@ class RatingEngine:
 
         return edges
 
+    def _factorize_nodes(
+        self, edges: pl.DataFrame, node_col_from: str, node_col_to: str
+    ) -> tuple[list, pl.DataFrame]:
+        """
+        Map arbitrary node ids (ints/strings) to contiguous [0..n-1] indices
+        using a fast join in Polars. Returns (nodes_list, edges_with_idx).
+        """
+        nodes_df = (
+            pl.concat(
+                [
+                    edges.select(pl.col(node_col_from).alias("id")),
+                    edges.select(pl.col(node_col_to).alias("id")),
+                ]
+            )
+            .unique()
+            .with_row_index("idx")  # idx: UInt32
+        )
+        edges_idx = (
+            edges.join(
+                nodes_df, left_on=node_col_from, right_on="id", how="left"
+            )
+            .rename({"idx": "src_idx"})
+            .join(nodes_df, left_on=node_col_to, right_on="id", how="left")
+            .rename({"idx": "dst_idx"})
+            .select(["src_idx", "dst_idx", "norm_w"])
+            .with_columns(
+                [
+                    pl.col("src_idx").cast(pl.UInt32),
+                    pl.col("dst_idx").cast(pl.UInt32),
+                    pl.col("norm_w").cast(pl.Float64),
+                ]
+            )
+        )
+        nodes = nodes_df.sort("idx")["id"].to_list()
+        return nodes, edges_idx
+
     # =========================================================================
     # PageRank implementation
     # =========================================================================
@@ -704,96 +770,88 @@ class RatingEngine:
         node_col_to: str,
     ) -> pl.DataFrame:
         """
-        Compute PageRank from edge table with flexible teleport vectors.
+        Compute PageRank using a sparse transition matrix (row-stochastic with deficits).
         """
         self.logger.debug(f"Computing PageRank with {edges.height} edges")
-
         if edges.is_empty():
             self.logger.warning("Empty edges DataFrame, returning empty result")
             return pl.DataFrame([])
 
-        # Extract unique nodes
-        nodes = sorted(
-            set(edges[node_col_from].unique())
-            | set(edges[node_col_to].unique())
-        )
+        # Map ids -> contiguous indices once
+        nodes, eidx = self._factorize_nodes(edges, node_col_from, node_col_to)
         n = len(nodes)
-        self.logger.debug(f"PageRank graph has {n} nodes")
-        index: Dict[int, int] = {v: i for i, v in enumerate(nodes)}
+        alpha = self.damping_factor
 
-        # Build transition matrix
-        self.logger.debug("Building transition matrix")
-        M = np.zeros((n, n), dtype=float)
-        for row in edges.iter_rows(named=True):
-            i = index[row[node_col_from]]
-            j = index[row[node_col_to]]
-            M[i, j] += row["norm_w"]
+        # Build sparse matrix in CSR: rows=src, cols=dst, data=norm_w
+        src = eidx["src_idx"].to_numpy()
+        dst = eidx["dst_idx"].to_numpy()
+        dat = eidx["norm_w"].to_numpy()
 
-        # Compute row sums; rows may sum to <= 1 when smoothing is applied
-        row_sums = M.sum(axis=1)
+        if sp is not None:
+            M = sp.csr_matrix((dat, (src, dst)), shape=(n, n))
+            row_sums = np.asarray(M.sum(axis=1)).ravel()
+        else:
+            # NumPy sparse-like accumulation without SciPy
+            row_sums = np.zeros(n, dtype=np.float64)
+            # We'll keep COO triplets and use segment sums where needed
+            M_coo = (src, dst, dat)
+            np.add.at(row_sums, src, dat)
 
-        # Create teleport vector
-        self.logger.debug(
-            f"Creating teleport vector with spec: {self.teleport_spec}"
-        )
+        # Teleport vector
         teleport_vec = self._make_teleport_vec(nodes, edges, node_col_from)
         assert abs(teleport_vec.sum() - 1.0) < 1e-12
 
-        # PageRank power iteration
-        alpha = self.damping_factor
-        r = np.full(n, 1.0 / n)
+        r = np.full(n, 1.0 / n, dtype=np.float64)
         base = (1.0 - alpha) * teleport_vec
 
         self.logger.debug(
-            f"Starting PageRank iterations (max={self.max_pagerank_iter}, tol={self.pagerank_tol})"
+            f"Starting sparse PageRank (max={self.max_pagerank_iter}, tol={self.pagerank_tol})"
         )
-
-        for iteration in range(self.max_pagerank_iter):
-            # Route any per-row deficits to teleport proportionally
+        for it in range(self.max_pagerank_iter):
+            # deficit_mass = sum_i r[i] * (1 - row_sum[i])
             deficit_mass = float((1.0 - row_sums) @ r)
-            r_new = (
-                base + alpha * M.T.dot(r) + alpha * deficit_mass * teleport_vec
-            )
+
+            if sp is not None:
+                Mr = M.T.dot(r)
+            else:
+                # multiply using COO triplets: (src, dst, dat)
+                Mr = np.zeros(n, dtype=np.float64)
+                np.add.at(Mr, dst, r[src] * dat)
+
+            r_new = base + alpha * Mr + alpha * deficit_mass * teleport_vec
             delta = np.abs(r_new - r).sum()
-
-            if iteration % 20 == 0 or delta < self.pagerank_tol:
-                self.logger.debug(
-                    f"PageRank iteration {iteration}: delta={delta:.2e}"
-                )
-
-            if delta < self.pagerank_tol:
-                self.logger.debug(
-                    f"PageRank converged at iteration {iteration} with delta {delta:.2e}"
-                )
-                r = r_new
-                break
+            if it % 20 == 0 or delta < self.pagerank_tol:
+                self.logger.debug(f"PR iter {it}: delta={delta:.2e}")
             r = r_new
+            if delta < self.pagerank_tol:
+                break
         else:
             self.logger.warning(
-                f"PageRank reached max iterations ({self.max_pagerank_iter}) without convergence. Final delta: {delta:.2e}"
+                f"PageRank hit max_iter ({self.max_pagerank_iter}); final delta={delta:.2e}"
             )
 
-        # Store edge flux information for analysis (vectorized)
-        # Only include flux on REAL edges (from the provided edges DataFrame),
-        # and include the damping factor (alpha) in the link flux definition.
-        self.logger.debug(
-            "Computing edge flux information (real edges only, with alpha)"
-        )
-        node_scores = pl.DataFrame(
-            {
-                node_col_from: nodes,
-                "r_src": r.tolist(),
-            }
-        )
-        self.edge_flux_ = (
-            edges.join(node_scores, on=node_col_from, how="left")
-            .with_columns(
-                (pl.lit(alpha) * pl.col("r_src") * pl.col("norm_w")).alias(
-                    "flux"
-                )
+        # Edge flux: only compute if requested (expensive for large graphs)
+        if self.compute_edge_flux:
+            self.logger.debug(
+                "Computing edge flux information (real edges only, with alpha)"
             )
-            .select([node_col_from, node_col_to, "flux"])
-        )
+            node_scores = pl.DataFrame(
+                {
+                    node_col_from: nodes,
+                    "r_src": r.tolist(),
+                }
+            )
+            self.edge_flux_ = (
+                edges.join(node_scores, on=node_col_from, how="left")
+                .with_columns(
+                    (pl.lit(alpha) * pl.col("r_src") * pl.col("norm_w")).alias(
+                        "flux"
+                    )
+                )
+                .select([node_col_from, node_col_to, "flux"])
+            )
+        else:
+            self.edge_flux_ = None
 
         result = pl.DataFrame({"id": nodes, "score": r.tolist()}).sort(
             "score", descending=True
@@ -812,24 +870,12 @@ class RatingEngine:
     # Tournament influence calculation
     # =========================================================================
 
-    def _compute_tournament_influence(
-        self,
-        rating_df: pl.DataFrame,
-        matches: pl.DataFrame,
-        players: Optional[pl.DataFrame],
-        node_to: str,
-    ) -> Dict[int, float]:
-        """
-        Compute tournament influence from current ratings.
-
-        This is the "tock" step that updates tournament strengths based on
-        the ratings computed in the "tick" step.
-        """
-        rating_map = dict(zip(rating_df["id"], rating_df["score"]))
-
-        if node_to == "winner_team_id":  # Team mode
-            # Get all team participants per tournament
-            part_df = (
+    def _participants_by_tournament(
+        self, matches: pl.DataFrame, players: pl.DataFrame | None, node_to: str
+    ) -> pl.DataFrame:
+        """Compute participants per tournament. Returns: [tournament_id, id] unique."""
+        if node_to == "winner_team_id":
+            return (
                 matches.select(["tournament_id", "winner_team_id"])
                 .rename({"winner_team_id": "id"})
                 .vstack(
@@ -839,9 +885,8 @@ class RatingEngine:
                 )
                 .unique()
             )
-        else:  # Player mode
-            # Get all player participants per tournament
-            part_df = (
+        else:
+            return (
                 players.join(
                     matches.unique(subset=["tournament_id"]).select(
                         ["tournament_id"]
@@ -849,19 +894,39 @@ class RatingEngine:
                     on="tournament_id",
                     how="inner",
                 )
-                .select(["tournament_id", "user_id"])
-                .rename({"user_id": "id"})
+                .select(["tournament_id", pl.col("user_id").alias("id")])
+                .unique()
+            )
+
+    def _compute_tournament_influence(
+        self,
+        rating_df: pl.DataFrame,
+        matches: pl.DataFrame,
+        players: Optional[pl.DataFrame],
+        node_to: str,
+        participants_df: Optional[pl.DataFrame] = None,
+    ) -> Dict[int, float]:
+        """
+        Compute tournament influence from current ratings.
+
+        This is the "tock" step that updates tournament strengths based on
+        the ratings computed in the "tick" step.
+        """
+        # Use cached participants if provided, otherwise compute
+        if participants_df is not None:
+            part_df = participants_df
+        else:
+            part_df = self._participants_by_tournament(
+                matches, players, node_to
             )
 
         # Add ratings to participant data (use global_prior instead of 0.0)
         global_prior = self.global_prior_ or 0.05
-        part_df = part_df.with_columns(
-            pl.col("id")
-            .map_elements(
-                lambda x: rating_map.get(x, global_prior),
-                return_dtype=pl.Float64,
-            )
-            .alias("r")
+        rating_lookup = rating_df.select(
+            [pl.col("id"), pl.col("score").alias("r")]
+        )
+        part_df = part_df.join(rating_lookup, on="id", how="left").with_columns(
+            pl.col("r").fill_null(global_prior)
         )
 
         # Aggregate ratings by tournament using specified method
@@ -872,20 +937,20 @@ class RatingEngine:
         elif self.influence_agg_method == "median":
             agg_expr = pl.col("r").median()
         elif self.influence_agg_method == "top_20_sum":
-            agg_expr = pl.col("r").sort(descending=True).head(20).sum()
+            agg_expr = pl.col("r").top_k(20).sum()
         elif self.influence_agg_method == "log_top_20_sum":
             # Sum top 20, then apply log compression after normalization
-            agg_expr = pl.col("r").sort(descending=True).head(20).sum()
+            agg_expr = pl.col("r").top_k(20).sum()
         elif self.influence_agg_method == "sqrt_top_20_sum":
             # Take square root of top_20_sum for moderate compression
             # This provides less extreme compression than log
-            agg_expr = pl.col("r").sort(descending=True).head(20).sum().sqrt()
+            agg_expr = pl.col("r").top_k(20).sum().sqrt()
         elif self.influence_agg_method == "top_10_sum":
             # Sum of top 10 players (less extreme than top 20)
-            agg_expr = pl.col("r").sort(descending=True).head(10).sum()
+            agg_expr = pl.col("r").top_k(10).sum()
         elif self.influence_agg_method == "top_20_mean":
             # Mean of top 20 players (normalizes for tournament size)
-            agg_expr = pl.col("r").sort(descending=True).head(20).mean()
+            agg_expr = pl.col("r").top_k(20).mean()
         else:
             raise ValueError(
                 f"Unknown influence_agg_method: {self.influence_agg_method}"
@@ -949,6 +1014,7 @@ class RatingEngine:
         players: Optional[pl.DataFrame],
         node_to: str,
         influence: Dict[int, float],
+        participants_df: Optional[pl.DataFrame] = None,
     ) -> None:
         """
         Compute retrospective tournament strength metrics.
@@ -956,40 +1022,21 @@ class RatingEngine:
         This creates a final tournament strength table that can be used
         for analysis and comparison purposes.
         """
-        rating_map = dict(zip(rating_df["id"], rating_df["score"]))
+        # No longer needed with joins
 
         # Build participant table (same logic as influence calculation)
-        if node_to == "winner_team_id":  # Team mode
-            part_df = (
-                matches.select(["tournament_id", "winner_team_id"])
-                .rename({"winner_team_id": "id"})
-                .vstack(
-                    matches.select(["tournament_id", "loser_team_id"]).rename(
-                        {"loser_team_id": "id"}
-                    )
-                )
-                .unique()
-            )
-        else:  # Player mode
-            part_df = (
-                players.join(
-                    matches.unique(subset=["tournament_id"]).select(
-                        ["tournament_id"]
-                    ),
-                    on="tournament_id",
-                    how="inner",
-                )
-                .select(["tournament_id", "user_id"])
-                .rename({"user_id": "id"})
+        if participants_df is not None:
+            part_df = participants_df
+        else:
+            part_df = self._participants_by_tournament(
+                matches, players, node_to
             )
 
-        part_df = part_df.with_columns(
-            pl.col("id")
-            .map_elements(
-                lambda x: rating_map.get(x, self.global_prior_ or 0.05),
-                return_dtype=pl.Float64,
-            )
-            .alias("r")
+        rating_lookup = rating_df.select(
+            [pl.col("id"), pl.col("score").alias("r")]
+        )
+        part_df = part_df.join(rating_lookup, on="id", how="left").with_columns(
+            pl.col("r").fill_null(self.global_prior_ or 0.05)
         )
 
         # Apply aggregation method for retrospective strength
@@ -1001,13 +1048,15 @@ class RatingEngine:
         elif self.strength_agg == "trimmed_mean":
             k = self.strength_k
             agg_df = grp.agg(
-                pl.col("r").sort().tail(-k).head(-k).mean().alias("raw")
+                pl.col("r")
+                .sort()
+                .slice(k, pl.len() - 2 * k)
+                .mean()
+                .alias("raw")
             )
         elif self.strength_agg == "topN_sum":
             n = self.strength_k
-            agg_df = grp.agg(
-                pl.col("r").sort(descending=True).head(n).sum().alias("raw")
-            )
+            agg_df = grp.agg(pl.col("r").top_k(n).sum().alias("raw"))
         else:
             raise ValueError(f"Unknown strength_agg: {self.strength_agg}")
 
@@ -1068,42 +1117,53 @@ class RatingEngine:
             rankings = self.ratings_df
 
         # Convert rankings to dict for fast lookup
-        player_ranks = {}
-        for i, row in enumerate(rankings.iter_rows(named=True)):
-            player_ranks[row["id"]] = i + 1
+        player_ranks = dict(enumerate(rankings["id"].to_list(), 1))
+        player_ranks = {v: k for k, v in player_ranks.items()}
 
-        # Build match data structure for confidence calculation
+        # Precompute rosters for all teams (massive speedup)
+        team_rosters = players.group_by(["tournament_id", "team_id"]).agg(
+            pl.col("user_id").alias("roster")
+        )
+
+        # Join rosters to matches once
+        matches_with_rosters = (
+            matches.filter(~pl.col("is_bye").fill_null(False))
+            .join(
+                team_rosters,
+                left_on=["tournament_id", "winner_team_id"],
+                right_on=["tournament_id", "team_id"],
+                how="inner",
+            )
+            .rename({"roster": "winners"})
+            .join(
+                team_rosters,
+                left_on=["tournament_id", "loser_team_id"],
+                right_on=["tournament_id", "team_id"],
+                how="inner",
+            )
+            .rename({"roster": "losers"})
+            .select(["tournament_id", "winners", "losers"])
+        )
+
+        # Build match data structure using vectorized operations
         from collections import defaultdict
 
         player_matches = defaultdict(list)
 
-        for row in matches.iter_rows(named=True):
-            winner_team = row.get("winner_team_id")
-            loser_team = row.get("loser_team_id")
+        for row in matches_with_rosters.iter_rows(named=True):
+            match_record = {
+                "tournament_id": row["tournament_id"],
+                "winners": row["winners"],
+                "losers": row["losers"],
+            }
 
-            if winner_team and loser_team and not row.get("is_bye", False):
-                # Get players from both teams
-                winners = players.filter(pl.col("team_id") == winner_team)[
-                    "user_id"
-                ].to_list()
-                losers = players.filter(pl.col("team_id") == loser_team)[
-                    "user_id"
-                ].to_list()
+            for w in row["winners"]:
+                if w:
+                    player_matches[w].append(match_record)
 
-                # Create match record for each player
-                match_record = {
-                    "tournament_id": row["tournament_id"],
-                    "winners": winners,
-                    "losers": losers,
-                }
-
-                for w in winners:
-                    if w:
-                        player_matches[w].append(match_record)
-
-                for l in losers:
-                    if l:
-                        player_matches[l].append(match_record)
+            for l in row["losers"]:
+                if l:
+                    player_matches[l].append(match_record)
 
         # Initialize confidence calculator
         total_players = len(player_ranks)
@@ -1337,32 +1397,25 @@ class RatingEngine:
             cols = self._current_df_columns
         else:
             # Default behavior when we don't know the columns
-            return pl.col("match_created_at").fill_null(
-                int(self.now.timestamp())
-            )
+            return pl.col("match_created_at").fill_null(self.now_ts)
 
         if "last_game_finished_at" in cols:
             return (
                 pl.when(pl.col("last_game_finished_at").is_not_null())
                 .then(pl.col("last_game_finished_at"))
                 .otherwise(pl.col("match_created_at"))
-                .fill_null(int(self.now.timestamp()))
+                .fill_null(self.now_ts)
             )
         elif "match_created_at" in cols:
-            return pl.col("match_created_at").fill_null(
-                int(self.now.timestamp())
-            )
+            return pl.col("match_created_at").fill_null(self.now_ts)
         else:
             # Fallback to current timestamp if no timestamp columns
-            return pl.lit(int(self.now.timestamp()))
+            return pl.lit(self.now_ts)
 
     def _decay_expr(self, ts_col: str) -> pl.Expr:
         """Create expression for time decay."""
         return (
-            (
-                (int(self.now.timestamp()) - pl.col(ts_col).cast(pl.Float64))
-                / 86400.0
-            )
+            ((self.now_ts - pl.col(ts_col).cast(pl.Float64)) / 86400.0)
             .mul(-self.decay_rate)
             .exp()
         )
@@ -1382,12 +1435,11 @@ class RatingEngine:
         to_col : str | None
             Destination node column; if None, uses edges.columns[1]
         """
-        totals = edges.group_by(group_col).agg(
-            pl.col("w_sum").sum().alias("tot_w")
-        )
         dest = to_col or edges.columns[1]
         return (
-            edges.join(totals, on=group_col)
+            edges.with_columns(
+                pl.col("w_sum").sum().over(group_col).alias("tot_w")
+            )
             .with_columns((pl.col("w_sum") / pl.col("tot_w")).alias("norm_w"))
             .select([group_col, dest, "norm_w"])
         )
