@@ -4,11 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-
-try:
-    import scipy.sparse as sp
-except ImportError:
-    sp = None  # type: ignore
+import scipy.sparse as sp
 
 
 @dataclass(frozen=True)
@@ -45,17 +41,10 @@ def pagerank_sparse(
         PageRank scores vector (sums to 1)
     """
     # Create sparse matrix if scipy is available
-    A = sp.csr_matrix((weights, (rows, cols)), shape=(n, n)) if sp else None
+    A = sp.csr_matrix((weights, (rows, cols)), shape=(n, n))
 
     # Compute normalization per orientation
-    if sp:
-        sums = np.asarray(
-            A.sum(axis=1 if cfg.orientation == "row" else 0)
-        ).ravel()
-    else:
-        # Fallback: compute sums with np.add.at on indices
-        sums = np.zeros(n, dtype=float)
-        np.add.at(sums, rows if cfg.orientation == "row" else cols, weights)
+    sums = np.asarray(A.sum(axis=1 if cfg.orientation == "row" else 0)).ravel()
 
     # Compute inverse for normalization
     inv = np.zeros_like(sums)
@@ -64,7 +53,7 @@ def pagerank_sparse(
 
     # Transition multiply implemented via sparse matvec with proper normalization
     def multiply(v: np.ndarray) -> np.ndarray:
-        if sp and A is not None:
+        if A is not None:
             if cfg.orientation == "row":
                 # P^T @ v, but P row-stochastic => weight rows by inv[row]
                 # => equivalent to A^T @ (v * inv)
