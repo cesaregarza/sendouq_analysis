@@ -14,6 +14,123 @@ if TYPE_CHECKING:
 
 import polars as pl
 
+# Support for new engine
+try:
+    from rankings.algorithms import TTLEngine
+except ImportError:
+    TTLEngine = None
+
+
+def _get_engine_attributes(engine):
+    """
+    Extract necessary attributes from either old or new engine type.
+
+    Returns a dict with keys:
+    - tournament_influence
+    - now
+    - decay_rate
+    - damping_factor
+    - beta
+    - ratings_df
+    - win_pagerank
+    - loss_pagerank
+    - denominators_df
+    - global_prior
+    """
+    from datetime import datetime, timezone
+
+    attrs = {}
+
+    # Check if it's the new TTLEngine (by checking for specific attributes)
+    if hasattr(engine, "last_result") and hasattr(
+        engine, "tournament_influence"
+    ):
+        attrs["tournament_influence"] = engine.tournament_influence
+        # For TTLEngine, get now from clock or use current time
+        if hasattr(engine, "clock") and hasattr(engine.clock, "now"):
+            now_value = engine.clock.now
+            # Check if it's already a datetime or needs conversion from timestamp
+            if isinstance(now_value, (int, float)):
+                attrs["now"] = datetime.fromtimestamp(
+                    now_value, tz=timezone.utc
+                )
+            else:
+                attrs["now"] = now_value
+        else:
+            attrs["now"] = datetime.now(timezone.utc)
+        attrs["decay_rate"] = (
+            engine.config.decay.decay_rate if hasattr(engine, "config") else 0.0
+        )
+        attrs["damping_factor"] = (
+            engine.config.pagerank.alpha if hasattr(engine, "config") else 0.85
+        )
+        attrs["beta"] = (
+            engine.config.engine.beta
+            if hasattr(engine, "config") and hasattr(engine.config, "engine")
+            else 0.0
+        )
+        attrs["ratings_df"] = None  # May need to build from last_result
+        attrs["win_pagerank"] = None
+        attrs["loss_pagerank"] = None
+        attrs["denominators_df"] = None
+        attrs["global_prior"] = 0.0
+
+        # Build ratings_df from last_result if available
+        if hasattr(engine, "last_result") and engine.last_result:
+            result = engine.last_result
+            if hasattr(result, "ids") and hasattr(result, "scores"):
+                # Handle scores as either numpy array or list
+                scores_list = (
+                    result.scores.tolist()
+                    if hasattr(result.scores, "tolist")
+                    else result.scores
+                )
+                data = {"id": result.ids, "score": scores_list}
+                if result.win_pr is not None:
+                    attrs["win_pagerank"] = result.win_pr
+                    win_pr_list = (
+                        result.win_pr.tolist()
+                        if hasattr(result.win_pr, "tolist")
+                        else result.win_pr
+                    )
+                    data["win_pr"] = win_pr_list
+                if result.loss_pr is not None:
+                    attrs["loss_pagerank"] = result.loss_pr
+                    loss_pr_list = (
+                        result.loss_pr.tolist()
+                        if hasattr(result.loss_pr, "tolist")
+                        else result.loss_pr
+                    )
+                    data["loss_pr"] = loss_pr_list
+                attrs["ratings_df"] = pl.DataFrame(data)
+
+    # Check if it's the old RatingEngine
+    else:
+        attrs["tournament_influence"] = getattr(
+            engine, "tournament_influence_", None
+        )
+        now_value = getattr(engine, "now", None)
+        # Handle different types of now values
+        if now_value is not None:
+            if isinstance(now_value, (int, float)):
+                attrs["now"] = datetime.fromtimestamp(
+                    now_value, tz=timezone.utc
+                )
+            else:
+                attrs["now"] = now_value
+        else:
+            attrs["now"] = datetime.now(timezone.utc)
+        attrs["decay_rate"] = getattr(engine, "decay_rate", 0.0)
+        attrs["damping_factor"] = getattr(engine, "damping_factor", 0.85)
+        attrs["beta"] = getattr(engine, "beta", 0.0)
+        attrs["ratings_df"] = getattr(engine, "ratings_df", None)
+        attrs["win_pagerank"] = getattr(engine, "win_pagerank_", None)
+        attrs["loss_pagerank"] = getattr(engine, "loss_pagerank_", None)
+        attrs["denominators_df"] = getattr(engine, "denominators_df_", None)
+        attrs["global_prior"] = getattr(engine, "global_prior_", 0.0)
+
+    return attrs
+
 
 def get_most_influential_matches(
     player_id: int,
@@ -54,16 +171,16 @@ def get_most_influential_matches(
     import math
     from datetime import timezone
 
+    # Get engine attributes
+    engine_attrs = _get_engine_attributes(engine)
+
     # Get tournament influences
-    if (
-        not hasattr(engine, "tournament_influence_")
-        or engine.tournament_influence_ is None
-    ):
+    if engine_attrs["tournament_influence"] is None:
         raise ValueError(
             "Engine must have computed tournament influences. Run rank_players() first."
         )
 
-    tournament_influence = engine.tournament_influence_
+    tournament_influence = engine_attrs["tournament_influence"]
 
     # Convert tournament influences to DataFrame for joining
     influence_df = pl.DataFrame(
@@ -92,17 +209,31 @@ def get_most_influential_matches(
         pl.when(pl.col("last_game_finished_at").is_not_null())
         .then(pl.col("last_game_finished_at"))
         .otherwise(pl.col("match_created_at"))
-        .fill_null(int(engine.now.timestamp()))
+        .fill_null(
+            int(
+                engine_attrs["now"].timestamp()
+                if hasattr(engine_attrs["now"], "timestamp")
+                else engine_attrs["now"]
+            )
+            if engine_attrs["now"]
+            else 0
+        )
         .alias("event_ts")
     )
 
     # Calculate time decay
+    decay_rate = engine_attrs["decay_rate"]
+    # Handle now as either datetime or timestamp
+    if engine_attrs["now"] is not None:
+        if hasattr(engine_attrs["now"], "timestamp"):
+            now_ts = int(engine_attrs["now"].timestamp())
+        else:
+            now_ts = int(engine_attrs["now"])
+    else:
+        now_ts = 0
     matches_with_influence = matches_with_influence.with_columns(
-        (
-            (int(engine.now.timestamp()) - pl.col("event_ts").cast(pl.Float64))
-            / 86400.0
-        )
-        .mul(-engine.decay_rate)
+        ((now_ts - pl.col("event_ts").cast(pl.Float64)) / 86400.0)
+        .mul(-decay_rate)
         .exp()
         .alias("time_decay")
     )
@@ -117,11 +248,11 @@ def get_most_influential_matches(
     )
 
     # Calculate raw match weight w_m (time decay * tournament strength^beta)
+    beta = engine_attrs["beta"]
     matches_with_influence = matches_with_influence.with_columns(
-        (
-            pl.col("time_decay")
-            * (pl.col("tournament_influence") ** engine.beta)
-        ).alias("w_m")
+        (pl.col("time_decay") * (pl.col("tournament_influence") ** beta)).alias(
+            "w_m"
+        )
     )
 
     # Compute pair-level sums W_ij
@@ -139,10 +270,10 @@ def get_most_influential_matches(
     rated_ids: set[int] = set()
     if (
         hasattr(engine, "ratings_df")
-        and engine.ratings_df is not None
-        and "id" in engine.ratings_df.columns
+        and engine_attrs["ratings_df"] is not None
+        and "id" in engine_attrs["ratings_df"].columns
     ):
-        rated_ids = set(engine.ratings_df["id"].to_list())
+        rated_ids = set(engine_attrs["ratings_df"]["id"].to_list())
         # Check presence of team IDs and player IDs in rated IDs
         has_team_hits = False
         if "winner_team_id" in matches_df.columns:
@@ -183,7 +314,7 @@ def get_most_influential_matches(
             mode = "player" if has_player_hits else "team"
 
     # Calculate match flux depending on detected mode
-    alpha = engine.damping_factor if hasattr(engine, "damping_factor") else 0.85
+    alpha = engine_attrs["damping_factor"]
     if mode == "player":
         # Build player-pair rows per match
         pl_sel = players_df.select(
@@ -246,43 +377,41 @@ def get_most_influential_matches(
 
         # Map r_loser and join denominators if available
         denom_df = None
-        if (
-            hasattr(engine, "denominators_df_")
-            and engine.denominators_df_ is not None
-        ):
+        if engine_attrs["denominators_df"] is not None:
             # Expect denominators for player mode (id == loser_user_id)
             denom_df = (
-                engine.denominators_df_.select(["id", "denom"])
+                engine_attrs["denominators_df"]
+                .select(["id", "denom"])
                 .rename({"id": "loser_user_id"})
                 .with_columns(pl.col("loser_user_id").cast(pl.Int64))
             )
 
         # Build PageRank maps for exposure log-odds engine
-        default_score = float(getattr(engine, "global_prior_", 0.0))
+        default_score = float(engine_attrs["global_prior"])
         r_win_map = {}
         r_loss_map = {}
 
         # Check if this is an exposure log-odds engine with PageRank vectors
-        if (
-            hasattr(engine, "win_pagerank_")
-            and engine.win_pagerank_ is not None
-        ):
-            if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
-                player_ids = engine.ratings_df["id"].to_list()
+        if engine_attrs["win_pagerank"] is not None:
+            if engine_attrs["ratings_df"] is not None:
+                player_ids = engine_attrs["ratings_df"]["id"].to_list()
                 for i, pid in enumerate(player_ids):
-                    if i < len(engine.win_pagerank_):
-                        r_win_map[pid] = float(engine.win_pagerank_[i])
-                    if i < len(engine.loss_pagerank_):
-                        r_loss_map[pid] = float(engine.loss_pagerank_[i])
+                    if i < len(engine_attrs["win_pagerank"]):
+                        r_win_map[pid] = float(engine_attrs["win_pagerank"][i])
+                    if engine_attrs["loss_pagerank"] is not None and i < len(
+                        engine_attrs["loss_pagerank"]
+                    ):
+                        r_loss_map[pid] = float(
+                            engine_attrs["loss_pagerank"][i]
+                        )
 
         # Fallback to using ratings if PageRanks not available
-        if (
-            not r_win_map
-            and hasattr(engine, "ratings_df")
-            and engine.ratings_df is not None
-        ):
+        if not r_win_map and engine_attrs["ratings_df"] is not None:
             rating_map = dict(
-                zip(engine.ratings_df["id"], engine.ratings_df["score"])
+                zip(
+                    engine_attrs["ratings_df"]["id"],
+                    engine_attrs["ratings_df"]["score"],
+                )
             )
             r_win_map = rating_map
             r_loss_map = rating_map
@@ -384,11 +513,12 @@ def get_most_influential_matches(
         denom_df = None
         if (
             hasattr(engine, "denominators_df_")
-            and engine.denominators_df_ is not None
+            and engine_attrs["denominators_df"] is not None
         ):
             # Expect denominators for team mode (id == loser_team_id)
             denom_df = (
-                engine.denominators_df_.select(["id", "denom"])
+                engine_attrs["denominators_df"]
+                .select(["id", "denom"])
                 .rename({"id": "loser_team_id"})
                 .with_columns(pl.col("loser_team_id").cast(pl.Int64))
             )
@@ -407,13 +537,16 @@ def get_most_influential_matches(
             )
 
         rating_map = {}
-        if hasattr(engine, "ratings_df") and engine.ratings_df is not None:
+        if engine_attrs["ratings_df"] is not None:
             rating_map = dict(
-                zip(engine.ratings_df["id"], engine.ratings_df["score"])
+                zip(
+                    engine_attrs["ratings_df"]["id"],
+                    engine_attrs["ratings_df"]["score"],
+                )
             )
         default_score = (
-            engine.global_prior_
-            if getattr(engine, "global_prior_", None) is not None
+            engine_attrs["global_prior"]
+            if engine_attrs["global_prior"] is not None
             else 0.0
         )
 

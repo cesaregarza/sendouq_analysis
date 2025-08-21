@@ -22,6 +22,73 @@ from rankings.analysis.utils.formatting import (
 from rankings.analysis.utils.matches import get_most_influential_matches
 from rankings.analysis.utils.names import get_tournament_name_lookup
 
+# Support for new engine
+try:
+    from rankings.algorithms import TTLEngine
+except ImportError:
+    TTLEngine = None
+
+
+def _get_engine_values(engine, player_id):
+    """
+    Extract win_pr, loss_pr, and exposure values from either old or new engine.
+
+    Returns:
+        tuple: (win_pr, loss_pr, exposure) or (None, None, None) if not found
+    """
+    # Check if it's the new TTLEngine (by checking for last_result attribute)
+    if hasattr(engine, "last_result") and hasattr(
+        engine, "tournament_influence"
+    ):
+        if engine.last_result:
+            result = engine.last_result
+            if hasattr(result, "ids") and player_id in result.ids:
+                idx = result.ids.index(player_id)
+                win_pr = (
+                    float(result.win_pr[idx])
+                    if result.win_pr is not None and idx < len(result.win_pr)
+                    else None
+                )
+                loss_pr = (
+                    float(result.loss_pr[idx])
+                    if result.loss_pr is not None and idx < len(result.loss_pr)
+                    else None
+                )
+                exposure = (
+                    float(result.exposure[idx])
+                    if result.exposure is not None
+                    and idx < len(result.exposure)
+                    else None
+                )
+                return win_pr, loss_pr, exposure
+
+    # Check if it's the old RatingEngine
+    elif hasattr(engine, "active_players_") and hasattr(
+        engine, "win_pagerank_"
+    ):
+        try:
+            player_idx = engine.active_players_.index(player_id)
+            win_pr = (
+                float(engine.win_pagerank_[player_idx])
+                if player_idx < len(engine.win_pagerank_)
+                else None
+            )
+            loss_pr = (
+                float(engine.loss_pagerank_[player_idx])
+                if player_idx < len(engine.loss_pagerank_)
+                else None
+            )
+            exposure = None
+            if hasattr(engine, "exposure_teleport_") and player_idx < len(
+                engine.exposure_teleport_
+            ):
+                exposure = float(engine.exposure_teleport_[player_idx])
+            return win_pr, loss_pr, exposure
+        except (ValueError, IndexError):
+            pass
+
+    return None, None, None
+
 
 def analyze_player(
     player_id: int,
@@ -115,30 +182,16 @@ def analyze_player(
             }
 
             # If we have the engine, get the actual values from it
-            if (
-                engine is not None
-                and hasattr(engine, "win_pagerank_")
-                and hasattr(engine, "loss_pagerank_")
-            ):
-                if hasattr(engine, "active_players_"):
-                    try:
-                        player_idx = engine.active_players_.index(player_id)
-                        if player_idx < len(engine.win_pagerank_):
-                            ranking_stats["win_pr"] = float(
-                                engine.win_pagerank_[player_idx]
-                            )
-                        if player_idx < len(engine.loss_pagerank_):
-                            ranking_stats["loss_pr"] = float(
-                                engine.loss_pagerank_[player_idx]
-                            )
-                        if hasattr(
-                            engine, "exposure_teleport_"
-                        ) and player_idx < len(engine.exposure_teleport_):
-                            ranking_stats["exposure"] = float(
-                                engine.exposure_teleport_[player_idx]
-                            )
-                    except (ValueError, IndexError):
-                        pass  # Player not found in active players
+            if engine is not None:
+                win_pr, loss_pr, exposure = _get_engine_values(
+                    engine, player_id
+                )
+                if win_pr is not None:
+                    ranking_stats["win_pr"] = win_pr
+                if loss_pr is not None:
+                    ranking_stats["loss_pr"] = loss_pr
+                if exposure is not None:
+                    ranking_stats["exposure"] = exposure
 
             # Calculate win/loss ratio if PageRanks available
             if ranking_stats["loss_pr"] > 0:
@@ -421,10 +474,26 @@ def generate_tournament_report(
     # Get tournament names
     tournament_names = get_tournament_name_lookup(tournament_data)
 
+    # Get tournament influence and strength from engine
+    tournament_influence = None
+    tournament_strength = None
+
+    # Check if it's the new TTLEngine (by checking for specific attributes)
+    if hasattr(engine, "last_result") and hasattr(
+        engine, "tournament_influence"
+    ):
+        tournament_influence = engine.tournament_influence
+        # New engine may not have tournament_strength
+        tournament_strength = getattr(engine, "tournament_strength", None)
+    else:
+        # Old RatingEngine
+        tournament_influence = getattr(engine, "tournament_influence", None)
+        tournament_strength = getattr(engine, "tournament_strength", None)
+
     # Format the output
     formatted_output = format_tournament_influence_summary(
-        tournament_influence=engine.tournament_influence,
-        tournament_strength=engine.tournament_strength,
+        tournament_influence=tournament_influence,
+        tournament_strength=tournament_strength,
         tournament_names=tournament_names,
         top_n=top_n,
     )
@@ -433,8 +502,8 @@ def generate_tournament_report(
         print(formatted_output)
 
     return {
-        "tournament_influence": engine.tournament_influence,
-        "tournament_strength": engine.tournament_strength,
+        "tournament_influence": tournament_influence,
+        "tournament_strength": tournament_strength,
         "tournament_names": tournament_names,
         "formatted_output": formatted_output,
     }
