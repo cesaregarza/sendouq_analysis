@@ -126,6 +126,7 @@ def format_influential_matches(
     player_name: Optional[str] = None,
     tournament_names: Optional[dict[int, str]] = None,
     max_opponent_length: int = 50,
+    loo_impacts: Optional[dict[int, float]] = None,
 ) -> str:
     """
     Format influential matches for display using flux-based metrics.
@@ -149,12 +150,12 @@ def format_influential_matches(
     output = []
 
     if player_name:
-        output.append(f"\n🎯 Most Influential Matches for {player_name}")
+        output.append(f"\nMost Influential Matches for {player_name}")
         output.append("=" * 70)
 
     # Format wins
     output.append(
-        f"\n🏆 Top {influential_matches['wins'].height} Most Influential WINS:"
+        f"\nTop {influential_matches['wins'].height} Most Influential WINS:"
     )
     output.append("-" * 100)
 
@@ -209,14 +210,33 @@ def format_influential_matches(
                     and row["share_incoming"] is not None
                 ):
                     share_pct = row["share_incoming"] * 100
-                    output.append(
-                        f"   • Relative Importance (wins): {share_pct:.1f}%"
-                    )
+                    if share_pct < 0.1:
+                        # Use more precision for very small percentages
+                        output.append(
+                            f"   • Relative Importance: {share_pct:.3f}% of total flux"
+                        )
+                    else:
+                        output.append(
+                            f"   • Relative Importance: {share_pct:.1f}% of total flux"
+                        )
             else:
                 # Fall back to old weight if flux not available
                 output.append(
                     f"   • Match Weight: {row.get('w_m', row.get('match_weight', 0)):.6f}"
                 )
+
+            # Add LOO score impact if available
+            match_id = row.get("match_id")
+            if loo_impacts and match_id in loo_impacts:
+                score_impact = loo_impacts[match_id]
+                if score_impact >= 0:
+                    output.append(
+                        f"   • Score Contribution: +{score_impact:.6f}"
+                    )
+                else:
+                    output.append(
+                        f"   • Score Contribution: {score_impact:.6f}"
+                    )
 
             output.append(
                 f"   • Tournament Influence: {row['tournament_influence']:.3f}"
@@ -227,7 +247,7 @@ def format_influential_matches(
 
     # Format losses
     output.append(
-        f"\n💔 Top {influential_matches['losses'].height} Most Damaging LOSSES (worst results):"
+        f"\nTop {influential_matches['losses'].height} Most Damaging LOSSES (worst results):"
     )
     output.append("-" * 100)
 
@@ -282,14 +302,33 @@ def format_influential_matches(
                     and row["share_outgoing"] is not None
                 ):
                     share_pct = row["share_outgoing"] * 100
-                    output.append(
-                        f"   • Damage to Rating: {share_pct:.1f}% of total loss impact"
-                    )
+                    if share_pct < 0.1:
+                        # Use more precision for very small percentages
+                        output.append(
+                            f"   • Relative Importance: {share_pct:.3f}% of total flux"
+                        )
+                    else:
+                        output.append(
+                            f"   • Relative Importance: {share_pct:.1f}% of total flux"
+                        )
             else:
                 # Fall back to old weight if flux not available
                 output.append(
                     f"   • Match Weight: {row.get('w_m', row.get('match_weight', 0)):.6f}"
                 )
+
+            # Add LOO score impact if available (losses typically have negative contribution)
+            match_id = row.get("match_id")
+            if loo_impacts and match_id in loo_impacts:
+                score_impact = loo_impacts[match_id]
+                if score_impact >= 0:
+                    output.append(
+                        f"   • Score Contribution: +{score_impact:.6f}"
+                    )
+                else:
+                    output.append(
+                        f"   • Score Contribution: {score_impact:.6f}"
+                    )
 
             output.append(
                 f"   • Tournament Influence: {row['tournament_influence']:.3f}"

@@ -7,6 +7,7 @@ This module contains the advanced analysis capabilities:
 """
 
 from rankings.analysis.engine import RatingEngine
+from rankings.analysis.loo_analyzer import LOOAnalyzer
 from rankings.analysis.transforms import bt_prob
 from rankings.analysis.utils import (
     add_match_timestamps,
@@ -31,6 +32,7 @@ from rankings.analysis.utils import (
 __all__ = [
     # Engine
     "RatingEngine",
+    "LOOAnalyzer",
     # Probability models
     "bt_prob",
     # Utils

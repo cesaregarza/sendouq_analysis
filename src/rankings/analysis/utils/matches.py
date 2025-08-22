@@ -73,7 +73,24 @@ def _get_engine_attributes(engine):
         attrs["win_pagerank"] = None
         attrs["loss_pagerank"] = None
         attrs["denominators_df"] = None
-        attrs["global_prior"] = 0.0
+        # Use a small positive prior to avoid zero flux on unmapped IDs
+        prior = 1e-12
+        if hasattr(engine, "last_result") and engine.last_result:
+            if (
+                hasattr(engine.last_result, "exposure")
+                and engine.last_result.exposure is not None
+            ):
+                exp = (
+                    engine.last_result.exposure.tolist()
+                    if hasattr(engine.last_result.exposure, "tolist")
+                    else list(engine.last_result.exposure)
+                )
+                if exp:
+                    # Use median exposure as prior (robust and strictly positive)
+                    exp_sorted = sorted(float(x) for x in exp if x is not None)
+                    if exp_sorted:
+                        prior = max(exp_sorted[len(exp_sorted) // 2], 1e-12)
+        attrs["global_prior"] = prior
 
         # Build ratings_df from last_result if available
         if hasattr(engine, "last_result") and engine.last_result:
@@ -205,11 +222,16 @@ def get_most_influential_matches(
 
     # Add time decay weight
     # First add event timestamp
-    matches_with_influence = matches_with_influence.with_columns(
-        pl.when(pl.col("last_game_finished_at").is_not_null())
-        .then(pl.col("last_game_finished_at"))
-        .otherwise(pl.col("match_created_at"))
-        .fill_null(
+    # Handle different timestamp columns that might exist
+    if "last_game_finished_at" in matches_with_influence.columns:
+        timestamp_expr = pl.col("last_game_finished_at")
+    elif "match_created_at" in matches_with_influence.columns:
+        timestamp_expr = pl.col("match_created_at")
+    elif "ts" in matches_with_influence.columns:
+        timestamp_expr = pl.col("ts")
+    else:
+        # Default to now if no timestamp column exists
+        timestamp_expr = pl.lit(
             int(
                 engine_attrs["now"].timestamp()
                 if hasattr(engine_attrs["now"], "timestamp")
@@ -218,7 +240,17 @@ def get_most_influential_matches(
             if engine_attrs["now"]
             else 0
         )
-        .alias("event_ts")
+
+    matches_with_influence = matches_with_influence.with_columns(
+        timestamp_expr.fill_null(
+            int(
+                engine_attrs["now"].timestamp()
+                if hasattr(engine_attrs["now"], "timestamp")
+                else engine_attrs["now"]
+            )
+            if engine_attrs["now"]
+            else 0
+        ).alias("event_ts")
     )
 
     # Calculate time decay
@@ -238,13 +270,30 @@ def get_most_influential_matches(
         .alias("time_decay")
     )
 
-    # Ensure column types are correct
+    # Ensure column types are correct and add total_games if needed
+    columns_to_cast = [
+        pl.col("tournament_id").cast(pl.Int64),
+        pl.col("winner_team_id").cast(pl.Int64),
+        pl.col("loser_team_id").cast(pl.Int64),
+    ]
+
+    # Add total_games if we have score columns
+    if (
+        "team1_score" in matches_with_influence.columns
+        and "team2_score" in matches_with_influence.columns
+    ):
+        if "total_games" not in matches_with_influence.columns:
+            columns_to_cast.append(
+                (pl.col("team1_score") + pl.col("team2_score")).alias(
+                    "total_games"
+                )
+            )
+    elif "total_games" not in matches_with_influence.columns:
+        # Default to 0 if no score information available
+        columns_to_cast.append(pl.lit(0).alias("total_games"))
+
     matches_with_influence = matches_with_influence.with_columns(
-        [
-            pl.col("tournament_id").cast(pl.Int64),
-            pl.col("winner_team_id").cast(pl.Int64),
-            pl.col("loser_team_id").cast(pl.Int64),
-        ]
+        columns_to_cast
     )
 
     # Calculate raw match weight w_m (time decay * tournament strength^beta)
@@ -266,18 +315,19 @@ def get_most_influential_matches(
     )
 
     # Detect engine mode (player vs team) based on what IDs were ranked
-    mode = "unknown"
-    rated_ids: set[int] = set()
+    # Default to player mode for ExposureLogOdds-like engines
+    mode = "player"
     if (
-        hasattr(engine, "ratings_df")
-        and engine_attrs["ratings_df"] is not None
+        engine_attrs["ratings_df"] is not None
         and "id" in engine_attrs["ratings_df"].columns
     ):
-        rated_ids = set(engine_attrs["ratings_df"]["id"].to_list())
-        # Check presence of team IDs and player IDs in rated IDs
-        has_team_hits = False
-        if "winner_team_id" in matches_df.columns:
-            # Build a sample set from both team columns
+        # Convert all IDs to strings for robust comparison
+        to_str_set = lambda seq: set(map(str, seq))
+        rated_str = to_str_set(engine_attrs["ratings_df"]["id"].to_list())
+
+        # Get sample team IDs
+        team_str = set()
+        if "winner_team_id" in matches_df.columns and matches_df.height > 0:
             team_ids_col = (
                 matches_df.select(["winner_team_id"])
                 .rename({"winner_team_id": "id"})
@@ -289,29 +339,21 @@ def get_most_influential_matches(
                 .get_column("id")
                 .drop_nulls()
             )
-            sample_team_ids = (
-                set(team_ids_col.head(1000).to_list())
-                if matches_df.height > 0
-                else set()
-            )
-            has_team_hits = any(tid in rated_ids for tid in sample_team_ids)
+            team_str = to_str_set(team_ids_col.head(1000).to_list())
 
-        has_player_hits = False
-        if "user_id" in players_df.columns:
-            sample_player_ids = (
-                set(players_df["user_id"].drop_nulls().head(2000).to_list())
-                if players_df.height > 0
-                else set()
+        # Get sample player IDs
+        player_str = set()
+        if players_df.height > 0 and "user_id" in players_df.columns:
+            player_str = to_str_set(
+                players_df["user_id"].drop_nulls().head(2000).to_list()
             )
-            has_player_hits = any(uid in rated_ids for uid in sample_player_ids)
 
-        if has_player_hits and not has_team_hits:
-            mode = "player"
-        elif has_team_hits and not has_player_hits:
-            mode = "team"
-        else:
-            # Fallback: prefer player mode if any player IDs appear
-            mode = "player" if has_player_hits else "team"
+        # Check for overlaps
+        has_player_hits = bool(rated_str & player_str)
+        has_team_hits = bool(rated_str & team_str)
+
+        # Prefer player mode on ties/ambiguity (since ExposureLogOddsEngine ranks players)
+        mode = "player" if has_player_hits or not has_team_hits else "team"
 
     # Calculate match flux depending on detected mode
     alpha = engine_attrs["damping_factor"]
@@ -371,9 +413,9 @@ def get_most_influential_matches(
             )  # keep w_m for pairing
         )
 
-        pairs = losers.join(
-            winners, on=["match_id", "w_m"], how="inner"
-        ).select(["match_id", "loser_user_id", "winner_user_id", "w_m"])
+        pairs = losers.join(winners, on=["match_id"], how="inner").select(
+            ["match_id", "loser_user_id", "winner_user_id", "w_m"]
+        )
 
         # Map r_loser and join denominators if available
         denom_df = None
@@ -387,7 +429,8 @@ def get_most_influential_matches(
             )
 
         # Build PageRank maps for exposure log-odds engine
-        default_score = float(engine_attrs["global_prior"])
+        # Ensure default_score is strictly positive to avoid zero flux
+        default_score = max(float(engine_attrs["global_prior"] or 0.0), 1e-12)
         r_win_map = {}
         r_loss_map = {}
 
@@ -628,21 +671,6 @@ def get_most_influential_matches(
             ]
         )
 
-    # Calculate share of incoming flux for wins
-    if not wins.is_empty():
-        # Calculate share relative to total flux in this result set
-        # This shows the relative importance among the player's wins
-        total_win_flux = (
-            wins["match_flux"].sum() if "match_flux" in wins.columns else 0
-        )
-
-        if total_win_flux > 0:
-            wins = wins.with_columns(
-                (pl.col("match_flux") / total_win_flux).alias("share_incoming")
-            )
-        else:
-            wins = wins.with_columns(pl.lit(0.0).alias("share_incoming"))
-
     # Find matches where player's team lost
     losses = matches_with_influence.join(
         player_teams,
@@ -679,6 +707,21 @@ def get_most_influential_matches(
                 pl.lit(None).alias("r_winner"),
             ]
         )
+
+    # Calculate share of incoming flux for wins
+    if not wins.is_empty():
+        # Calculate share relative to total flux in this result set
+        # This shows the relative importance among the player's wins
+        total_win_flux = (
+            wins["match_flux"].sum() if "match_flux" in wins.columns else 0
+        )
+
+        if total_win_flux > 0:
+            wins = wins.with_columns(
+                (pl.col("match_flux") / total_win_flux).alias("share_incoming")
+            )
+        else:
+            wins = wins.with_columns(pl.lit(0.0).alias("share_incoming"))
 
     # Calculate share of outgoing flux for losses
     if not losses.is_empty():

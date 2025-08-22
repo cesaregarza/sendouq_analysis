@@ -1,8 +1,5 @@
-# === PATCH: Refactored ExposureLogOddsEngine (parity with old) ===
-
-import math
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import polars as pl
@@ -54,6 +51,13 @@ class ExposureLogOddsEngine:
         # keep last teleport for diagnostics
         self._last_rho: Optional[np.ndarray] = None
 
+        # LOO analyzer infrastructure (lazily initialized)
+        self._loo_analyzer = None
+        self._loo_matches_df = None
+        self._loo_players_df = None
+        # Store converted matches for LOO
+        self._converted_matches_df = None
+
     def rank_players(
         self,
         matches: pl.DataFrame,
@@ -63,17 +67,23 @@ class ExposureLogOddsEngine:
         start_time = time.time()
 
         # 1) Get active players and tournament influences via tick‑tock, like the legacy path
-        self.logger.info(
-            "Running tick-tock to obtain active players & tournament influences..."
-        )
-        tick = self._run_tick_tock_for_active_players(matches, players)
-        active_players = tick["active_players"]
-        tournament_influence = tick["tournament_influence"]
-        if not active_players:
-            self.logger.warning(
-                "No active players from tick-tock; returning empty result."
+        if self.config.use_tick_tock_active:
+            self.logger.info(
+                "Running tick-tock to obtain active players & tournament influences..."
             )
-            return pl.DataFrame()
+            tick = self._run_tick_tock_for_active_players(matches, players)
+            active_players = tick["active_players"]
+            tournament_influence = tick["tournament_influence"]
+            if not active_players:
+                self.logger.warning(
+                    "No active players from tick-tock; returning empty result."
+                )
+                return pl.DataFrame()
+        else:
+            # Skip tick-tock, use all players
+            self.logger.info("Skipping tick-tock (use_tick_tock_active=False)")
+            active_players = players["player_id"].to_list()
+            tournament_influence = tournament_influence or {}
 
         # 2) Convert matches into compact per-match lists with roster expansion and weights
         self.logger.info("Converting matches...")
@@ -87,6 +97,8 @@ class ExposureLogOddsEngine:
             include_share=True,  # IMPORTANT: we need 'share' for exposure teleport
             streaming=False,
         )
+        # Store for LOO analyzer
+        self._converted_matches_df = mdf
         if mdf.is_empty():
             self.logger.warning(
                 "No valid matches after conversion; returning empty result."
@@ -231,8 +243,159 @@ class ExposureLogOddsEngine:
             raw_scores=scores.copy(),
         )
 
+        # Store tournament influence for analysis tools
+        self.tournament_influence = tournament_influence
+
         log_timing("exposure_log_odds_total", time.time() - start_time)
         return result
+
+    def prepare_loo_analyzer(
+        self,
+        matches_df: Optional[pl.DataFrame] = None,
+        players_df: Optional[pl.DataFrame] = None,
+        force_rebuild: bool = False,
+    ) -> None:
+        """
+        Prepare LOO analyzer with pre-factorized solvers for fast repeated analysis.
+
+        This should be called after rank_players() to set up the LOO infrastructure.
+        The analyzer is cached and reused unless force_rebuild is True.
+
+        Args:
+            matches_df: Optional matches DataFrame (uses internal converted if None)
+            players_df: Optional players DataFrame (uses last ranking data if None)
+            force_rebuild: Force rebuild even if analyzer exists
+        """
+        if self.last_result is None:
+            raise ValueError(
+                "Must call rank_players() before preparing LOO analyzer"
+            )
+
+        # Use internal converted matches if not provided
+        if matches_df is None:
+            if self._converted_matches_df is None:
+                raise ValueError(
+                    "No converted matches available. Call rank_players() first."
+                )
+            matches_df = self._converted_matches_df
+            self.logger.info("Using internally converted matches dataframe")
+
+        # Use last result's player data if not provided
+        if players_df is None:
+            # Create a simple players dataframe from last result
+            players_df = pl.DataFrame(
+                {
+                    "player_id": self.last_result.ids,
+                    "name": [f"Player_{pid}" for pid in self.last_result.ids],
+                }
+            )
+            self.logger.info("Using player IDs from last ranking result")
+
+        # Check if we need to rebuild
+        if not force_rebuild and self._loo_analyzer is not None:
+            # Check if data has changed
+            if (
+                self._loo_matches_df is not None
+                and matches_df.equals(self._loo_matches_df)
+                and self._loo_players_df is not None
+                and players_df.equals(self._loo_players_df)
+            ):
+                self.logger.info(
+                    "LOO analyzer already prepared, reusing existing infrastructure"
+                )
+                return
+
+        self.logger.info(
+            "Preparing LOO analyzer with pre-factorized solvers..."
+        )
+        from rankings.analysis.loo_analyzer import LOOAnalyzer
+
+        start_time = time.time()
+        self._loo_analyzer = LOOAnalyzer(self, matches_df, players_df)
+        self._loo_matches_df = matches_df
+        self._loo_players_df = players_df
+
+        prep_time = time.time() - start_time
+        self.logger.info(f"LOO analyzer prepared in {prep_time:.2f}s")
+        self.logger.info(f"  - {len(self._loo_analyzer.node_to_idx)} nodes")
+        self.logger.info(f"  - {self._loo_analyzer.A_win.nnz} win edges")
+        self.logger.info(f"  - {self._loo_analyzer.A_loss.nnz} loss edges")
+        self.logger.info(
+            f"  - {len(self._loo_analyzer._match_cache)} matches cached"
+        )
+
+    def analyze_match_impact(
+        self, match_id: int, player_id: int, include_teleport: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Analyze the impact of removing a match on a player's score.
+
+        Automatically prepares LOO analyzer if needed.
+        Uses pre-factorized solvers for extremely fast analysis.
+
+        Args:
+            match_id: Match to analyze
+            player_id: Player to check impact for
+            include_teleport: Whether to include teleport vector changes
+
+        Returns:
+            Dictionary with impact analysis
+        """
+        # Auto-prepare LOO analyzer if not ready
+        if self._loo_analyzer is None:
+            self.logger.info("LOO analyzer not prepared, initializing now...")
+            self.prepare_loo_analyzer()
+
+        return self._loo_analyzer.impact_of_match_on_player(
+            match_id, player_id, include_teleport
+        )
+
+    def analyze_player_matches(
+        self,
+        player_id: int,
+        limit: Optional[int] = None,
+        include_teleport: bool = True,
+        parallel: bool = True,
+        max_workers: int = 4,
+    ) -> pl.DataFrame:
+        """
+        Analyze impact of all matches involving a player.
+
+        Automatically prepares LOO analyzer if needed.
+        Uses pre-factorized solvers and parallel processing for speed.
+
+        Args:
+            player_id: Player to analyze
+            limit: Maximum number of matches to analyze
+            include_teleport: Whether to include teleport changes
+            parallel: Use parallel processing
+            max_workers: Number of parallel workers
+
+        Returns:
+            DataFrame with match impacts sorted by score change
+        """
+        # Auto-prepare LOO analyzer if not ready
+        if self._loo_analyzer is None:
+            self.logger.info("LOO analyzer not prepared, initializing now...")
+            self.prepare_loo_analyzer()
+
+        return self._loo_analyzer.analyze_player_matches(
+            player_id,
+            limit,
+            include_teleport,
+            use_flux_ranking=True,
+            parallel=parallel,
+            max_workers=max_workers,
+        )
+
+    def get_loo_analyzer(self):
+        """
+        Get the underlying LOO analyzer for advanced usage.
+
+        Returns:
+            LOOAnalyzer instance or None if not prepared
+        """
+        return self._loo_analyzer
 
     # ---------------------------------------------------------------------
     # internals

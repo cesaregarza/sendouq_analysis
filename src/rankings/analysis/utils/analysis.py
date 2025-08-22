@@ -99,6 +99,9 @@ def analyze_player(
     tournament_data: Optional[list[dict]] = None,
     top_n_matches: int = 10,
     print_output: bool = True,
+    include_loo: bool = False,
+    loo_matches: int = 5,
+    score_multiplier: float = 1.0,
 ) -> dict:
     """
     Simplified player analysis function that only needs player_id.
@@ -124,6 +127,12 @@ def analyze_player(
         Number of top influential matches to analyze
     print_output : bool, optional
         Whether to print the formatted output
+    include_loo : bool, optional
+        Whether to include Leave-One-Out score contribution analysis for all influential matches
+    loo_matches : int, optional
+        Deprecated - LOO is now computed for all top_n_matches when include_loo=True
+    score_multiplier : float, optional
+        Multiplier for score values in output (e.g., 1000 to show as per-mille). Default is 1.0
 
     Returns
     -------
@@ -133,6 +142,7 @@ def analyze_player(
         - ranking_stats: Ranking statistics
         - match_stats: Match statistics
         - influential_matches: Top influential wins/losses (if engine provided)
+        - loo_analysis: Leave-One-Out analysis results (if requested)
         - formatted_output: Formatted text output
     """
     result = {}
@@ -312,16 +322,117 @@ def analyze_player(
             if tournament_data:
                 tournament_names = get_tournament_name_lookup(tournament_data)
 
-            # Format output
+            # If LOO is requested and engine supports it, compute LOO impacts for ALL influential matches
+            loo_impacts = {}
+            if include_loo and hasattr(engine, "analyze_match_impact"):
+                try:
+                    logger.info(
+                        f"Computing LOO impacts for top {top_n_matches} influential matches..."
+                    )
+                    # Compute LOO for ALL the influential matches we're displaying
+                    all_match_ids = []
+                    if (
+                        "wins" in influential
+                        and not influential["wins"].is_empty()
+                    ):
+                        all_match_ids.extend(
+                            influential["wins"]["match_id"].to_list()
+                        )
+                    if (
+                        "losses" in influential
+                        and not influential["losses"].is_empty()
+                    ):
+                        all_match_ids.extend(
+                            influential["losses"]["match_id"].to_list()
+                        )
+
+                    # Compute for all matches that will be displayed (not just loo_matches)
+                    for i, match_id in enumerate(all_match_ids, 1):
+                        logger.debug(
+                            f"  Computing LOO for match {i}/{len(all_match_ids)}: {match_id}"
+                        )
+                        impact = engine.analyze_match_impact(
+                            match_id, player_id
+                        )
+                        if impact.get("ok"):
+                            # Store the actual contribution (negative of removal delta) with multiplier
+                            loo_impacts[match_id] = (
+                                -impact["delta"]["score"] * score_multiplier
+                            )
+
+                    logger.info(
+                        f"Computed LOO impacts for {len(loo_impacts)} matches"
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not compute LOO impacts: {e}")
+
+            # Re-sort by LOO impact if available
+            if loo_impacts:
+                # Re-sort wins and losses by absolute LOO impact
+                if "wins" in influential and not influential["wins"].is_empty():
+                    wins_df = influential["wins"]
+                    # Add LOO impact column
+                    wins_with_loo = wins_df.with_columns(
+                        pl.col("match_id")
+                        .map_elements(
+                            lambda x: abs(loo_impacts.get(x, 0.0)),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("abs_loo_impact")
+                    )
+                    # Sort by absolute LOO impact
+                    influential["wins"] = wins_with_loo.sort(
+                        "abs_loo_impact", descending=True
+                    )
+                    # Update influence_rank based on new sorting
+                    influential["wins"] = influential["wins"].with_columns(
+                        pl.arange(1, len(influential["wins"]) + 1).alias(
+                            "influence_rank"
+                        )
+                    )
+
+                if (
+                    "losses" in influential
+                    and not influential["losses"].is_empty()
+                ):
+                    losses_df = influential["losses"]
+                    # Add LOO impact column
+                    losses_with_loo = losses_df.with_columns(
+                        pl.col("match_id")
+                        .map_elements(
+                            lambda x: abs(loo_impacts.get(x, 0.0)),
+                            return_dtype=pl.Float64,
+                        )
+                        .alias("abs_loo_impact")
+                    )
+                    # Sort by absolute LOO impact
+                    influential["losses"] = losses_with_loo.sort(
+                        "abs_loo_impact", descending=True
+                    )
+                    # Update influence_rank based on new sorting
+                    influential["losses"] = influential["losses"].with_columns(
+                        pl.arange(1, len(influential["losses"]) + 1).alias(
+                            "influence_rank"
+                        )
+                    )
+
+                logger.info(
+                    "Re-sorted influential matches by LOO score contribution"
+                )
+
+            # Format output with LOO impacts if available
             formatted_output = format_influential_matches(
                 influential,
                 player_name=player_name,
                 tournament_names=tournament_names,
+                loo_impacts=loo_impacts,
             )
             result["formatted_output"] = formatted_output
         except Exception as e:
             logger.error(f"Failed to get influential matches: {e}")
             result["influential_matches"] = {"error": str(e)}
+
+    # Note: LOO analysis is now integrated into influential matches above when include_loo=True
 
     # Create summary output
     output_lines = []
@@ -335,7 +446,7 @@ def analyze_player(
         output_lines.append(
             f"  Rank: #{int(rs['rank'])} out of {int(rs['total_players'])} (Top {rs['percentile']:.1f}%)"
         )
-        output_lines.append(f"  Score: {rs['score']:.4f}")
+        output_lines.append(f"  Score: {rs['score'] * score_multiplier:.4f}")
 
     if "match_stats" in result:
         ms = result["match_stats"]
@@ -363,6 +474,8 @@ def analyze_player(
 
     if "formatted_output" in result:
         output_lines.append("\n" + result["formatted_output"])
+
+    # LOO analysis is now integrated into influential matches display above
 
     summary_output = "\n".join(output_lines)
     result["summary"] = summary_output
