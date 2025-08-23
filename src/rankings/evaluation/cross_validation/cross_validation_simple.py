@@ -72,7 +72,7 @@ def _optimize_alpha_fast(
     sample_size: int = 10000,
     alpha_range: tuple = (0.1, 2.0),
     n_steps: int = 20,
-    warm_start: Optional[float] = None,
+    warm_start: float | None = None,
 ) -> float:
     """Optimize alpha parameter using sampling for speed.
 
@@ -164,7 +164,7 @@ def _optimize_alpha_fast(
 
 def cross_validate_simple(
     engine_class: Type,
-    engine_params: Dict[str, Any],
+    engine_params: dict[str, Any],
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
     ranking_entity: str = "player",
@@ -176,7 +176,7 @@ def cross_validate_simple(
     weight_scheme: str = "entropy_squared",
     min_train_tournaments: int = 50,
     progress_bar: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run simple cross-validation with fast alpha optimization.
 
     Args:

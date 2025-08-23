@@ -7,19 +7,14 @@ tournament prediction capabilities using proper temporal validation.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import polars as pl
 
 logger = logging.getLogger(__name__)
 
-from rankings.evaluation.tournament_metrics import (
-    mean_absolute_seed_error,
-    ndcg_at_k,
-    pairwise_agreement,
-    tournament_prediction_summary,
-)
+from rankings.evaluation.tournament_metrics import tournament_prediction_summary
 from rankings.tournament_prediction import (
     MatchPredictor,
     MonteCarloSimulator,
@@ -33,7 +28,7 @@ from rankings.tournament_prediction import (
 class TournamentPredictionSplit:
     """Data split for tournament prediction evaluation."""
 
-    train_tournaments: List[int]  # Tournament IDs for training
+    train_tournaments: list[int]  # Tournament IDs for training
     test_tournament: int  # Single tournament ID for testing
     train_start_date: int  # Unix timestamp
     train_end_date: int  # Unix timestamp
@@ -44,7 +39,7 @@ def create_tournament_prediction_splits(
     tournaments_df: pl.DataFrame,
     min_train_tournaments: int = 10,
     gap_weeks: int = 0,
-) -> List[TournamentPredictionSplit]:
+) -> list[TournamentPredictionSplit]:
     """
     Create time-based splits for tournament prediction evaluation.
 
@@ -62,7 +57,7 @@ def create_tournament_prediction_splits(
 
     Returns
     -------
-    List[TournamentPredictionSplit]
+    list[TournamentPredictionSplit]
         List of train/test splits
     """
     # Sort tournaments by start time
@@ -110,11 +105,11 @@ def create_tournament_prediction_splits(
 
 def evaluate_tournament_prediction(
     split: TournamentPredictionSplit,
-    player_ratings: Dict[int, float],
+    player_ratings: dict[int, float],
     matches_df: pl.DataFrame,
     teams_df: pl.DataFrame,
-    config: Optional[TeamRatingConfig] = None,
-) -> Dict[str, Any]:
+    config: TeamRatingConfig | None = None,
+) -> dict[str, Any]:
     """
     Evaluate tournament prediction on a single split.
 
@@ -122,18 +117,18 @@ def evaluate_tournament_prediction(
     ----------
     split : TournamentPredictionSplit
         Train/test split specification
-    player_ratings : Dict[int, float]
+    player_ratings : dict[int, float]
         Player ratings trained on training data
     matches_df : pl.DataFrame
         Match data for the test tournament
     teams_df : pl.DataFrame
         Team roster data for the test tournament
-    config : Optional[TeamRatingConfig]
+    config : TeamRatingConfig | None
         Configuration for team strength calculation
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Evaluation metrics for this split
     """
     # Initialize components
@@ -257,11 +252,11 @@ def cross_validate_tournament_predictions(
     tournaments_df: pl.DataFrame,
     matches_df: pl.DataFrame,
     teams_df: pl.DataFrame,
-    player_ratings_by_date: Dict[int, Dict[int, float]],
-    n_splits: Optional[int] = None,
-    config: Optional[TeamRatingConfig] = None,
+    player_ratings_by_date: dict[int, dict[int, float]],
+    n_splits: int | None = None,
+    config: TeamRatingConfig | None = None,
     verbose: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run cross-validation for tournament predictions.
 
@@ -273,18 +268,18 @@ def cross_validate_tournament_predictions(
         Match data
     teams_df : pl.DataFrame
         Team roster data
-    player_ratings_by_date : Dict[int, Dict[int, float]]
+    player_ratings_by_date : dict[int, dict[int, float]
         Player ratings keyed by tournament date
-    n_splits : Optional[int]
+    n_splits : int | None
         Number of splits to evaluate (None for all)
-    config : Optional[TeamRatingConfig]
+    config : TeamRatingConfig | None
         Team rating configuration
     verbose : bool
         Print progress
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Aggregated cross-validation results
     """
     # Create splits
@@ -326,18 +321,18 @@ def cross_validate_tournament_predictions(
     return aggregated
 
 
-def aggregate_cv_results(split_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def aggregate_cv_results(split_results: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Aggregate cross-validation results across splits.
 
     Parameters
     ----------
-    split_results : List[Dict[str, Any]]
+    split_results : list[dict[str, Any]
         Results from each split
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Aggregated metrics with mean, std, and confidence intervals
     """
     if not split_results:
@@ -381,13 +376,13 @@ def aggregate_cv_results(split_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return aggregated
 
 
-def print_cv_summary(results: Dict[str, Any]) -> None:
+def print_cv_summary(results: dict[str, Any]) -> None:
     """
     Print a summary of cross-validation results.
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Aggregated CV results
     """
     print("\n" + "=" * 60)
@@ -426,21 +421,22 @@ def print_cv_summary(results: Dict[str, Any]) -> None:
 
 
 def compare_models_cv(
-    model_results: Dict[str, Dict[str, Any]], baseline_name: str = "manual"
-) -> Dict[str, Any]:
+    model_results: dict[str, dict[str, Any]],
+    baseline_name: str = "manual",
+) -> dict[str, Any]:
     """
     Compare multiple models using cross-validation results.
 
     Parameters
     ----------
-    model_results : Dict[str, Dict[str, Any]]
+    model_results : dict[str, dict[str, Any]]
         Results for each model (model_name -> cv_results)
     baseline_name : str
         Name of baseline model for comparison
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Comparison statistics
     """
     comparison = {}

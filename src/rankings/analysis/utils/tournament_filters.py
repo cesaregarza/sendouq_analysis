@@ -1,21 +1,22 @@
 """Tournament filtering utilities for analyzing ranked tournaments."""
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 import polars as pl
 
 
 def filter_ranked_tournaments(
-    tables: Dict[str, pl.DataFrame],
+    tables: dict[str, pl.DataFrame],
     min_teams: int = 4,
     min_players: int = 16,
     min_matches: int = 10,
     exclude_test_patterns: bool = True,
-    exclusions: Optional[List[int]] = None,
-    tournament_before_id: Optional[int] = None,
+    exclusions: list[int] | None = None,
+    tournament_before_id: int | None = None,
     buffer_weeks: float = 0,
-) -> Dict[str, pl.DataFrame]:
+) -> dict[str, pl.DataFrame]:
     """
     Filter tournament data to include only ranked tournaments and clean data issues.
 
@@ -161,7 +162,7 @@ def get_ranked_tournament_ids(
     min_players: int = 16,
     min_matches: int = 10,
     exclude_test_patterns: bool = True,
-    exclusions: Optional[List[int]] = None,
+    exclusions: list[int] | None = None,
 ) -> pl.DataFrame:
     """
     Get tournament IDs for ranked tournaments only.
@@ -233,13 +234,13 @@ def apply_ranked_filter(
 
 
 def get_ranked_stats(
-    tables: Dict[str, pl.DataFrame],
+    tables: dict[str, pl.DataFrame],
     min_teams: int = 4,
     min_players: int = 16,
     min_matches: int = 10,
     exclude_test_patterns: bool = True,
-    exclusions: Optional[List[int]] = None,
-) -> Dict[str, int]:
+    exclusions: list[int] | None = None,
+) -> dict[str, int]:
     """
     Get statistics about ranked vs total tournaments.
 

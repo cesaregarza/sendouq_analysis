@@ -5,8 +5,13 @@ This module implements time-based cross-validation splits and evaluation
 procedures for tournament data.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from rankings.analysis.engine import RatingEngine
 
 import numpy as np
 import polars as pl
@@ -40,7 +45,7 @@ def create_time_based_folds(
     min_tournaments_before: int = MIN_TOURNAMENTS_BEFORE_CV,
     tournament_id_col: str = "tournament_id",
     timestamp_col: str = "last_game_finished_at",
-) -> List[Tuple[pl.DataFrame, pl.DataFrame, List[int]]]:
+) -> list[tuple[pl.DataFrame, pl.DataFrame, list[int]]]:
     """
     Create time-based cross-validation splits for tournaments.
 
@@ -65,7 +70,7 @@ def create_time_based_folds(
 
     Returns
     -------
-    List[Tuple[pl.DataFrame, pl.DataFrame, List[int]]]
+    list[tuple[pl.DataFrame, pl.DataFrame, list[int]
         List of (train_df, test_df, test_tournament_ids) tuples
     """
     # Get tournament start times
@@ -115,12 +120,12 @@ def create_time_based_folds(
 
 
 def evaluate_on_split(
-    engine_class: Type[RatingEngine],
-    engine_params: Dict[str, Any],
+    engine_class: type[RatingEngine],
+    engine_params: dict[str, Any],
     train_df: pl.DataFrame,
     test_df: pl.DataFrame,
-    players_df: Optional[pl.DataFrame] = None,
-    teams_df: Optional[pl.DataFrame] = None,
+    players_df: pl.DataFrame | None = None,
+    teams_df: pl.DataFrame | None = None,
     ranking_entity: str = "player",
     prediction_entity: str = "team",
     agg_func: str = "mean",
@@ -131,25 +136,25 @@ def evaluate_on_split(
     weight_scheme: str = "entropy",
     weight_threshold: float = 0.1,
     weight_exp_base: float = 2.0,
-    warm_start_alpha: Optional[float] = None,
+    warm_start_alpha: float | None = None,
     alpha_fit_method: str = "optimized",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Evaluate rating engine on a single train/test split.
 
     Parameters
     ----------
-    engine_class : Type[RatingEngine]
+    engine_class : type[RatingEngine]
         Rating engine class to instantiate
-    engine_params : Dict[str, Any]
+    engine_params : dict[str, Any]
         Parameters for engine initialization
     train_df : pl.DataFrame
         Training matches
     test_df : pl.DataFrame
         Test matches
-    players_df : Optional[pl.DataFrame]
+    players_df : pl.DataFrame | None
         Player metadata (if ranking players)
-    teams_df : Optional[pl.DataFrame]
+    teams_df : pl.DataFrame | None
         Team metadata (if ranking teams)
     ranking_entity : str
         Entity type to rank ("player" or "team")
@@ -171,7 +176,7 @@ def evaluate_on_split(
         Method for fitting alpha: "original", "sampled", or "optimized" (default)
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Evaluation metrics including loss
     """
     logger = get_logger(__name__)
@@ -388,11 +393,11 @@ def evaluate_on_split(
 
 
 def cross_validate_ratings(
-    engine_class: Type[RatingEngine],
-    engine_params: Dict[str, Any],
+    engine_class: type[RatingEngine],
+    engine_params: dict[str, Any],
     matches_df: pl.DataFrame,
-    players_df: Optional[pl.DataFrame] = None,
-    teams_df: Optional[pl.DataFrame] = None,
+    players_df: pl.DataFrame | None = None,
+    teams_df: pl.DataFrame | None = None,
     ranking_entity: str = "player",
     prediction_entity: str = "team",
     agg_func: str = "mean",
@@ -401,28 +406,28 @@ def cross_validate_ratings(
     alpha_bounds: tuple[float, float] = (0.1, 5.0),
     score_transform: str = "bradley_terry",
     regularization_lambda: float = 0.0,
-    default_params: Optional[Dict[str, Any]] = None,
+    default_params: dict[str, Any] | None = None,
     weight_scheme: str = "entropy",
     weight_threshold: float = 0.1,
     weight_exp_base: float = 2.0,
     min_test_tournaments: int = 10,
     test_size_ratio: float = 0.2,
     alpha_fit_method: str = "optimized",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Perform full cross-validation evaluation of rating engine.
 
     Parameters
     ----------
-    engine_class : Type[RatingEngine]
+    engine_class : type[RatingEngine]
         Rating engine class
-    engine_params : Dict[str, Any]
+    engine_params : dict[str, Any]
         Engine parameters to evaluate
     matches_df : pl.DataFrame
         All matches data
-    players_df : Optional[pl.DataFrame]
+    players_df : pl.DataFrame | None
         Player metadata
-    teams_df : Optional[pl.DataFrame]
+    teams_df : pl.DataFrame | None
         Team metadata
     ranking_entity : str
         Entity type to rank ("player" or "team")
@@ -440,7 +445,7 @@ def cross_validate_ratings(
         Transform to apply: "bradley_terry", "logistic", or "identity"
     regularization_lambda : float
         L2 regularization strength
-    default_params : Optional[Dict[str, Any]]
+    default_params : dict[str, Any] | None
         Default parameters for regularization
     min_test_tournaments : int
         Minimum number of tournaments per test fold (default: 10)
@@ -451,7 +456,7 @@ def cross_validate_ratings(
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Cross-validation results including average loss
     """
     logger = get_logger(__name__)

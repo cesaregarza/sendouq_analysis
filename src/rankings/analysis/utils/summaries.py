@@ -7,8 +7,6 @@ teams, and tournaments with additional statistics and rankings.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import polars as pl
 
@@ -344,8 +342,8 @@ def prepare_team_summary(
 
 def prepare_tournament_summary(
     tournament_data: list[dict],
-    tournament_influence: Optional[dict[int, float]] = None,
-    tournament_strength: Optional[pl.DataFrame] = None,
+    tournament_influence: dict[int, float] | None = None,
+    tournament_strength: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """
     Create a summary of tournaments with names and strength metrics.

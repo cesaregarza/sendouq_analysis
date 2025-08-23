@@ -130,24 +130,24 @@ class RowPRBackend:
         denominators = compute_denominators(
             edges,
             self.smoothing_strategy,
-            loser_col="loser_user_id",
-            winner_col="winner_user_id",
+            loser_column="loser_user_id",
+            winner_column="winner_user_id",
         )
 
         # Normalize edges
         edges = normalize_edges(
             edges,
             denominators,
-            loser_col="loser_user_id",
+            loser_column="loser_user_id",
         )
 
         # Convert to triplets
         rows, cols, weights = edges_to_triplets(
             edges,
             node_to_idx,
-            source_col="loser_user_id",
-            target_col="winner_user_id",
-            weight_col="normalized_weight",
+            source_column="loser_user_id",
+            target_column="winner_user_id",
+            weight_column="normalized_weight",
         )
 
         # Compute teleport vector

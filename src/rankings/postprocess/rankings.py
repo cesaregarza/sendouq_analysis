@@ -1,11 +1,6 @@
-"""
-Post-processing utilities for ranking results.
+"""Post-processing utilities for ranking results."""
 
-This module provides engine-agnostic post-processing functions for
-formatting and enhancing ranking DataFrames.
-"""
-
-from typing import List, Optional
+from __future__ import annotations
 
 import polars as pl
 
@@ -14,11 +9,11 @@ def post_process_rankings(
     rankings: pl.DataFrame,
     players_df: pl.DataFrame,
     min_tournaments: int = 3,
-    rank_cutoffs: Optional[List[float]] = None,
-    rank_labels: Optional[List[str]] = None,
+    rank_cutoffs: list[float] | None = None,
+    rank_labels: list[str] | None = None,
     score_multiplier: float = 25.0,
     score_offset: float = 0.0,
-    tournaments_df: Optional[pl.DataFrame] = None,
+    tournaments_df: pl.DataFrame | None = None,
     id_column: str = "id",
     score_column: str = "score",
 ) -> pl.DataFrame:
@@ -36,15 +31,15 @@ def post_process_rankings(
         Players DataFrame with tournament_id, user_id, username
     min_tournaments : int, default=3
         Minimum tournaments required for inclusion
-    rank_cutoffs : Optional[List[float]], default=None
+    rank_cutoffs : list[float] | None, default=None
         Score cutoffs for rank labels
-    rank_labels : Optional[List[str]], default=None
+    rank_labels : list[str] | None, default=None
         Labels for rank grades
     score_multiplier : float, default=25.0
         Multiplier for final score display
     score_offset : float, default=0.0
         Offset to add to scores before applying multiplier
-    tournaments_df : Optional[pl.DataFrame], default=None
+    tournaments_df : pl.DataFrame | None, default=None
         Tournaments DataFrame with tournament_id and start_time columns
         If provided, adds last_active date for each player
     id_column : str, default="id"
@@ -199,8 +194,8 @@ def post_process_rankings(
 
 def assign_percentile_grades(
     rankings: pl.DataFrame,
-    percentile_cutoffs: Optional[List[float]] = None,
-    grade_labels: Optional[List[str]] = None,
+    percentile_cutoffs: list[float] | None = None,
+    grade_labels: list[str] | None = None,
 ) -> pl.DataFrame:
     """
     Assign grades based on percentile rankings.
@@ -209,9 +204,9 @@ def assign_percentile_grades(
     ----------
     rankings : pl.DataFrame
         Rankings DataFrame with 'rank' column
-    percentile_cutoffs : Optional[List[float]], default=None
+    percentile_cutoffs : list[float] | None, default=None
         Percentile cutoffs for grades (0.0 to 1.0)
-    grade_labels : Optional[List[str]], default=None
+    grade_labels : list[str] | None, default=None
         Grade labels corresponding to percentile ranges
 
     Returns
@@ -246,7 +241,7 @@ def add_activity_decay(
     last_active_col: str = "last_active",
     decay_delay_days: float = 30.0,
     decay_rate: float = 0.01,
-    current_timestamp: Optional[float] = None,
+    current_timestamp: float | None = None,
 ) -> pl.DataFrame:
     """
     Apply inactivity decay to display scores.
@@ -261,7 +256,7 @@ def add_activity_decay(
         Days before decay starts
     decay_rate : float, default=0.01
         Daily decay rate after delay
-    current_timestamp : Optional[float], default=None
+    current_timestamp : float | None, default=None
         Current time (defaults to now)
 
     Returns

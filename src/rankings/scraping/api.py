@@ -11,7 +11,6 @@ import json
 import logging
 import re
 import time
-from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -37,8 +36,8 @@ def scrape_tournament(
     timeout: float = DEFAULT_TIMEOUT,
     max_retries: int = DEFAULT_MAX_RETRIES,
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
-    session: Optional[requests.Session] = None,
-) -> Dict:
+    session: requests.Session | None = None,
+) -> dict:
     """
     Scrape tournament data from Sendou.ink API.
 
@@ -89,7 +88,7 @@ def scrape_tournament(
                 ) from e
 
 
-def validate_tournament_data(tournament_data: Dict) -> bool:
+def validate_tournament_data(tournament_data: dict) -> bool:
     """
     Validate that tournament data has the expected structure.
 
@@ -119,7 +118,7 @@ def validate_tournament_data(tournament_data: Dict) -> bool:
         return False
 
 
-def extract_tournament_id_from_url(url: str) -> Optional[int]:
+def extract_tournament_id_from_url(url: str) -> int | None:
     """
     Extract tournament ID from a Sendou.ink URL.
 

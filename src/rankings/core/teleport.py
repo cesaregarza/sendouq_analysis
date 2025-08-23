@@ -1,9 +1,14 @@
 """Teleport vector strategies for PageRank algorithms."""
 
-from typing import Protocol, Sequence, runtime_checkable
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import polars as pl
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 @runtime_checkable
@@ -12,20 +17,19 @@ class TeleportStrategy(Protocol):
 
     def __call__(
         self,
-        nodes: Sequence[object],
+        nodes: Sequence[Any],
         edges: pl.DataFrame,
-        from_col: str,
+        from_column: str,
     ) -> np.ndarray:
-        """
-        Compute teleport probabilities for nodes.
+        """Compute teleport probabilities for nodes.
 
         Args:
-            nodes: List of node identifiers
-            edges: Edge DataFrame
-            from_col: Column name for source nodes
+            nodes: List of node identifiers.
+            edges: Edge DataFrame.
+            from_column: Column name for source nodes.
 
         Returns:
-            Teleport probability vector (sums to 1)
+            Teleport probability vector (sums to 1).
         """
         ...
 
@@ -35,13 +39,22 @@ class UniformTeleport:
 
     def __call__(
         self,
-        nodes: Sequence[object],
+        nodes: Sequence[Any],
         edges: pl.DataFrame,
-        from_col: str,
+        from_column: str,
     ) -> np.ndarray:
-        """Return uniform probabilities."""
-        n = len(nodes)
-        return np.ones(n) / max(n, 1)
+        """Return uniform probabilities.
+
+        Args:
+            nodes: List of node identifiers.
+            edges: Edge DataFrame (unused).
+            from_column: Column name for source nodes (unused).
+
+        Returns:
+            Uniform probability vector.
+        """
+        node_count = len(nodes)
+        return np.ones(node_count) / max(node_count, 1)
 
 
 class VolumeInverseTeleport:
@@ -49,97 +62,137 @@ class VolumeInverseTeleport:
 
     def __call__(
         self,
-        nodes: Sequence[object],
+        nodes: Sequence[Any],
         edges: pl.DataFrame,
-        from_col: str,
+        from_column: str,
     ) -> np.ndarray:
-        """
-        Compute teleport probabilities inversely proportional to sqrt of degree.
+        """Compute teleport probabilities inversely proportional to sqrt of degree.
 
         This gives higher teleport probability to nodes with fewer connections.
-        """
-        # Count edges per node
-        counts = edges[from_col].value_counts()
-        count_map = dict(zip(counts[from_col], counts["count"]))
 
-        # Compute inverse sqrt of degree
-        v = np.array(
-            [1.0 / np.sqrt(count_map.get(node, 1)) for node in nodes],
+        Args:
+            nodes: List of node identifiers.
+            edges: Edge DataFrame.
+            from_column: Column name for source nodes.
+
+        Returns:
+            Volume-inverse probability vector.
+        """
+        edge_counts = edges[from_column].value_counts()
+        count_mapping = dict(
+            zip(edge_counts[from_column], edge_counts["count"])
+        )
+
+        teleport_vector = np.array(
+            [1.0 / np.sqrt(count_mapping.get(node, 1)) for node in nodes],
             dtype=float,
         )
 
-        # Normalize to sum to 1
-        v /= v.sum() or 1.0
-        return v
+        teleport_vector /= teleport_vector.sum() or 1.0
+        return teleport_vector
 
 
 class ActivePlayersTeleport:
-    """
-    Teleport only to active players based on recent match activity.
+    """Teleport only to active players based on recent match activity.
 
     This strategy assigns zero teleport probability to inactive players
     and uniform probability to active players.
     """
 
-    def __init__(self, active_threshold_days: float = 90.0):
-        """
+    def __init__(self, active_threshold_days: float = 90.0) -> None:
+        """Initialize active players teleport strategy.
+
         Args:
-            active_threshold_days: Days since last match to consider player active
+            active_threshold_days: Days since last match to consider player active.
+                Defaults to 90.0.
         """
         self.active_threshold_days = active_threshold_days
 
     def __call__(
         self,
-        nodes: Sequence[object],
+        nodes: Sequence[Any],
         edges: pl.DataFrame,
-        from_col: str,
+        from_column: str,
     ) -> np.ndarray:
-        """
-        Compute teleport probabilities for active players only.
+        """Compute teleport probabilities for active players only.
 
         Note: This assumes edges DataFrame has a 'timestamp' or similar column
         to determine activity. If not available, falls back to uniform.
+
+        Args:
+            nodes: List of node identifiers.
+            edges: Edge DataFrame.
+            from_column: Column name for source nodes.
+
+        Returns:
+            Teleport probabilities for active players.
         """
         # For now, return uniform as a baseline
         # This would need match timestamps to properly implement
-        n = len(nodes)
-        return np.ones(n) / max(n, 1)
+        node_count = len(nodes)
+        return np.ones(node_count) / max(node_count, 1)
 
 
 class CustomTeleport:
     """Custom teleport probabilities from provided weights."""
 
-    def __init__(self, weights: dict):
-        """
+    def __init__(self, weights: dict[Any, float]) -> None:
+        """Initialize custom teleport strategy.
+
         Args:
-            weights: Dictionary mapping node IDs to teleport weights
+            weights: Dictionary mapping node IDs to teleport weights.
         """
         self.weights = weights
 
     def __call__(
         self,
-        nodes: Sequence[object],
+        nodes: Sequence[Any],
         edges: pl.DataFrame,
-        from_col: str,
+        from_column: str,
     ) -> np.ndarray:
-        """Use custom weights for teleport probabilities."""
-        v = np.array(
+        """Use custom weights for teleport probabilities.
+
+        Args:
+            nodes: List of node identifiers.
+            edges: Edge DataFrame (unused).
+            from_column: Column name for source nodes (unused).
+
+        Returns:
+            Custom weighted teleport probabilities.
+        """
+        teleport_vector = np.array(
             [self.weights.get(node, 1.0) for node in nodes], dtype=float
         )
-        v /= v.sum() or 1.0
-        return v
+        teleport_vector /= teleport_vector.sum() or 1.0
+        return teleport_vector
 
 
-# Convenience functions for backward compatibility
-def uniform(nodes: Sequence[object], *args) -> np.ndarray:
-    """Uniform teleport probabilities."""
+def uniform(nodes: Sequence[Any], *args: Any) -> np.ndarray:
+    """Uniform teleport probabilities.
+
+    Args:
+        nodes: List of node identifiers.
+        *args: Additional arguments (unused).
+
+    Returns:
+        Uniform teleport probability vector.
+    """
     return UniformTeleport()(nodes, pl.DataFrame(), "")
 
 
 def volume_inverse(
-    nodes: Sequence[object],
+    nodes: Sequence[Any],
     edges: pl.DataFrame,
-    from_col: str,
+    from_column: str,
 ) -> np.ndarray:
-    """Volume-inverse teleport probabilities."""
-    return VolumeInverseTeleport()(nodes, edges, from_col)
+    """Volume-inverse teleport probabilities.
+
+    Args:
+        nodes: List of node identifiers.
+        edges: Edge DataFrame.
+        from_column: Column name for source nodes.
+
+    Returns:
+        Volume-inverse teleport probability vector.
+    """
+    return VolumeInverseTeleport()(nodes, edges, from_column)

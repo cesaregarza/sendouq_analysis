@@ -1,8 +1,9 @@
 """Team strength calculation from individual player ratings."""
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from scipy.special import logsumexp
 
@@ -12,14 +13,14 @@ class TeamRatingConfig:
     """Configuration for team rating calculation."""
 
     alpha: float = 1.0  # Diminishing returns exponent (0 < alpha <= 1)
-    use_top_k: Optional[int] = None  # Only use top-k players
+    use_top_k: int | None = None  # Only use top-k players
     default_weight: float = 1.0  # Default exposure weight
 
 
 class TeamStrengthCalculator:
     """Calculate team strength from individual player ratings."""
 
-    def __init__(self, config: Optional[TeamRatingConfig] = None):
+    def __init__(self, config: TeamRatingConfig | None = None):
         """Initialize with optional configuration.
 
         Args:
@@ -40,9 +41,9 @@ class TeamStrengthCalculator:
 
     def team_strength(
         self,
-        player_ratings: Dict[int, float],
-        team_roster: List[int],
-        exposure_weights: Optional[Dict[int, float]] = None,
+        player_ratings: dict[int, float],
+        team_roster: list[int],
+        exposure_weights: dict[int, float] | None = None,
     ) -> float:
         """Calculate team strength from player ratings.
 
@@ -87,9 +88,9 @@ class TeamStrengthCalculator:
 
     def team_log_rating(
         self,
-        player_ratings: Dict[int, float],
-        team_roster: List[int],
-        exposure_weights: Optional[Dict[int, float]] = None,
+        player_ratings: dict[int, float],
+        team_roster: list[int],
+        exposure_weights: dict[int, float] | None = None,
     ) -> float:
         """Calculate team log-rating from player ratings.
 

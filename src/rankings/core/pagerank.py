@@ -1,7 +1,8 @@
 """Unified PageRank solver supporting both row and column stochastic orientations."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import scipy.sparse as sp
@@ -14,7 +15,7 @@ class PageRankConfig:
     alpha: float = 0.85
     tol: float = 1e-8
     max_iter: int = 200
-    orientation: str = "row"  # "row" or "col" stochastic
+    orientation: str = "row"
     redistribute_dangling: bool = True
 
 
@@ -22,76 +23,80 @@ def pagerank_sparse(
     rows: np.ndarray,
     cols: np.ndarray,
     weights: np.ndarray,
-    n: int,
+    num_nodes: int,
     teleport: np.ndarray,
     cfg: PageRankConfig,
 ) -> np.ndarray:
-    """
-    Generic PageRank on sparse triplets. Supports row/col orientation with the same code path.
+    """Generic PageRank on sparse triplets.
+
+    Supports row/col orientation with the same code path.
 
     Args:
-        rows: Source node indices
-        cols: Target node indices
-        weights: Edge weights
-        n: Number of nodes
-        teleport: Teleport probability vector (must sum to 1)
-        cfg: PageRank configuration
+        rows: Source node indices.
+        cols: Target node indices.
+        weights: Edge weights.
+        num_nodes: Number of nodes.
+        teleport: Teleport probability vector (must sum to 1).
+        cfg: PageRank configuration.
 
     Returns:
-        PageRank scores vector (sums to 1)
+        PageRank scores vector that sums to 1.
     """
-    # Create sparse matrix if scipy is available
-    A = sp.csr_matrix((weights, (rows, cols)), shape=(n, n))
+    adjacency_matrix = sp.csr_matrix(
+        (weights, (rows, cols)), shape=(num_nodes, num_nodes)
+    )
 
-    # Compute normalization per orientation
-    sums = np.asarray(A.sum(axis=1 if cfg.orientation == "row" else 0)).ravel()
+    sums = np.asarray(
+        adjacency_matrix.sum(axis=1 if cfg.orientation == "row" else 0)
+    ).ravel()
 
-    # Compute inverse for normalization
-    inv = np.zeros_like(sums)
-    nz = sums > 0
-    inv[nz] = 1.0 / sums[nz]
+    inverse_sums = np.zeros_like(sums)
+    nonzero_mask = sums > 0
+    inverse_sums[nonzero_mask] = 1.0 / sums[nonzero_mask]
 
-    # Transition multiply implemented via sparse matvec with proper normalization
-    def multiply(v: np.ndarray) -> np.ndarray:
-        if A is not None:
+    def multiply(vector: np.ndarray) -> np.ndarray:
+        if adjacency_matrix is not None:
             if cfg.orientation == "row":
-                # P^T @ v, but P row-stochastic => weight rows by inv[row]
-                # => equivalent to A^T @ (v * inv)
-                return A.T.dot(v * inv)
+                return adjacency_matrix.T.dot(vector * inverse_sums)
             else:
-                # col-stochastic => v on cols
-                # => equivalent to A @ (v * inv)
-                return A.dot(v * inv)
+                return adjacency_matrix.dot(vector * inverse_sums)
 
         # Fallback: COO-style accumulation
-        out = np.zeros(n)
+        result = np.zeros(num_nodes)
         if cfg.orientation == "row":
-            np.add.at(out, cols, v[rows] * (weights * inv[rows]))
+            np.add.at(
+                result, cols, vector[rows] * (weights * inverse_sums[rows])
+            )
         else:
-            np.add.at(out, rows, v[cols] * (weights * inv[cols]))
-        return out
+            np.add.at(
+                result, rows, vector[cols] * (weights * inverse_sums[cols])
+            )
+        return result
 
-    # Initialize with teleport vector
-    r = teleport / teleport.sum()
+    rank_vector = teleport / teleport.sum()
     alpha = cfg.alpha
 
-    # Power iteration
     for _ in range(cfg.max_iter):
-        Mr = multiply(r)
+        matrix_product = multiply(rank_vector)
 
-        # Handle dangling nodes
-        dangling = alpha * r[~nz].sum() if cfg.redistribute_dangling else 0.0
+        dangling_mass = (
+            alpha * rank_vector[~nonzero_mask].sum()
+            if cfg.redistribute_dangling
+            else 0.0
+        )
 
-        # PageRank update
-        r_new = alpha * Mr + (1 - alpha) * teleport + dangling * teleport
-        r_new /= r_new.sum()
+        new_rank = (
+            alpha * matrix_product
+            + (1 - alpha) * teleport
+            + dangling_mass * teleport
+        )
+        new_rank /= new_rank.sum()
 
-        # Check convergence
-        if np.linalg.norm(r_new - r, 1) < cfg.tol:
-            return r_new
-        r = r_new
+        if np.linalg.norm(new_rank - rank_vector, 1) < cfg.tol:
+            return new_rank
+        rank_vector = new_rank
 
-    return r
+    return rank_vector
 
 
 def pagerank_dense(
@@ -99,54 +104,58 @@ def pagerank_dense(
     teleport: np.ndarray,
     cfg: PageRankConfig,
 ) -> np.ndarray:
-    """
-    PageRank on dense adjacency matrix (for backward compatibility).
+    """PageRank on dense adjacency matrix (for backward compatibility).
 
     Args:
-        adjacency: Dense adjacency matrix
-        teleport: Teleport probability vector
-        cfg: PageRank configuration
+        adjacency: Dense adjacency matrix.
+        teleport: Teleport probability vector.
+        cfg: PageRank configuration.
 
     Returns:
-        PageRank scores vector
+        PageRank scores vector.
     """
-    n = adjacency.shape[0]
+    num_nodes = adjacency.shape[0]
 
-    # Convert to stochastic matrix
     if cfg.orientation == "row":
         row_sums = adjacency.sum(axis=1)
-        P = np.zeros_like(adjacency)
-        nonzero = row_sums > 0
-        P[nonzero] = adjacency[nonzero] / row_sums[nonzero, np.newaxis]
+        transition_matrix = np.zeros_like(adjacency)
+        nonzero_rows = row_sums > 0
+        transition_matrix[nonzero_rows] = (
+            adjacency[nonzero_rows] / row_sums[nonzero_rows, np.newaxis]
+        )
     else:
         col_sums = adjacency.sum(axis=0)
-        P = np.zeros_like(adjacency)
-        nonzero = col_sums > 0
-        P[:, nonzero] = adjacency[:, nonzero] / col_sums[nonzero]
+        transition_matrix = np.zeros_like(adjacency)
+        nonzero_cols = col_sums > 0
+        transition_matrix[:, nonzero_cols] = (
+            adjacency[:, nonzero_cols] / col_sums[nonzero_cols]
+        )
 
-    # Initialize
-    r = teleport / teleport.sum()
+    rank_vector = teleport / teleport.sum()
     alpha = cfg.alpha
 
-    # Power iteration
     for _ in range(cfg.max_iter):
         if cfg.orientation == "row":
-            r_new = alpha * P.T @ r + (1 - alpha) * teleport
+            new_rank = (
+                alpha * transition_matrix.T @ rank_vector
+                + (1 - alpha) * teleport
+            )
         else:
-            r_new = alpha * P @ r + (1 - alpha) * teleport
+            new_rank = (
+                alpha * transition_matrix @ rank_vector + (1 - alpha) * teleport
+            )
 
-        # Handle dangling nodes
         if cfg.redistribute_dangling:
             if cfg.orientation == "row":
-                dangling_mass = alpha * r[row_sums == 0].sum()
+                dangling_mass = alpha * rank_vector[row_sums == 0].sum()
             else:
-                dangling_mass = alpha * r[col_sums == 0].sum()
-            r_new += dangling_mass * teleport
+                dangling_mass = alpha * rank_vector[col_sums == 0].sum()
+            new_rank += dangling_mass * teleport
 
-        r_new /= r_new.sum()
+        new_rank /= new_rank.sum()
 
-        if np.linalg.norm(r_new - r, 1) < cfg.tol:
-            return r_new
-        r = r_new
+        if np.linalg.norm(new_rank - rank_vector, 1) < cfg.tol:
+            return new_rank
+        rank_vector = new_rank
 
-    return r
+    return rank_vector

@@ -1,124 +1,122 @@
 """Data conversion utilities for ranking algorithms."""
 
+from __future__ import annotations
+
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 def convert_matches_dataframe(
     matches: pl.DataFrame,
     players: pl.DataFrame,
-    tournament_influence: Dict[int, float],
-    now_ts: float,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
     decay_rate: float,
     beta: float = 0.0,
     *,
-    rosters: Optional[pl.DataFrame] = None,
+    rosters: pl.DataFrame | None = None,
     include_share: bool = True,
     streaming: bool = False,
 ) -> pl.DataFrame:
-    """
-    Build a compact matches table with winners/losers roster lists and weights.
+    """Build a compact matches table with winners/losers roster lists and weights.
 
     This is the optimized Polars-based conversion path.
 
     Args:
-        matches: Match data with tournament_id, winner_team_id, loser_team_id
-        players: Player/roster data mapping users to teams
-        tournament_influence: Tournament ID to influence score mapping
-        now_ts: Current timestamp for decay calculations
-        decay_rate: Time decay rate
-        beta: Tournament influence exponent
-        rosters: Optional pre-filtered roster data
-        include_share: Whether to include share calculations
-        streaming: Whether to use streaming mode
+        matches: Match data with tournament_id, winner_team_id, loser_team_id.
+        players: Player/roster data mapping users to teams.
+        tournament_influence: Tournament ID to influence score mapping.
+        now_timestamp: Current timestamp for decay calculations.
+        decay_rate: Time decay rate.
+        beta: Tournament influence exponent.
+        rosters: Optional pre-filtered roster data. Defaults to None.
+        include_share: Whether to include share calculations. Defaults to True.
+        streaming: Whether to use streaming mode. Defaults to False.
 
     Returns:
-        DataFrame with columns:
-        - match_id, tournament_id
-        - winners (list of user_ids)
-        - losers (list of user_ids)
-        - weight (float)
-        - ts (timestamp)
-        - If include_share=True: wlen, llen, share
+        DataFrame with columns: match_id, tournament_id, winners (list of user_ids),
+        losers (list of user_ids), weight (float), ts (timestamp). If include_share=True,
+        also includes winner_count, loser_count, share.
     """
-    # Select only needed columns
-    needed = [
+    needed_columns = [
         "match_id",
         "tournament_id",
         "winner_team_id",
         "loser_team_id",
     ]
 
-    # Add timestamp columns if available
-    for col in ["last_game_finished_at", "match_created_at"]:
-        if col in matches.columns:
-            needed.append(col)
+    for column_name in ["last_game_finished_at", "match_created_at"]:
+        if column_name in matches.columns:
+            needed_columns.append(column_name)
 
     if "is_bye" in matches.columns:
-        needed.append("is_bye")
+        needed_columns.append("is_bye")
 
-    m = matches.select([c for c in needed if c in matches.columns])
+    match_data = matches.select(
+        [c for c in needed_columns if c in matches.columns]
+    )
 
-    # Filter out byes and null teams
-    filt = (
+    filter_condition = (
         pl.col("winner_team_id").is_not_null()
         & pl.col("loser_team_id").is_not_null()
     )
 
-    if "is_bye" in m.columns:
-        filt = filt & ~pl.col("is_bye").fill_null(False)
+    if "is_bye" in match_data.columns:
+        filter_condition = filter_condition & ~pl.col("is_bye").fill_null(False)
 
-    m = m.filter(filt)
+    match_data = match_data.filter(filter_condition)
 
-    # Create timestamp expression with fallbacks
-    ts_exprs = []
-    if "last_game_finished_at" in m.columns:
-        ts_exprs.append(pl.col("last_game_finished_at"))
-    if "match_created_at" in m.columns:
-        ts_exprs.append(pl.col("match_created_at"))
-    ts_exprs.append(pl.lit(now_ts))
-    ts_expr = pl.coalesce(ts_exprs).cast(pl.Int64)
+    timestamp_expressions = []
+    if "last_game_finished_at" in match_data.columns:
+        timestamp_expressions.append(pl.col("last_game_finished_at"))
+    if "match_created_at" in match_data.columns:
+        timestamp_expressions.append(pl.col("match_created_at"))
+    timestamp_expressions.append(pl.lit(now_timestamp))
+    timestamp_expr = pl.coalesce(timestamp_expressions).cast(pl.Int64)
 
-    m = m.with_columns(ts_expr.alias("ts"))
+    match_data = match_data.with_columns(timestamp_expr.alias("ts"))
 
-    # Add tournament influence
     if tournament_influence:
-        s_df = pl.DataFrame(
+        strength_dataframe = pl.DataFrame(
             {
                 "tournament_id": list(tournament_influence.keys()),
-                "S": list(tournament_influence.values()),
+                "tournament_strength": list(tournament_influence.values()),
             }
         )
-        m = m.join(s_df, on="tournament_id", how="left").with_columns(
-            pl.col("S").fill_null(1.0)
-        )
+        match_data = match_data.join(
+            strength_dataframe, on="tournament_id", how="left"
+        ).with_columns(pl.col("tournament_strength").fill_null(1.0))
     else:
-        m = m.with_columns(pl.lit(1.0).alias("S"))
+        match_data = match_data.with_columns(
+            pl.lit(1.0).alias("tournament_strength")
+        )
 
-    # Compute weight: exp(-decay_rate * age_days) * (S ** beta)
-    time_decay = (
-        ((pl.lit(now_ts) - pl.col("ts").cast(pl.Float64)) / 86400.0)
+    time_decay_factor = (
+        ((pl.lit(now_timestamp) - pl.col("ts").cast(pl.Float64)) / 86400.0)
         .mul(-decay_rate)
         .exp()
     )
 
     if beta == 0.0:
-        weight_expr = time_decay
+        weight_expression = time_decay_factor
     else:
-        weight_expr = time_decay * (pl.col("S") ** beta)
+        weight_expression = time_decay_factor * (
+            pl.col("tournament_strength") ** beta
+        )
 
-    m = m.with_columns(weight_expr.alias("weight"))
+    match_data = match_data.with_columns(weight_expression.alias("weight"))
 
-    # Handle rosters
     if rosters is None:
-        # Use all teams from matches
         used_teams = pl.concat(
             [
-                m.select(pl.col("winner_team_id").alias("team_id")),
-                m.select(pl.col("loser_team_id").alias("team_id")),
+                match_data.select(pl.col("winner_team_id").alias("team_id")),
+                match_data.select(pl.col("loser_team_id").alias("team_id")),
             ]
         ).unique()
 
@@ -126,77 +124,78 @@ def convert_matches_dataframe(
             used_teams, left_on="team_id", right_on="team_id", how="inner"
         ).select(["tournament_id", "team_id", "user_id"])
 
-    # Group rosters by team
     roster_lists = rosters.group_by(["tournament_id", "team_id"]).agg(
         pl.col("user_id").alias("roster")
     )
 
-    # Join winner rosters
-    m = m.join(
+    match_data = match_data.join(
         roster_lists,
         left_on=["tournament_id", "winner_team_id"],
         right_on=["tournament_id", "team_id"],
         how="left",
     ).rename({"roster": "winners"})
 
-    # Join loser rosters
-    m = m.join(
+    match_data = match_data.join(
         roster_lists,
         left_on=["tournament_id", "loser_team_id"],
         right_on=["tournament_id", "team_id"],
         how="left",
     ).rename({"roster": "losers"})
 
-    # Filter out matches with null rosters
-    m = m.filter(
+    match_data = match_data.filter(
         pl.col("winners").is_not_null() & pl.col("losers").is_not_null()
     )
 
-    # Add share calculations if requested
     if include_share:
-        m = m.with_columns(
+        match_data = match_data.with_columns(
             [
-                pl.col("winners").list.len().alias("wlen"),
-                pl.col("losers").list.len().alias("llen"),
+                pl.col("winners").list.len().alias("winner_count"),
+                pl.col("losers").list.len().alias("loser_count"),
             ]
         )
-        m = m.with_columns(
-            (pl.col("weight") / (pl.col("wlen") * pl.col("llen"))).alias(
-                "share"
-            )
+        match_data = match_data.with_columns(
+            (
+                pl.col("weight")
+                / (pl.col("winner_count") * pl.col("loser_count"))
+            ).alias("share")
         )
 
-    # Select final columns
-    cols = ["match_id", "tournament_id", "winners", "losers", "weight", "ts"]
+    final_columns = [
+        "match_id",
+        "tournament_id",
+        "winners",
+        "losers",
+        "weight",
+        "ts",
+    ]
     if include_share:
-        cols.extend(["wlen", "llen", "share"])
+        final_columns.extend(["winner_count", "loser_count", "share"])
 
-    return m.select(cols)
+    return match_data.select(final_columns)
 
 
 def convert_matches_format(
     matches: pl.DataFrame,
     players: pl.DataFrame,
-    tournament_influence: Dict[int, float],
-    now_ts: float,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
     decay_rate: float,
     beta: float = 0.0,
-) -> List[Dict]:
-    """
-    Convert polars DataFrame matches to list of dicts with winners/losers lists.
+) -> list[dict[str, Any]]:
+    """Convert polars DataFrame matches to list of dicts with winners/losers lists.
 
     This is the fallback/legacy conversion path.
 
     Args:
-        matches: Match data
-        players: Player/roster data
-        tournament_influence: Tournament influence scores
-        now_ts: Current timestamp
-        decay_rate: Time decay rate
-        beta: Tournament influence exponent
+        matches: Match data.
+        players: Player/roster data.
+        tournament_influence: Tournament influence scores.
+        now_timestamp: Current timestamp.
+        decay_rate: Time decay rate.
+        beta: Tournament influence exponent.
 
     Returns:
-        List of match dictionaries
+        List of match dictionaries.
     """
     converted = []
 
@@ -204,51 +203,49 @@ def convert_matches_format(
         if row.get("is_bye", False):
             continue
 
-        winner_team = row.get("winner_team_id")
-        loser_team = row.get("loser_team_id")
+        winner_team_id = row.get("winner_team_id")
+        loser_team_id = row.get("loser_team_id")
 
-        if not winner_team or not loser_team:
+        if not winner_team_id or not loser_team_id:
             continue
 
-        tid = row["tournament_id"]
+        tournament_id = row["tournament_id"]
 
-        # Get players from teams
-        winner_players = players.filter(
-            (pl.col("tournament_id") == tid)
-            & (pl.col("team_id") == winner_team)
+        winner_player_ids = players.filter(
+            (pl.col("tournament_id") == tournament_id)
+            & (pl.col("team_id") == winner_team_id)
         )["user_id"].to_list()
 
-        loser_players = players.filter(
-            (pl.col("tournament_id") == tid) & (pl.col("team_id") == loser_team)
+        loser_player_ids = players.filter(
+            (pl.col("tournament_id") == tournament_id)
+            & (pl.col("team_id") == loser_team_id)
         )["user_id"].to_list()
 
-        if not winner_players or not loser_players:
+        if not winner_player_ids or not loser_player_ids:
             continue
 
-        # Compute match weight
-        t_influence = tournament_influence.get(tid, 1.0)
+        tournament_strength = tournament_influence.get(tournament_id, 1.0)
 
-        # Time decay
         if "last_game_finished_at" in row and row["last_game_finished_at"]:
-            ts = row["last_game_finished_at"]
+            timestamp = row["last_game_finished_at"]
         elif "match_created_at" in row and row["match_created_at"]:
-            ts = row["match_created_at"]
+            timestamp = row["match_created_at"]
         else:
-            ts = now_ts
+            timestamp = now_timestamp
 
-        days_ago = (now_ts - ts) / 86400.0
-        time_decay = math.exp(-decay_rate * days_ago)
+        days_ago = (now_timestamp - timestamp) / 86400.0
+        time_decay_factor = math.exp(-decay_rate * days_ago)
 
-        weight = time_decay * (t_influence**beta)
+        weight = time_decay_factor * (tournament_strength**beta)
 
         converted.append(
             {
-                "winners": winner_players,
-                "losers": loser_players,
+                "winners": winner_player_ids,
+                "losers": loser_player_ids,
                 "weight": weight,
-                "tournament_id": tid,
+                "tournament_id": tournament_id,
                 "match_id": row.get("match_id"),
-                "timestamp": ts,
+                "timestamp": timestamp,
             }
         )
 
@@ -257,23 +254,22 @@ def convert_matches_format(
 
 def convert_team_matches(
     matches: pl.DataFrame,
-    tournament_influence: Dict[int, float],
-    now_ts: float,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
     decay_rate: float,
     beta: float = 0.0,
-) -> List[Dict]:
-    """
-    Convert team matches to required format.
+) -> list[dict[str, Any]]:
+    """Convert team matches to required format.
 
     Args:
-        matches: Match data with team IDs
-        tournament_influence: Tournament influence scores
-        now_ts: Current timestamp
-        decay_rate: Time decay rate
-        beta: Tournament influence exponent
+        matches: Match data with team IDs.
+        tournament_influence: Tournament influence scores.
+        now_timestamp: Current timestamp.
+        decay_rate: Time decay rate.
+        beta: Tournament influence exponent.
 
     Returns:
-        List of match dictionaries with team IDs as single-element lists
+        List of match dictionaries with team IDs as single-element lists.
     """
     converted = []
 
@@ -281,36 +277,35 @@ def convert_team_matches(
         if row.get("is_bye", False):
             continue
 
-        winner_team = row.get("winner_team_id")
-        loser_team = row.get("loser_team_id")
+        winner_team_id = row.get("winner_team_id")
+        loser_team_id = row.get("loser_team_id")
 
-        if not winner_team or not loser_team:
+        if not winner_team_id or not loser_team_id:
             continue
 
-        tid = row["tournament_id"]
-        t_influence = tournament_influence.get(tid, 1.0)
+        tournament_id = row["tournament_id"]
+        tournament_strength = tournament_influence.get(tournament_id, 1.0)
 
-        # Time decay
         if "last_game_finished_at" in row and row["last_game_finished_at"]:
-            ts = row["last_game_finished_at"]
+            timestamp = row["last_game_finished_at"]
         elif "match_created_at" in row and row["match_created_at"]:
-            ts = row["match_created_at"]
+            timestamp = row["match_created_at"]
         else:
-            ts = now_ts
+            timestamp = now_timestamp
 
-        days_ago = (now_ts - ts) / 86400.0
-        time_decay = math.exp(-decay_rate * days_ago)
+        days_ago = (now_timestamp - timestamp) / 86400.0
+        time_decay_factor = math.exp(-decay_rate * days_ago)
 
-        weight = time_decay * (t_influence**beta)
+        weight = time_decay_factor * (tournament_strength**beta)
 
         converted.append(
             {
-                "winners": [winner_team],
-                "losers": [loser_team],
+                "winners": [winner_team_id],
+                "losers": [loser_team_id],
                 "weight": weight,
-                "tournament_id": tid,
+                "tournament_id": tournament_id,
                 "match_id": row.get("match_id"),
-                "timestamp": ts,
+                "timestamp": timestamp,
             }
         )
 
@@ -318,58 +313,61 @@ def convert_team_matches(
 
 
 def factorize_ids(
-    ids: List,
-) -> Tuple[List, Dict[object, int]]:
-    """
-    Convert list of IDs to indices.
+    node_ids: list[Any],
+) -> tuple[list[Any], dict[Any, int]]:
+    """Convert list of IDs to indices.
 
     Args:
-        ids: List of unique IDs
+        node_ids: List of unique IDs.
 
     Returns:
-        Tuple of (unique_ids, id_to_index_mapping)
+        Tuple of (unique_ids, id_to_index_mapping).
     """
-    unique_ids = list(dict.fromkeys(ids))  # Preserve order, remove duplicates
-    id_to_idx = {id_val: idx for idx, id_val in enumerate(unique_ids)}
-    return unique_ids, id_to_idx
+    unique_ids = list(dict.fromkeys(node_ids))
+    id_to_index = {node_id: index for index, node_id in enumerate(unique_ids)}
+    return unique_ids, id_to_index
 
 
 def build_node_mapping(
-    matches_df: pl.DataFrame,
-    winner_col: str = "winners",
-    loser_col: str = "losers",
-) -> Tuple[List, Dict]:
-    """
-    Build node ID to index mapping from matches DataFrame.
+    matches_dataframe: pl.DataFrame,
+    winner_column: str = "winners",
+    loser_column: str = "losers",
+) -> tuple[list[Any], dict[Any, int]]:
+    """Build node ID to index mapping from matches DataFrame.
 
     Args:
-        matches_df: DataFrame with winner/loser columns
-        winner_col: Name of winner column
-        loser_col: Name of loser column
+        matches_dataframe: DataFrame with winner/loser columns.
+        winner_column: Name of winner column. Defaults to "winners".
+        loser_column: Name of loser column. Defaults to "losers".
 
     Returns:
-        Tuple of (node_list, node_to_index_map)
+        Tuple of (node_list, node_to_index_map).
     """
-    # Extract all unique IDs
-    if winner_col in matches_df.columns and loser_col in matches_df.columns:
-        # Handle list columns
-        if matches_df[winner_col].dtype == pl.List:
-            winners = (
-                matches_df.select(pl.col(winner_col).list.explode())[winner_col]
+    if (
+        winner_column in matches_dataframe.columns
+        and loser_column in matches_dataframe.columns
+    ):
+        if matches_dataframe[winner_column].dtype == pl.List:
+            winner_ids = (
+                matches_dataframe.select(pl.col(winner_column).list.explode())[
+                    winner_column
+                ]
                 .unique()
                 .to_list()
             )
-            losers = (
-                matches_df.select(pl.col(loser_col).list.explode())[loser_col]
+            loser_ids = (
+                matches_dataframe.select(pl.col(loser_column).list.explode())[
+                    loser_column
+                ]
                 .unique()
                 .to_list()
             )
         else:
-            winners = matches_df[winner_col].unique().to_list()
-            losers = matches_df[loser_col].unique().to_list()
+            winner_ids = matches_dataframe[winner_column].unique().to_list()
+            loser_ids = matches_dataframe[loser_column].unique().to_list()
 
-        all_ids = list(set(winners) | set(losers))
+        all_node_ids = list(set(winner_ids) | set(loser_ids))
     else:
-        raise ValueError(f"Columns {winner_col} or {loser_col} not found")
+        raise ValueError(f"Columns {winner_column} or {loser_column} not found")
 
-    return factorize_ids(all_ids)
+    return factorize_ids(all_node_ids)

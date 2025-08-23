@@ -16,7 +16,10 @@ from __future__ import annotations
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import numpy as np
 import polars as pl
@@ -64,12 +67,12 @@ class ExposureLogOddsEngine(RatingEngine):
     def __init__(
         self,
         *,
-        lambda_smooth: Optional[float] = None,
+        lambda_smooth: float | None = None,
         use_surprisal: bool = False,
         surprisal_T: float = 1.0,
         surprisal_iters: int = 2,
         epsilon: float = 1e-9,
-        min_exposure: Optional[float] = None,
+        min_exposure: float | None = None,
         score_decay_delay_days: float = 30.0,
         score_decay_rate: float = 0.01,
         **kwargs,
@@ -97,12 +100,12 @@ class ExposureLogOddsEngine(RatingEngine):
             self.logger.info(f"  min_exposure={min_exposure}")
 
         # Store intermediate results for analysis
-        self.exposure_vector_: Optional[np.ndarray] = None
-        self.exposure_teleport_: Optional[np.ndarray] = None
-        self.win_pagerank_: Optional[np.ndarray] = None
-        self.loss_pagerank_: Optional[np.ndarray] = None
-        self.logodds_scores_: Optional[np.ndarray] = None
-        self.lambda_used_: Optional[float] = None
+        self.exposure_vector_: np.ndarray | None = None
+        self.exposure_teleport_: np.ndarray | None = None
+        self.win_pagerank_: np.ndarray | None = None
+        self.loss_pagerank_: np.ndarray | None = None
+        self.logodds_scores_: np.ndarray | None = None
+        self.lambda_used_: float | None = None
 
     def rank_players(
         self, matches: pl.DataFrame, players: pl.DataFrame
@@ -143,7 +146,6 @@ class ExposureLogOddsEngine(RatingEngine):
 
             # Convert matches to the required format
             self.logger.info("Converting match data...")
-            # Try to use optimized version first
             try:
                 matches_df = self._convert_matches_dataframe(
                     matches, players, tournament_influence
@@ -158,7 +160,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 )
                 use_optimized = False
 
-            # Run exposure log-odds with optional surprisal iterations
             if self.use_surprisal and not use_optimized:
                 (
                     scores,
@@ -170,7 +171,6 @@ class ExposureLogOddsEngine(RatingEngine):
                     converted_matches, active_players
                 )
             elif use_optimized:
-                # Use optimized version
                 (
                     scores,
                     win_pr,
@@ -187,16 +187,13 @@ class ExposureLogOddsEngine(RatingEngine):
                     lambda_used,
                 ) = self._exposure_logodds(converted_matches, active_players)
 
-            # Store results
             self.win_pagerank_ = win_pr
             self.loss_pagerank_ = loss_pr
             self.exposure_teleport_ = rho
             self.logodds_scores_ = scores
             self.lambda_used_ = lambda_used
 
-            # Compute raw exposure for reporting
             if use_optimized:
-                # For optimized path, compute exposure from matches_df
                 node_to_idx = {p: i for i, p in enumerate(active_players)}
                 exposure = np.zeros(len(active_players))
 
@@ -223,7 +220,6 @@ class ExposureLogOddsEngine(RatingEngine):
                     if row["id"] in node_to_idx:
                         exposure[node_to_idx[row["id"]]] = row["e"]
             else:
-                # Original path for non-optimized
                 node_to_idx = {p: i for i, p in enumerate(active_players)}
                 exposure = np.zeros(len(active_players))
                 for match in converted_matches:
@@ -237,10 +233,8 @@ class ExposureLogOddsEngine(RatingEngine):
 
             self.exposure_vector_ = exposure
 
-            # Calculate last match timestamp for each player
             player_last_match = {}
             if use_optimized:
-                # For optimized path, compute from matches_df
                 winners_ts = (
                     matches_df.select(["winners", "ts"])
                     .explode("winners")
@@ -262,14 +256,11 @@ class ExposureLogOddsEngine(RatingEngine):
                 for row in ts_df.iter_rows(named=True):
                     player_last_match[row["id"]] = row["last_ts"]
             else:
-                # Original path
                 for match in converted_matches:
-                    # Get match timestamp (already calculated in conversion)
                     match_ts = self.now_ts  # Default to now
                     if "timestamp" in match:
                         match_ts = match["timestamp"]
 
-                    # Update last match for all players in the match
                     for p in match["winners"]:
                         if p in node_to_idx:
                             player_last_match[p] = max(
@@ -281,7 +272,6 @@ class ExposureLogOddsEngine(RatingEngine):
                                 player_last_match.get(p, 0), match_ts
                             )
 
-            # Apply time-based score decay
             now_ts = self.now_ts
             decay_factors = np.ones(len(active_players))
 
@@ -289,10 +279,8 @@ class ExposureLogOddsEngine(RatingEngine):
                 last_match_ts = player_last_match.get(player_id, now_ts)
                 days_inactive = (now_ts - last_match_ts) / 86400.0
 
-                # Apply decay only after the delay period
                 if days_inactive > self.score_decay_delay_days:
                     days_to_decay = days_inactive - self.score_decay_delay_days
-                    # Exponential decay: score * (1 - rate)^days
                     decay_factors[i] = (
                         1 - self.score_decay_rate
                     ) ** days_to_decay
@@ -302,10 +290,7 @@ class ExposureLogOddsEngine(RatingEngine):
                         f"decay factor: {decay_factors[i]:.3f}"
                     )
 
-            # Apply decay to scores
             scores = scores * decay_factors
-
-            # Create result DataFrame
             result = pl.DataFrame(
                 {
                     "id": active_players,
@@ -316,7 +301,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 }
             )
 
-            # Apply minimum exposure filter if specified
             if self.min_exposure is not None:
                 pre_filter = result.height
                 result = result.filter(pl.col("exposure") >= self.min_exposure)
@@ -326,7 +310,6 @@ class ExposureLogOddsEngine(RatingEngine):
 
             result = result.sort("player_rank", descending=True)
 
-        # Log statistics
         self.logger.info(f"Score statistics:")
         self.logger.info(
             f"  Win PR - mean: {win_pr.mean():.6f}, std: {win_pr.std():.6f}"
@@ -370,7 +353,6 @@ class ExposureLogOddsEngine(RatingEngine):
         log_dataframe_stats(self.logger, matches, "team_matches")
 
         with log_timing(self.logger, "exposure log-odds team calculation"):
-            # Get active teams and tournament influences
             self.logger.info("Getting active teams via standard ranking...")
             standard_result = self._tick_tock_loop(
                 matches=matches,
@@ -384,12 +366,10 @@ class ExposureLogOddsEngine(RatingEngine):
 
             tournament_influence = self.tournament_influence_ or {}
 
-            # Convert matches for team mode
             converted_matches = self._convert_team_matches(
                 matches, tournament_influence
             )
 
-            # Run exposure log-odds
             if self.use_surprisal:
                 (
                     scores,
@@ -409,7 +389,6 @@ class ExposureLogOddsEngine(RatingEngine):
                     lambda_used,
                 ) = self._exposure_logodds(converted_matches, active_teams)
 
-            # Compute exposure
             node_to_idx = {t: i for i, t in enumerate(active_teams)}
             exposure = np.zeros(len(active_teams))
             for match in converted_matches:
@@ -421,7 +400,6 @@ class ExposureLogOddsEngine(RatingEngine):
                     if t in node_to_idx:
                         exposure[node_to_idx[t]] += w
 
-            # Create result
             result = pl.DataFrame(
                 {
                     "id": active_teams,
@@ -443,7 +421,7 @@ class ExposureLogOddsEngine(RatingEngine):
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame,
-        tournament_influence: Dict[int, float],
+        tournament_influence: dict[int, float],
         *,
         rosters: pl.DataFrame | None = None,
         include_share: bool = True,
@@ -458,12 +436,10 @@ class ExposureLogOddsEngine(RatingEngine):
           [wlen, llen, share]
         """
 
-        # ---- constants & guards (avoid repeated Python work) ----
         now_ts = getattr(self, "now_ts", None) or int(self.now.timestamp())
         decay_rate = self.decay_rate
         beta = float(self.beta)
 
-        # ---- select only what we need from matches ----
         needed = [
             "match_id",
             "tournament_id",
@@ -479,7 +455,6 @@ class ExposureLogOddsEngine(RatingEngine):
 
         m = matches.select([c for c in needed if c in matches.columns])
 
-        # ---- filter out byes / null teams as early as possible ----
         filt = (
             pl.col("winner_team_id").is_not_null()
             & pl.col("loser_team_id").is_not_null()
@@ -491,7 +466,6 @@ class ExposureLogOddsEngine(RatingEngine):
         )
         m = m.filter(filt)
 
-        # ---- fast timestamp via coalesce: last_game_finished_at -> match_created_at -> now_ts ----
         ts_exprs = []
         if "last_game_finished_at" in m.columns:
             ts_exprs.append(pl.col("last_game_finished_at"))
@@ -500,8 +474,6 @@ class ExposureLogOddsEngine(RatingEngine):
         ts_exprs.append(pl.lit(now_ts))
         ts_expr = pl.coalesce(ts_exprs).cast(pl.Int64)
 
-        # ---- add ts and S (tournament influence) ----
-        # Option A: vectorized join to add S
         m = m.with_columns(ts_expr.alias("ts"))
 
         if tournament_influence:
@@ -515,23 +487,20 @@ class ExposureLogOddsEngine(RatingEngine):
                 pl.col("S").fill_null(1.0)
             )
         else:
-            # If no tournament influence provided, use 1.0 for all
             m = m.with_columns(pl.lit(1.0).alias("S"))
 
-        # ---- compute weight: exp(-decay_rate * age_days) * (S ** beta) ----
         time_decay = (
             ((pl.lit(now_ts) - pl.col("ts").cast(pl.Float64)) / 86400.0)
             .mul(-decay_rate)
             .exp()
         )
         if beta == 0.0:
-            weight_expr = time_decay  # S^0 == 1
+            weight_expr = time_decay
         else:
             weight_expr = time_decay * (pl.col("S") ** beta)
 
         m = m.with_columns(weight_expr.alias("weight"))
 
-        # ---- rosters: shrink before grouping to reduce work ----
         if rosters is None:
             used_teams = (
                 pl.concat(
@@ -555,7 +524,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 )
             )
 
-            # Only keep players for used (tournament_id, team_id) pairs
             rosters = (
                 players.select(["tournament_id", "team_id", "user_id"])
                 .with_columns(
@@ -569,7 +537,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 .agg(pl.col("user_id").alias("roster"))
             )
         else:
-            # Ensure expected dtypes for joins
             rosters = rosters.with_columns(
                 [
                     pl.col("tournament_id").cast(pl.Int64),
@@ -577,8 +544,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 ]
             )
 
-        # ---- two hash joins to attach winner/loser rosters ----
-        # Cast once to aligned integer types to avoid implicit casts per row
         m = m.with_columns(
             [
                 pl.col("tournament_id").cast(pl.Int64),
@@ -614,7 +579,6 @@ class ExposureLogOddsEngine(RatingEngine):
             )
         )
 
-        # ---- optionally add per‑match pair share (for later pair expansion) ----
         if include_share:
             m = m.with_columns(
                 [
@@ -627,7 +591,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 )
             )
 
-        # ---- allow streaming on the final collect for large pipelines ----
         if streaming and isinstance(m, pl.LazyFrame):
             return m.collect(streaming=True)
 
@@ -637,8 +600,8 @@ class ExposureLogOddsEngine(RatingEngine):
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame,
-        tournament_influence: Dict[int, float],
-    ) -> List[Dict]:
+        tournament_influence: dict[int, float],
+    ) -> list[dict]:
         """
         Convert polars DataFrame matches to list of dicts with winners/losers lists.
         """
@@ -656,7 +619,6 @@ class ExposureLogOddsEngine(RatingEngine):
 
             tid = row["tournament_id"]
 
-            # Get players from teams
             winner_players = players.filter(
                 (pl.col("tournament_id") == tid)
                 & (pl.col("team_id") == winner_team)
@@ -670,10 +632,7 @@ class ExposureLogOddsEngine(RatingEngine):
             if not winner_players or not loser_players:
                 continue
 
-            # Compute match weight
             t_influence = tournament_influence.get(tid, 1.0)
-
-            # Time decay
             if "last_game_finished_at" in row and row["last_game_finished_at"]:
                 ts = row["last_game_finished_at"]
             elif "match_created_at" in row and row["match_created_at"]:
@@ -702,7 +661,7 @@ class ExposureLogOddsEngine(RatingEngine):
 
     def _convert_team_matches(
         self, matches: pl.DataFrame, tournament_influence: Dict[int, float]
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Convert team matches to required format.
         """
@@ -755,8 +714,6 @@ class ExposureLogOddsEngine(RatingEngine):
         Uses list-explode to form the cartesian product winner×loser per match
         but stays inside Polars/NumPy for speed.
         """
-        # Explode both lists to pairs. Since Polars doesn't directly cartesian two list columns,
-        # we explode one then explode the other; Polars duplicates rows, achieving the cross join.
         pairs = (
             m.explode("winners")
             .explode("losers")
@@ -768,7 +725,6 @@ class ExposureLogOddsEngine(RatingEngine):
                 ]
             )
         )
-        # Map ids -> indices
         idx_map = pl.DataFrame(
             {"id": list(node_to_idx.keys()), "idx": list(node_to_idx.values())}
         )
@@ -779,7 +735,6 @@ class ExposureLogOddsEngine(RatingEngine):
             .rename({"idx": "l_idx"})
             .select(["w_idx", "l_idx", "share"])
         )
-        # Aggregate duplicate pairs
         pairs = pairs.group_by(["w_idx", "l_idx"]).agg(
             pl.col("share").sum().alias("w_sum")
         )
@@ -804,59 +759,60 @@ class ExposureLogOddsEngine(RatingEngine):
         Column-stochastic PageRank using sparse assembly: A[dst, src].
         """
         if sp is not None:
-            A = sp.csc_matrix((data, (rows, cols)), shape=(n, n))
-            col_sums = np.asarray(A.sum(axis=0)).ravel()
-            # Normalize columns in-place (avoid building dense P)
-            # P = A * diag(1/col_sums_nonzero)
-            inv = np.zeros_like(col_sums)
-            nz = col_sums > 0
-            inv[nz] = 1.0 / col_sums[nz]
-            P = A @ sp.diags(inv)
-            s = rho / rho.sum()
+            adjacency_matrix = sp.csc_matrix((data, (rows, cols)), shape=(n, n))
+            column_sums = np.asarray(adjacency_matrix.sum(axis=0)).ravel()
+            inverse_sums = np.zeros_like(column_sums)
+            nonzero_mask = column_sums > 0
+            inverse_sums[nonzero_mask] = 1.0 / column_sums[nonzero_mask]
+            transition_matrix = adjacency_matrix @ sp.diags(inverse_sums)
+            rank_vector = rho / rho.sum()
             for _ in range(max_iter):
-                s_new = alpha * (P @ s) + (1 - alpha) * rho
-                # redistribute dangling mass
-                dangling_mass = alpha * s[~nz].sum()
+                rank_vector_new = (
+                    alpha * (transition_matrix @ rank_vector)
+                    + (1 - alpha) * rho
+                )
+                dangling_mass = alpha * rank_vector[~nonzero_mask].sum()
                 if dangling_mass:
-                    s_new += dangling_mass * rho
-                s_new /= s_new.sum()
-                if np.linalg.norm(s_new - s, 1) < tol:
+                    rank_vector_new += dangling_mass * rho
+                rank_vector_new /= rank_vector_new.sum()
+                if np.linalg.norm(rank_vector_new - rank_vector, 1) < tol:
                     break
-                s = s_new
-            return s
+                rank_vector = rank_vector_new
+            return rank_vector
         else:
-            # NumPy fallback: COO multiply via segment adds
-            col_sums = np.zeros(n)
-            np.add.at(col_sums, cols, data)
-            inv = np.zeros_like(col_sums)
-            nz = col_sums > 0
-            inv[nz] = 1.0 / col_sums[nz]
-            weights = data * inv[cols]  # normalized per-column
-            s = rho / rho.sum()
+            column_sums = np.zeros(n)
+            np.add.at(column_sums, cols, data)
+            inverse_sums = np.zeros_like(column_sums)
+            nonzero_mask = column_sums > 0
+            inverse_sums[nonzero_mask] = 1.0 / column_sums[nonzero_mask]
+            weights = data * inverse_sums[cols]
+            rank_vector = rho / rho.sum()
             for _ in range(max_iter):
-                s_new = np.zeros(n)
-                np.add.at(s_new, rows, alpha * weights * s[cols])
-                dangling_mass = alpha * s[~nz].sum()
-                s_new += (1 - alpha + dangling_mass) * rho
-                s_new /= s_new.sum()
-                if np.linalg.norm(s_new - s, 1) < tol:
+                rank_vector_new = np.zeros(n)
+                np.add.at(
+                    rank_vector_new, rows, alpha * weights * rank_vector[cols]
+                )
+                dangling_mass = alpha * rank_vector[~nonzero_mask].sum()
+                rank_vector_new += (1 - alpha + dangling_mass) * rho
+                rank_vector_new /= rank_vector_new.sum()
+                if np.linalg.norm(rank_vector_new - rank_vector, 1) < tol:
                     break
-                s = s_new
-            return s
+                rank_vector = rank_vector_new
+            return rank_vector
 
     def _build_edges_loser_to_winner(
         self,
         matches: List[Dict],
-        node_to_idx: Dict,
-        surprisal_ratings: Optional[np.ndarray] = None,
+        node_to_idx: dict,
+        surprisal_ratings: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Build adjacency matrix A where A[dst, src] = weight.
         Edges go from LOSER -> WINNER.
         Team weights are divided evenly across all player pairs.
         """
-        n = len(node_to_idx)
-        A = np.zeros((n, n), dtype=float)
+        num_nodes = len(node_to_idx)
+        adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=float)
 
         for match in matches:
             winners = match["winners"]
@@ -865,8 +821,8 @@ class ExposureLogOddsEngine(RatingEngine):
             if not winners or not losers:
                 continue
 
-            w_time = match["weight"]
-            u = 1.0
+            time_weight = match["weight"]
+            upset_weight = 1.0
 
             if surprisal_ratings is not None and self.use_surprisal:
                 # Compute surprisal weight based on average team ratings
@@ -888,27 +844,27 @@ class ExposureLogOddsEngine(RatingEngine):
                     p_win = 1.0 / (
                         1.0 + math.exp(-rating_diff / self.surprisal_T)
                     )
-                    u = -math.log(max(p_win, 1e-10))
+                    upset_weight = -math.log(max(p_win, 1e-10))
 
-            w_match = w_time * u
+            match_weight = time_weight * upset_weight
 
             # CRITICAL: Divide by number of pairs to preserve total match weight
-            share = w_match / (len(winners) * len(losers))
+            share = match_weight / (len(winners) * len(losers))
 
-            for lp in losers:
-                ls = node_to_idx.get(lp)
-                if ls is None:
+            for loser_player in losers:
+                loser_idx = node_to_idx.get(loser_player)
+                if loser_idx is None:
                     continue
 
-                for wp in winners:
-                    ws = node_to_idx.get(wp)
-                    if ws is None:
+                for winner_player in winners:
+                    winner_idx = node_to_idx.get(winner_player)
+                    if winner_idx is None:
                         continue
 
                     # A[dst, src] = weight; loser -> winner means src=loser, dst=winner
-                    A[ws, ls] += share
+                    adjacency_matrix[winner_idx, loser_idx] += share
 
-        return A
+        return adjacency_matrix
 
     def _pagerank_col_stochastic(
         self,
@@ -924,43 +880,44 @@ class ExposureLogOddsEngine(RatingEngine):
         """
         n = A.shape[0]
 
-        # Column sums (outgoing mass per source)
-        col = A.sum(axis=0)
-        P = np.zeros_like(A)
+        column_sums = A.sum(axis=0)
+        transition_matrix = np.zeros_like(A)
 
         for j in range(n):
-            if col[j] > 0:
-                P[:, j] = A[:, j] / col[j]  # Column-stochastic
-            # else leave column zeros (dangling)
+            if column_sums[j] > 0:
+                transition_matrix[:, j] = A[:, j] / column_sums[j]
 
         # Normalize teleport
         rho = np.asarray(rho, dtype=float)
         rho = rho / rho.sum()
-        s = rho.copy()
+        rank_vector = rho.copy()
 
         for iteration in range(max_iter):
-            s_new = alpha * (P @ s) + (1 - alpha) * rho
+            rank_vector_new = (
+                alpha * (transition_matrix @ rank_vector) + (1 - alpha) * rho
+            )
 
-            # Redistribute dangling mass
-            dangling_mass = alpha * s[col == 0].sum()
+            dangling_mass = alpha * rank_vector[column_sums == 0].sum()
             if dangling_mass > 0:
-                s_new += dangling_mass * rho
+                rank_vector_new += dangling_mass * rho
 
-            # Normalize for safety
-            s_new /= s_new.sum()
+            rank_vector_new /= rank_vector_new.sum()
 
-            if np.linalg.norm(s_new - s, 1) < tol:
+            if np.linalg.norm(rank_vector_new - rank_vector, 1) < tol:
                 self.logger.debug(
                     f"PageRank converged at iteration {iteration}"
                 )
                 break
 
-            s = s_new
+            rank_vector = rank_vector_new
 
-        return s
+        return rank_vector
 
     def _exposure_logodds_optimized(
-        self, matches_df: pl.DataFrame, active_nodes: list, alpha: float = None
+        self,
+        matches_df: pl.DataFrame,
+        active_nodes: list,
+        alpha: float | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
         """
         Optimized exposure log-odds using vectorized operations.
@@ -969,9 +926,6 @@ class ExposureLogOddsEngine(RatingEngine):
         node_to_idx = {p: i for i, p in enumerate(active_nodes)}
         n = len(node_to_idx)
 
-        # Exposure teleport rho from per-player total match weights (no Python loops)
-        # winners+losers exposure per player
-        # Use share (per-pair weight) for correct exposure calculation
         winners_exp = (
             matches_df.select(["winners", "share"])
             .explode("winners")
@@ -992,34 +946,38 @@ class ExposureLogOddsEngine(RatingEngine):
             .fill_null(0.0)
             .select("e")
         )
-        e = exp_df["e"].to_numpy()
-        rho = e + self.epsilon
+        exposure_array = exp_df["e"].to_numpy()
+        rho = exposure_array + self.epsilon
         rho = rho / rho.sum()
 
-        # Build A_win triplets and mirror for A_loss
         rows, cols, data = self._build_exposure_triplets(
             matches_df, node_to_idx
-        )  # A_win[dst=winner, src=loser]
-        s = self._pagerank_col_stochastic_sparse(
+        )
+        win_pagerank = self._pagerank_col_stochastic_sparse(
             rows, cols, data, rho, n, alpha=alpha
         )
-        l = self._pagerank_col_stochastic_sparse(
+        loss_pagerank = self._pagerank_col_stochastic_sparse(
             cols, rows, data, rho, n, alpha=alpha
-        )  # transpose
+        )
 
-        # Lambda smoothing (auto)
         if self.lambda_smooth is None:
-            target = 0.025 * np.median(s)
+            target = 0.025 * np.median(win_pagerank)
             med_rho = np.median(rho)
             lambda_smooth = 0.0 if med_rho == 0 else max(target / med_rho, 0.0)
         else:
             lambda_smooth = self.lambda_smooth
 
-        score = np.log((s + lambda_smooth * rho) / (l + lambda_smooth * rho))
-        return score, s, l, rho, lambda_smooth
+        score = np.log(
+            (win_pagerank + lambda_smooth * rho)
+            / (loss_pagerank + lambda_smooth * rho)
+        )
+        return score, win_pagerank, loss_pagerank, rho, lambda_smooth
 
     def _exposure_logodds(
-        self, matches: List[Dict], active_nodes: List, alpha: float = None
+        self,
+        matches: list[dict],
+        active_nodes: list,
+        alpha: float | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
         """
         Core exposure log-odds computation following plan.md.
@@ -1032,33 +990,29 @@ class ExposureLogOddsEngine(RatingEngine):
         node_to_idx = {p: i for i, p in enumerate(active_nodes)}
         n = len(node_to_idx)
 
-        # 1) Compute exposure vector
-        e = np.zeros(n)
+        exposure_vector = np.zeros(n)
         for match in matches:
             w = match["weight"]
             for p in match["winners"]:
                 if p in node_to_idx:
-                    e[node_to_idx[p]] += w
+                    exposure_vector[node_to_idx[p]] += w
             for p in match["losers"]:
                 if p in node_to_idx:
-                    e[node_to_idx[p]] += w
+                    exposure_vector[node_to_idx[p]] += w
 
         # Create teleport vector
-        rho = e + self.epsilon
+        rho = exposure_vector + self.epsilon
         rho = rho / rho.sum()
 
         self.logger.info(
-            f"Exposure stats: min={e.min():.2f}, max={e.max():.2f}, "
-            f"mean={e.mean():.2f}, median={np.median(e):.2f}"
+            f"Exposure stats: min={exposure_vector.min():.2f}, max={exposure_vector.max():.2f}, "
+            f"mean={exposure_vector.mean():.2f}, median={np.median(exposure_vector):.2f}"
         )
 
-        # 2) Build loser->winner adjacency A_win[dst, src]
         A_win = self._build_edges_loser_to_winner(matches, node_to_idx)
 
-        # 3) Loss graph is the EXACT mirror: A_loss = A_win.T
         A_loss = A_win.T.copy()
 
-        # Sanity checks
         assert np.allclose(
             A_loss, A_win.T, atol=1e-12
         ), "Loss graph not exact transpose!"
@@ -1070,37 +1024,36 @@ class ExposureLogOddsEngine(RatingEngine):
             f"Built adjacency matrices: total weight = {A_win.sum():.2f}"
         )
 
-        # 4) PageRanks with the SAME teleport rho
-        s = self._pagerank_col_stochastic(A_win, rho, alpha=alpha)
-        l = self._pagerank_col_stochastic(A_loss, rho, alpha=alpha)
+        win_pagerank = self._pagerank_col_stochastic(A_win, rho, alpha=alpha)
+        loss_pagerank = self._pagerank_col_stochastic(A_loss, rho, alpha=alpha)
 
-        # Auto lambda if not given
         if self.lambda_smooth is None:
-            target = 0.025 * np.median(s)  # 2.5% of typical PR mass
+            target = 0.025 * np.median(win_pagerank)
             med_rho = np.median(rho)
             lambda_smooth = max(target / med_rho, 0.0)
             self.logger.info(f"Auto-tuned lambda: {lambda_smooth:.6f}")
         else:
             lambda_smooth = self.lambda_smooth
 
-        # 5) Log-odds (smoothed)
-        score = np.log((s + lambda_smooth * rho) / (l + lambda_smooth * rho))
+        score = np.log(
+            (win_pagerank + lambda_smooth * rho)
+            / (loss_pagerank + lambda_smooth * rho)
+        )
 
-        # Validations
         assert np.isclose(
-            s.sum(), 1.0, atol=1e-10
-        ), f"Win PR doesn't sum to 1: {s.sum()}"
+            win_pagerank.sum(), 1.0, atol=1e-10
+        ), f"Win PR doesn't sum to 1: {win_pagerank.sum()}"
         assert np.isclose(
-            l.sum(), 1.0, atol=1e-10
-        ), f"Loss PR doesn't sum to 1: {l.sum()}"
+            loss_pagerank.sum(), 1.0, atol=1e-10
+        ), f"Loss PR doesn't sum to 1: {loss_pagerank.sum()}"
         assert np.isclose(
             rho.sum(), 1.0, atol=1e-10
         ), f"Teleport doesn't sum to 1: {rho.sum()}"
 
-        return score, s, l, rho, lambda_smooth
+        return score, win_pagerank, loss_pagerank, rho, lambda_smooth
 
     def _exposure_logodds_with_surprisal(
-        self, matches: List[Dict], active_nodes: List
+        self, matches: list[dict], active_nodes: list
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
         """
         Exposure log-odds with iterative surprisal refinement.
@@ -1116,22 +1069,20 @@ class ExposureLogOddsEngine(RatingEngine):
                 f"Surprisal iteration {iteration + 1}/{self.surprisal_iters}"
             )
 
-            # Compute exposure (same for all iterations)
             if iteration == 0:
-                e = np.zeros(n)
+                exposure_vector = np.zeros(n)
                 for match in matches:
                     w = match["weight"]
                     for p in match["winners"]:
                         if p in node_to_idx:
-                            e[node_to_idx[p]] += w
+                            exposure_vector[node_to_idx[p]] += w
                     for p in match["losers"]:
                         if p in node_to_idx:
-                            e[node_to_idx[p]] += w
+                            exposure_vector[node_to_idx[p]] += w
 
-                rho = e + self.epsilon
+                rho = exposure_vector + self.epsilon
                 rho = rho / rho.sum()
 
-            # Build edges with current surprisal weights
             A_win = self._build_edges_loser_to_winner(
                 matches,
                 node_to_idx,
@@ -1141,44 +1092,41 @@ class ExposureLogOddsEngine(RatingEngine):
             )
             A_loss = A_win.T.copy()
 
-            # PageRanks
-            s = self._pagerank_col_stochastic(
+            win_pagerank = self._pagerank_col_stochastic(
                 A_win, rho, alpha=self.damping_factor
             )
-            l = self._pagerank_col_stochastic(
+            loss_pagerank = self._pagerank_col_stochastic(
                 A_loss, rho, alpha=self.damping_factor
             )
 
-            # Auto-tune lambda on first iteration
             if iteration == 0:
                 if self.lambda_smooth is None:
-                    target = 0.025 * np.median(s)
+                    target = 0.025 * np.median(win_pagerank)
                     med_rho = np.median(rho)
                     lambda_smooth = max(target / med_rho, 0.0)
                     self.logger.info(f"Auto-tuned lambda: {lambda_smooth:.6f}")
                 else:
                     lambda_smooth = self.lambda_smooth
 
-            # Compute scores
             score = np.log(
-                (s + lambda_smooth * rho) / (l + lambda_smooth * rho)
+                (win_pagerank + lambda_smooth * rho)
+                / (loss_pagerank + lambda_smooth * rho)
             )
 
-            # Update provisional ratings (z-scored)
             provisional_ratings = (score - score.mean()) / (score.std() + 1e-8)
 
-        return score, s, l, rho, lambda_smooth
+        return score, win_pagerank, loss_pagerank, rho, lambda_smooth
 
     def post_process_rankings(
         self,
         rankings: pl.DataFrame,
         players_df: pl.DataFrame,
         min_tournaments: int = 3,
-        rank_cutoffs: Optional[List[float]] = None,
-        rank_labels: Optional[List[str]] = None,
+        rank_cutoffs: list[float] | None = None,
+        rank_labels: list[str] | None = None,
         score_multiplier: float = 25.0,
         score_offset: float = 0.0,
-        tournaments_df: Optional[pl.DataFrame] = None,
+        tournaments_df: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
         """
         Post-process rankings with tournament filtering and grade assignment.

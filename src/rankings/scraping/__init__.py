@@ -1,12 +1,6 @@
-"""
-Tournament scraping module for Sendou.ink data.
+"""Tournament scraping module for Sendou.ink data."""
 
-This module provides comprehensive scraping capabilities organized into focused submodules:
-- api: Core scraping functions and HTTP operations
-- discovery: Tournament discovery via calendar and other methods
-- batch: Batch processing and range scraping
-- storage: Data loading, saving, and management
-"""
+from __future__ import annotations
 
 # Core API functions
 from rankings.scraping.api import (

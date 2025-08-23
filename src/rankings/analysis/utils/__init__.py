@@ -1,15 +1,6 @@
-"""
-Utility functions for tournament ranking analysis.
+"""Utility functions for tournament ranking analysis."""
 
-This module is organized into submodules:
-- summaries: Functions for preparing summary DataFrames
-- formatting: Functions for formatting data for display
-- comparisons: Functions for comparing rankings and entities
-- matches: Functions for match analysis
-- names: Functions for adding human-readable names
-- analysis: Higher-level analysis functions
-- tournament_filters: Functions for filtering ranked tournaments
-"""
+from __future__ import annotations
 
 # Probability model functions
 from rankings.analysis.transforms import bt_prob

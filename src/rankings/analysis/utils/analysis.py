@@ -8,7 +8,10 @@ functions for common analysis tasks.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rankings.analysis.engine import RatingEngine
 
 import polars as pl
 
@@ -45,13 +48,15 @@ def _get_engine_values(engine, player_id):
             if hasattr(result, "ids") and player_id in result.ids:
                 idx = result.ids.index(player_id)
                 win_pr = (
-                    float(result.win_pr[idx])
-                    if result.win_pr is not None and idx < len(result.win_pr)
+                    float(result.win_pagerank[idx])
+                    if result.win_pagerank is not None
+                    and idx < len(result.win_pagerank)
                     else None
                 )
                 loss_pr = (
-                    float(result.loss_pr[idx])
-                    if result.loss_pr is not None and idx < len(result.loss_pr)
+                    float(result.loss_pagerank[idx])
+                    if result.loss_pagerank is not None
+                    and idx < len(result.loss_pagerank)
                     else None
                 )
                 exposure = (
@@ -92,11 +97,11 @@ def _get_engine_values(engine, player_id):
 
 def analyze_player(
     player_id: int,
-    engine: Optional[RatingEngine] = None,
-    rankings_df: Optional[pl.DataFrame] = None,
-    matches_df: Optional[pl.DataFrame] = None,
-    players_df: Optional[pl.DataFrame] = None,
-    tournament_data: Optional[list[dict]] = None,
+    engine: RatingEngine | None = None,
+    rankings_df: pl.DataFrame | None = None,
+    matches_df: pl.DataFrame | None = None,
+    players_df: pl.DataFrame | None = None,
+    tournament_data: list[dict] | None = None,
     top_n_matches: int = 10,
     print_output: bool = True,
     include_loo: bool = False,

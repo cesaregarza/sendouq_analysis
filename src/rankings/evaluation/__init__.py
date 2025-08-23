@@ -1,5 +1,7 @@
 """Evaluation module for tournament ranking models."""
 
+from __future__ import annotations
+
 from rankings.evaluation.cross_validation import (
     create_simple_time_splits,
     create_time_based_folds,

@@ -1,6 +1,8 @@
 """Backtesting framework for tournament predictions."""
 
-from typing import Any, Dict, List
+from __future__ import annotations
+
+from typing import Any
 
 from rankings.tournament_prediction.match_predictor import MatchPredictor
 from rankings.tournament_prediction.seeder import TournamentSeeder
@@ -29,9 +31,9 @@ class TournamentBacktester:
 
     def rolling_backtest(
         self,
-        tournaments: List[Dict[str, Any]],
-        player_ratings_history: Dict[int, Dict[int, float]],
-    ) -> Dict[str, Any]:
+        tournaments: list[dict[str, Any]],
+        player_ratings_history: dict[int, dict[int, float]],
+    ) -> dict[str, Any]:
         """Run rolling origin backtest on historical tournaments.
 
         Args:
@@ -73,10 +75,10 @@ class TournamentBacktester:
 
     def evaluate_vs_manual_seeds(
         self,
-        tournament: Dict[str, Any],
-        player_ratings: Dict[int, float],
-        manual_seeds: List[int],
-    ) -> Dict[str, float]:
+        tournament: dict[str, Any],
+        player_ratings: dict[int, float],
+        manual_seeds: list[int],
+    ) -> dict[str, float]:
         """Compare model seeds to manual seeds.
 
         Args:
@@ -108,7 +110,7 @@ class TournamentBacktester:
         }
 
     def _calculate_pairwise_agreement(
-        self, order1: List[int], order2: List[int]
+        self, order1: list[int], order2: list[int]
     ) -> float:
         """Calculate pairwise agreement between two orderings."""
         agree = 0
@@ -130,13 +132,13 @@ class TournamentBacktester:
         return agree / total if total > 0 else 0.0
 
     def _spearman_correlation(
-        self, order1: List[int], order2: List[int]
+        self, order1: list[int], order2: list[int]
     ) -> float:
         """Calculate Spearman rank correlation."""
         # Simplified implementation - real would use scipy.stats.spearmanr
         return 0.0
 
-    def _kendall_tau(self, order1: List[int], order2: List[int]) -> float:
+    def _kendall_tau(self, order1: list[int], order2: list[int]) -> float:
         """Calculate Kendall's tau."""
         # Simplified implementation - real would use scipy.stats.kendalltau
         return 0.0

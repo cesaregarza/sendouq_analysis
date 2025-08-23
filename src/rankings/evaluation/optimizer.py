@@ -5,9 +5,11 @@ This module provides optimization routines for finding the best hyperparameters
 using cross-validation loss as the objective function.
 """
 
+from __future__ import annotations
+
 import logging
 from itertools import product
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Type
 
 import numpy as np
 import polars as pl
@@ -27,8 +29,8 @@ class GridSearchOptimizer:
 
     def __init__(
         self,
-        param_grid: Dict[str, List[Any]],
-        engine_class: Type[RatingEngine] = RatingEngine,
+        param_grid: dict[str, list[Any]],
+        engine_class: type[RatingEngine] = RatingEngine,
         n_splits: int = 5,
         fit_alpha: bool = True,
         regularization_lambda: float = 0.0,
@@ -39,9 +41,9 @@ class GridSearchOptimizer:
 
         Parameters
         ----------
-        param_grid : Dict[str, List[Any]]
+        param_grid : dict[str, list[Any]
             Dictionary mapping parameter names to lists of values to try
-        engine_class : Type[RatingEngine]
+        engine_class : type[RatingEngine]
             Rating engine class to optimize
         n_splits : int
             Number of CV folds
@@ -67,12 +69,12 @@ class GridSearchOptimizer:
     def fit(
         self,
         matches_df: pl.DataFrame,
-        players_df: Optional[pl.DataFrame] = None,
-        teams_df: Optional[pl.DataFrame] = None,
+        players_df: pl.DataFrame | None = None,
+        teams_df: pl.DataFrame | None = None,
         ranking_entity: str = "player",
         prediction_entity: str = "team",
         agg_func: str = "mean",
-    ) -> "GridSearchOptimizer":
+    ) -> GridSearchOptimizer:
         """
         Run grid search optimization.
 
@@ -80,9 +82,9 @@ class GridSearchOptimizer:
         ----------
         matches_df : pl.DataFrame
             Matches data
-        players_df : Optional[pl.DataFrame]
+        players_df : pl.DataFrame | None
             Player metadata
-        teams_df : Optional[pl.DataFrame]
+        teams_df : pl.DataFrame | None
             Team metadata
         ranking_entity : str
             Entity type to rank ("player" or "team")
@@ -188,9 +190,9 @@ class BayesianOptimizer:
 
     def __init__(
         self,
-        param_bounds: Dict[str, Tuple[float, float]],
-        param_types: Optional[Dict[str, str]] = None,
-        engine_class: Type[RatingEngine] = RatingEngine,
+        param_bounds: dict[str, tuple[float, float]],
+        param_types: dict[str, str] | None = None,
+        engine_class: type[RatingEngine] = RatingEngine,
         n_splits: int = 5,
         n_initial: int = 5,
         n_iterations: int = 20,
@@ -203,11 +205,11 @@ class BayesianOptimizer:
 
         Parameters
         ----------
-        param_bounds : Dict[str, Tuple[float, float]]
+        param_bounds : dict[str, tuple[float, float]
             Bounds for each parameter
-        param_types : Optional[Dict[str, str]]
+        param_types : dict[str, str| None
             Type hints for parameters ("float", "int", "choice")
-        engine_class : Type[RatingEngine]
+        engine_class : type[RatingEngine]
             Rating engine class
         n_splits : int
             Number of CV folds
@@ -240,12 +242,12 @@ class BayesianOptimizer:
     def fit(
         self,
         matches_df: pl.DataFrame,
-        players_df: Optional[pl.DataFrame] = None,
-        teams_df: Optional[pl.DataFrame] = None,
+        players_df: pl.DataFrame | None = None,
+        teams_df: pl.DataFrame | None = None,
         ranking_entity: str = "player",
         prediction_entity: str = "team",
         agg_func: str = "mean",
-    ) -> "BayesianOptimizer":
+    ) -> BayesianOptimizer:
         """
         Run Bayesian optimization.
 
@@ -343,16 +345,16 @@ class BayesianOptimizer:
 
 def optimize_rating_engine(
     matches_df: pl.DataFrame,
-    players_df: Optional[pl.DataFrame] = None,
-    teams_df: Optional[pl.DataFrame] = None,
+    players_df: pl.DataFrame | None = None,
+    teams_df: pl.DataFrame | None = None,
     ranking_entity: str = "player",
     prediction_entity: str = "team",
     agg_func: str = "mean",
     method: str = "grid",
-    param_space: Optional[Dict[str, Any]] = None,
+    param_space: dict[str, Any] | None = None,
     n_splits: int = 5,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Convenience function for optimizing rating engine parameters.
 
@@ -360,9 +362,9 @@ def optimize_rating_engine(
     ----------
     matches_df : pl.DataFrame
         Matches data
-    players_df : Optional[pl.DataFrame]
+    players_df : pl.DataFrame | None
         Player metadata
-    teams_df : Optional[pl.DataFrame]
+    teams_df : pl.DataFrame | None
         Team metadata
     ranking_entity : str
         Entity type to rank ("player" or "team")
@@ -372,7 +374,7 @@ def optimize_rating_engine(
         Aggregation function for converting player ratings to team ratings
     method : str
         "grid" or "bayesian"
-    param_space : Optional[Dict[str, Any]]
+    param_space : dict[str, Any] | None
         Parameter search space
     n_splits : int
         Number of CV folds
@@ -381,7 +383,7 @@ def optimize_rating_engine(
 
     Returns
     -------
-    Dict[str, Any]
+    dict[str, Any]
         Optimization results
     """
     if param_space is None:

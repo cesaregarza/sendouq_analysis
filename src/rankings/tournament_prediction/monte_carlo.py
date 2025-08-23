@@ -1,6 +1,8 @@
 """Monte Carlo simulation for tournament outcomes."""
 
-from typing import Any, Dict, List
+from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 
@@ -62,11 +64,11 @@ class MonteCarloSimulator:
 
     def simulate_tournament(
         self,
-        player_ratings: Dict[int, float],
-        bracket_structure: Dict[str, Any],
-        team_rosters: Dict[int, List[int]],
+        player_ratings: dict[int, float],
+        bracket_structure: dict[str, Any],
+        team_rosters: dict[int, list[int]],
         n_simulations: int = 10000,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run Monte Carlo simulation of tournament.
 
         Args:
@@ -118,8 +120,8 @@ class MonteCarloSimulator:
         return results
 
     def _simulate_single_tournament(
-        self, team_ratings: Dict[int, float], bracket_structure: Dict[str, Any]
-    ) -> Dict[int, int]:
+        self, team_ratings: dict[int, float], bracket_structure: dict[str, Any]
+    ) -> dict[int, int]:
         """Simulate a single tournament run.
 
         Args:

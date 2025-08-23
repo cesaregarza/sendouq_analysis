@@ -1,5 +1,7 @@
 """Rating computation backends for tick-tock orchestration."""
 
+from __future__ import annotations
+
 from rankings.algorithms.backends.log_odds import LogOddsBackend
 from rankings.algorithms.backends.row_pr import RowPRBackend
 

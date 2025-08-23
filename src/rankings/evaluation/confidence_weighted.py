@@ -5,7 +5,7 @@ This module provides evaluation metrics that weight players by their confidence
 scores, giving more importance to players with sufficient data for accurate ranking.
 """
 
-from typing import Dict, List, Optional, Tuple
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
@@ -24,7 +24,7 @@ class ConfidenceWeightedEvaluator:
 
     def __init__(
         self,
-        confidence_calculator: Optional[RankingConfidence] = None,
+        confidence_calculator: RankingConfidence | None = None,
         weight_power: float = 2.0,
     ):
         """
@@ -32,7 +32,7 @@ class ConfidenceWeightedEvaluator:
 
         Parameters
         ----------
-        confidence_calculator : Optional[RankingConfidence]
+        confidence_calculator : RankingConfidence | None
             Confidence calculator instance
         weight_power : float
             Power to raise confidence scores to for weighting (higher = more aggressive weighting)
@@ -42,9 +42,9 @@ class ConfidenceWeightedEvaluator:
 
     def weighted_spearman_correlation(
         self,
-        true_ranks: Dict[str, int],
-        predicted_ranks: Dict[str, int],
-        confidence_scores: Dict[str, float],
+        true_ranks: dict[str, int],
+        predicted_ranks: dict[str, int],
+        confidence_scores: dict[str, float],
     ) -> float:
         """
         Calculate weighted Spearman correlation.
@@ -53,11 +53,11 @@ class ConfidenceWeightedEvaluator:
 
         Parameters
         ----------
-        true_ranks : Dict[str, int]
+        true_ranks : dict[str, int]
             True rankings (player_id -> rank)
-        predicted_ranks : Dict[str, int]
+        predicted_ranks : dict[str, int]
             Predicted rankings (player_id -> rank)
-        confidence_scores : Dict[str, float]
+        confidence_scores : dict[str, float]
             Confidence scores (player_id -> score 0-1)
 
         Returns
@@ -110,10 +110,10 @@ class ConfidenceWeightedEvaluator:
 
     def tier_specific_correlation(
         self,
-        true_ranks: Dict[str, int],
-        predicted_ranks: Dict[str, int],
-        player_tiers: Dict[str, ConfidenceTier],
-    ) -> Dict[str, float]:
+        true_ranks: dict[str, int],
+        predicted_ranks: dict[str, int],
+        player_tiers: dict[str, ConfidenceTier],
+    ) -> dict[str, float]:
         """
         Calculate correlation separately for each confidence tier.
 
@@ -122,16 +122,16 @@ class ConfidenceWeightedEvaluator:
 
         Parameters
         ----------
-        true_ranks : Dict[str, int]
+        true_ranks : dict[str, int]
             True rankings
-        predicted_ranks : Dict[str, int]
+        predicted_ranks : dict[str, int]
             Predicted rankings
-        player_tiers : Dict[str, ConfidenceTier]
+        player_tiers : dict[str, ConfidenceTier]
             Player confidence tiers
 
         Returns
         -------
-        Dict[str, float]
+        dict[str, float]
             Correlation for each tier
         """
         results = {}
@@ -168,9 +168,9 @@ class ConfidenceWeightedEvaluator:
 
     def activity_weighted_correlation(
         self,
-        true_ranks: Dict[str, int],
-        predicted_ranks: Dict[str, int],
-        player_activity: Dict[str, int],
+        true_ranks: dict[str, int],
+        predicted_ranks: dict[str, int],
+        player_activity: dict[str, int],
     ) -> float:
         """
         Weight correlation by player activity (e.g., tournament count).
@@ -179,11 +179,11 @@ class ConfidenceWeightedEvaluator:
 
         Parameters
         ----------
-        true_ranks : Dict[str, int]
+        true_ranks : dict[str, int]
             True rankings
-        predicted_ranks : Dict[str, int]
+        predicted_ranks : dict[str, int]
             Predicted rankings
-        player_activity : Dict[str, int]
+        player_activity : dict[str, int]
             Activity measure (e.g., tournament count)
 
         Returns
@@ -237,10 +237,10 @@ class ConfidenceWeightedEvaluator:
 
     def connected_component_correlation(
         self,
-        true_ranks: Dict[str, int],
-        predicted_ranks: Dict[str, int],
-        player_components: Dict[str, int],
-    ) -> Dict[str, float]:
+        true_ranks: dict[str, int],
+        predicted_ranks: dict[str, int],
+        player_components: dict[str, int],
+    ) -> dict[str, float]:
         """
         Calculate correlation within connected components.
 
@@ -249,16 +249,16 @@ class ConfidenceWeightedEvaluator:
 
         Parameters
         ----------
-        true_ranks : Dict[str, int]
+        true_ranks : dict[str, int]
             True rankings
-        predicted_ranks : Dict[str, int]
+        predicted_ranks : dict[str, int]
             Predicted rankings
-        player_components : Dict[str, int]
+        player_components : dict[str, int]
             Component ID for each player
 
         Returns
         -------
-        Dict[str, float]
+        dict[str, float]
             Correlation for each component
         """
         # Group players by component
@@ -298,19 +298,19 @@ class ConfidenceWeightedEvaluator:
 
     def calculate_comprehensive_metrics(
         self,
-        true_ranks: Dict[str, int],
-        predicted_ranks: Dict[str, int],
+        true_ranks: dict[str, int],
+        predicted_ranks: dict[str, int],
         players_df: pl.DataFrame,
         matches_df: pl.DataFrame,
-    ) -> Dict:
+    ) -> dict:
         """
         Calculate all confidence-weighted metrics.
 
         Parameters
         ----------
-        true_ranks : Dict[str, int]
+        true_ranks : dict[str, int]
             True rankings
-        predicted_ranks : Dict[str, int]
+        predicted_ranks : dict[str, int]
             Predicted rankings
         players_df : pl.DataFrame
             Player data
@@ -319,7 +319,7 @@ class ConfidenceWeightedEvaluator:
 
         Returns
         -------
-        Dict
+        dict
             Comprehensive evaluation metrics
         """
         # Calculate confidence scores
@@ -398,7 +398,7 @@ class ConfidenceWeightedEvaluator:
 
         return results
 
-    def print_evaluation_summary(self, metrics: Dict) -> None:
+    def print_evaluation_summary(self, metrics: dict) -> None:
         """Print formatted evaluation summary."""
         print("\n" + "=" * 60)
         print("CONFIDENCE-WEIGHTED EVALUATION SUMMARY")

@@ -1,11 +1,8 @@
-"""
-Diagnostic metrics for tournament rating evaluation.
+"""Diagnostic metrics for tournament rating evaluation."""
 
-This module implements additional metrics beyond the main loss function
-to help diagnose rating system performance.
-"""
+from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -59,22 +56,22 @@ def compute_accuracy(
 
 
 def compute_spearman_correlation(
-    pre_tournament_ratings: Dict[int, float], final_placements: Dict[int, int]
-) -> Tuple[float, float]:
+    pre_tournament_ratings: dict[int, float], final_placements: dict[int, int]
+) -> tuple[float, float]:
     """
     Compute Spearman correlation between ratings and tournament placements.
 
     Parameters
     ----------
-    pre_tournament_ratings : Dict[int, float]
+    pre_tournament_ratings : dict[int, float]
         Ratings before tournament (team_id -> rating)
-    final_placements : Dict[int, int]
+    final_placements : dict[int, int]
         Final tournament placements (team_id -> placement)
         Lower placement = better (1st place = 1)
 
     Returns
     -------
-    Tuple[float, float]
+    tuple[float, float]
         (correlation, p-value)
     """
     # Get common teams
@@ -103,7 +100,7 @@ def compute_spearman_correlation(
 
 def compute_round_metrics(
     matches_df: pl.DataFrame,
-    predictions: Dict[int, float],
+    predictions: dict[int, float],
     round_col: str = "round_name",
 ) -> pl.DataFrame:
     """
@@ -113,7 +110,7 @@ def compute_round_metrics(
     ----------
     matches_df : pl.DataFrame
         Matches with predictions
-    predictions : Dict[int, float]
+    predictions : dict[int, float]
         Match ID to predicted probability
     round_col : str
         Column containing round information
@@ -165,10 +162,10 @@ def compute_round_metrics(
 
 def evaluate_tournament_predictions(
     tournament_matches: pl.DataFrame,
-    rating_map: Dict[int, float],
-    tournament_placements: Optional[Dict[int, int]] = None,
+    rating_map: dict[int, float],
+    tournament_placements: dict[int, int] | None = None,
     alpha: float = 1.0,
-) -> Dict[str, any]:
+) -> dict[str, Any]:
     """
     Comprehensive evaluation of predictions for a single tournament.
 
@@ -176,16 +173,16 @@ def evaluate_tournament_predictions(
     ----------
     tournament_matches : pl.DataFrame
         Matches from the tournament
-    rating_map : Dict[int, float]
+    rating_map : dict[int, float]
         Pre-tournament ratings
-    tournament_placements : Optional[Dict[int, int]]
+    tournament_placements : dict[int, int] | None
         Final placements (if available)
     alpha : float
         Temperature parameter
 
     Returns
     -------
-    Dict[str, any]
+    dict[str, Any]
         Comprehensive metrics
     """
     from rankings.evaluation.loss import compute_match_probability
@@ -288,7 +285,7 @@ def compute_accuracy_at_threshold(
 
 def compute_expected_upset_rate(
     predictions: np.ndarray, outcomes: np.ndarray
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Compare observed upsets vs expected given predicted probabilities.
 
@@ -303,7 +300,7 @@ def compute_expected_upset_rate(
 
     Returns
     -------
-    Tuple[float, float]
+    tuple[float, float]
         (expected_upset_rate, observed_upset_rate)
     """
     # Expected upset rate is mean of (1 - p) for all matches
@@ -320,7 +317,7 @@ def evaluate_by_rating_separation(
     outcomes: np.ndarray,
     rating_diffs: np.ndarray,
     min_gap: float = 0.5,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Evaluate predictions only on matches with meaningful rating separation.
 
@@ -340,7 +337,7 @@ def evaluate_by_rating_separation(
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Metrics for well-separated matches only
     """
     separated_mask = rating_diffs >= min_gap
@@ -361,19 +358,19 @@ def evaluate_by_rating_separation(
 
 
 def aggregate_tournament_metrics(
-    tournament_metrics: List[Dict[str, any]]
-) -> Dict[str, any]:
+    tournament_metrics: list[dict[str, Any]],
+) -> dict[str, Any]:
     """
     Aggregate metrics across multiple tournaments.
 
     Parameters
     ----------
-    tournament_metrics : List[Dict[str, any]]
+    tournament_metrics : list[dict[str, Any]]
         List of metric dictionaries from evaluate_tournament_predictions
 
     Returns
     -------
-    Dict[str, any]
+    dict[str, Any]
         Aggregated metrics
     """
     if not tournament_metrics:

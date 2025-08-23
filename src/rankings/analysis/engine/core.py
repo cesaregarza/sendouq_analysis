@@ -1,5 +1,4 @@
-"""
-Core rating engine implementation.
+"""Core rating engine implementation.
 
 This module contains the main RatingEngine class that implements a sophisticated
 rating system using a tick-tock algorithm for iterative refinement of ratings
@@ -11,13 +10,15 @@ from __future__ import annotations
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Dict, List, Literal, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict, List, Literal, Optional
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import polars as pl
 
-# Try to import scipy for sparse matrix operations
 try:
     import scipy.sparse as sp
 except Exception:
@@ -129,7 +130,7 @@ class RatingEngine:
         max_tick_tock: int = DEFAULT_MAX_TICK_TOCK,
         max_pagerank_iter: int = DEFAULT_MAX_PAGERANK_ITER,
         pagerank_tol: float = DEFAULT_PAGERANK_TOLERANCE,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
         teleport: str | dict[int, float] = TELEPORT_VOLUME_INVERSE,
         volume_mix_eta: float = DEFAULT_VOLUME_MIX_ETA,
         volume_mix_gamma: float = DEFAULT_VOLUME_MIX_GAMMA,
@@ -153,7 +154,7 @@ class RatingEngine:
             "mean", "median", "trimmed_mean", "topN_sum"
         ] = DEFAULT_STRENGTH_AGG,
         strength_k: int = DEFAULT_STRENGTH_K,
-        normalize_min_influence: Optional[float] = None,
+        normalize_min_influence: float | None = None,
         compute_edge_flux: bool = False,
     ):
         self.logger = get_logger(__name__)
@@ -191,19 +192,19 @@ class RatingEngine:
         self.compute_edge_flux = compute_edge_flux
 
         # Results populated after a run
-        self.edge_flux_: Optional[pl.DataFrame] = None
-        self.tournament_influence_: Optional[Dict[int, float]] = None
-        self.tournament_strength: Optional[pl.DataFrame] = None
-        self.ratings_df: Optional[pl.DataFrame] = None
-        self.global_prior_: Optional[float] = None
+        self.edge_flux_: pl.DataFrame | None = None
+        self.tournament_influence_: dict[int, float] | None = None
+        self.tournament_strength: pl.DataFrame | None = None
+        self.ratings_df: pl.DataFrame | None = None
+        self.global_prior_: float | None = None
         # Expose final per-source denominators for analysis reuse
-        self.denominators_df_: Optional[pl.DataFrame] = None
-        self.confidence_metrics_: Optional[
-            Dict[str, AsymmetricConfidenceMetrics]
-        ] = None
+        self.denominators_df_: pl.DataFrame | None = None
+        self.confidence_metrics_: dict[
+            str, AsymmetricConfidenceMetrics
+        ] | None = None
 
     @property
-    def tournament_influence(self) -> Optional[Dict[int, float]]:
+    def tournament_influence(self) -> dict[int, float] | None:
         """Return the tournament influence dictionary from the last run."""
         return self.tournament_influence_
 
@@ -290,7 +291,7 @@ class RatingEngine:
         self,
         *,
         matches: pl.DataFrame,
-        players: Optional[pl.DataFrame],
+        players: pl.DataFrame | None,
         node_from: str,
         node_to: str,
     ) -> pl.DataFrame:
@@ -442,15 +443,17 @@ class RatingEngine:
     # =========================================================================
 
     def _build_team_edges(
-        self, matches: pl.DataFrame, S: Dict[int, float]
+        self, matches: pl.DataFrame, tournament_strengths: dict[int, float]
     ) -> pl.DataFrame:
         """Build team-level edges with tournament strength weighting."""
         if matches.is_empty():
             return pl.DataFrame([])
 
-        # Create tournament strength lookup
-        s_df = pl.DataFrame(
-            {"tournament_id": list(S.keys()), "S": list(S.values())}
+        strength_df = pl.DataFrame(
+            {
+                "tournament_id": list(tournament_strengths.keys()),
+                "S": list(tournament_strengths.values()),
+            }
         )
 
         # Filter valid matches (exclude byes/forfeits) and join strengths
@@ -464,7 +467,7 @@ class RatingEngine:
 
         df = (
             matches.filter(filter_expr)
-            .join(s_df, on="tournament_id", how="left")
+            .join(strength_df, on="tournament_id", how="left")
             .fill_null(1.0)  # Default strength for unseen tournaments
         )
 
@@ -558,7 +561,7 @@ class RatingEngine:
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame,
-        S: Dict[int, float],
+        tournament_strengths: dict[int, float],
     ) -> pl.DataFrame:
         """Build player-level edges with tournament strength weighting."""
         if matches.is_empty() or players.is_empty():
@@ -580,7 +583,7 @@ class RatingEngine:
 
         m = (
             matches.filter(filter_expr)
-            .join(s_df, on="tournament_id", how="left")
+            .join(strength_df, on="tournament_id", how="left")
             .fill_null(1.0)
         )
         self._current_df_columns = m.columns
@@ -902,10 +905,10 @@ class RatingEngine:
         self,
         rating_df: pl.DataFrame,
         matches: pl.DataFrame,
-        players: Optional[pl.DataFrame],
+        players: pl.DataFrame | None,
         node_to: str,
-        participants_df: Optional[pl.DataFrame] = None,
-    ) -> Dict[int, float]:
+        participants_df: pl.DataFrame | None = None,
+    ) -> dict[int, float]:
         """
         Compute tournament influence from current ratings.
 
@@ -1011,10 +1014,10 @@ class RatingEngine:
         self,
         rating_df: pl.DataFrame,
         matches: pl.DataFrame,
-        players: Optional[pl.DataFrame],
+        players: pl.DataFrame | None,
         node_to: str,
-        influence: Dict[int, float],
-        participants_df: Optional[pl.DataFrame] = None,
+        influence: dict[int, float],
+        participants_df: pl.DataFrame | None = None,
     ) -> None:
         """
         Compute retrospective tournament strength metrics.

@@ -1,25 +1,31 @@
 """Smoothing strategies for denominator calculations in ranking algorithms."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 @runtime_checkable
 class SmoothingStrategy(Protocol):
     """Protocol for denominator smoothing strategies."""
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """
-        Compute smoothed denominators.
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Compute smoothed denominators.
 
         Args:
-            W_loss: Loss weights
-            W_win: Win weights
+            loss_weights: Loss weights.
+            win_weights: Win weights.
 
         Returns:
-            Smoothed denominators
+            Smoothed denominators.
         """
         ...
 
@@ -28,59 +34,85 @@ class SmoothingStrategy(Protocol):
 class NoSmoothing:
     """No smoothing - use raw loss weights as denominators."""
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """Return unsmoothed loss weights."""
-        return W_loss
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Return unsmoothed loss weights.
+
+        Args:
+            loss_weights: Loss weights.
+            win_weights: Win weights (unused).
+
+        Returns:
+            Original loss weights without smoothing.
+        """
+        return loss_weights
 
 
 @dataclass(frozen=True)
 class WinsProportional:
-    """
-    Smoothing proportional to win weights.
+    """Smoothing proportional to win weights.
 
-    Denominators are computed as: W_loss + gamma * W_win
-    with optional capping relative to W_loss.
+    Denominators are computed as: loss_weights + gamma * win_weights
+    with optional capping relative to loss_weights.
     """
 
     gamma: float = 0.02
     cap_ratio: float = 1.0
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """
-        Compute denominators with wins-proportional smoothing.
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Compute denominators with wins-proportional smoothing.
 
-        The smoothing term (gamma * W_win) can be capped at cap_ratio * W_loss
+        The smoothing term (gamma * win_weights) can be capped at cap_ratio * loss_weights
         to prevent excessive smoothing for players with many wins but few losses.
+
+        Args:
+            loss_weights: Loss weights.
+            win_weights: Win weights.
+
+        Returns:
+            Smoothed denominators with wins-proportional adjustment.
         """
-        raw = W_loss + self.gamma * W_win
+        raw_denominator = loss_weights + self.gamma * win_weights
 
         if np.isfinite(self.cap_ratio):
-            # denom = W_loss + min(lambda, cap_ratio * W_loss)
-            lambda_term = raw - W_loss
-            return W_loss + np.minimum(lambda_term, self.cap_ratio * W_loss)
+            lambda_smoothing = raw_denominator - loss_weights
+            return loss_weights + np.minimum(
+                lambda_smoothing, self.cap_ratio * loss_weights
+            )
 
-        return raw
+        return raw_denominator
 
 
 @dataclass(frozen=True)
 class ConstantSmoothing:
-    """
-    Add a constant smoothing term to denominators.
+    """Add a constant smoothing term to denominators.
 
-    Denominators are computed as: W_loss + epsilon
+    Denominators are computed as: loss_weights + epsilon.
     """
 
     epsilon: float = 1e-6
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """Add constant epsilon to loss weights."""
-        return W_loss + self.epsilon
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Add constant epsilon to loss weights.
+
+        Args:
+            loss_weights: Loss weights.
+            win_weights: Win weights (unused).
+
+        Returns:
+            Loss weights with constant smoothing term added.
+        """
+        return loss_weights + self.epsilon
 
 
 @dataclass(frozen=True)
 class AdaptiveSmoothing:
-    """
-    Adaptive smoothing based on total volume.
+    """Adaptive smoothing based on total volume.
 
     Players with more total games get less smoothing,
     while players with fewer games get more smoothing.
@@ -89,50 +121,68 @@ class AdaptiveSmoothing:
     base_smooth: float = 0.1
     volume_scale: float = 100.0
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """
-        Compute adaptive smoothing based on total game volume.
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Compute adaptive smoothing based on total game volume.
 
         Smoothing decreases as total games increase.
-        """
-        total_volume = W_loss + W_win
 
-        # Smoothing factor decreases with volume
-        smooth_factor = self.base_smooth / (
+        Args:
+            loss_weights: Loss weights.
+            win_weights: Win weights.
+
+        Returns:
+            Denominators with volume-adaptive smoothing.
+        """
+        total_volume = loss_weights + win_weights
+
+        smoothing_factor = self.base_smooth / (
             1 + total_volume / self.volume_scale
         )
 
-        return W_loss + smooth_factor * W_win
+        return loss_weights + smoothing_factor * win_weights
 
 
 @dataclass(frozen=True)
 class HybridSmoothing:
-    """
-    Hybrid smoothing combining constant and proportional terms.
+    """Hybrid smoothing combining constant and proportional terms.
 
-    Denominators are computed as: W_loss + epsilon + gamma * W_win
+    Denominators are computed as: loss_weights + epsilon + gamma * win_weights.
     """
 
     epsilon: float = 1e-6
     gamma: float = 0.01
 
-    def denom(self, W_loss: np.ndarray, W_win: np.ndarray) -> np.ndarray:
-        """Apply both constant and proportional smoothing."""
-        return W_loss + self.epsilon + self.gamma * W_win
+    def denom(
+        self, loss_weights: np.ndarray, win_weights: np.ndarray
+    ) -> np.ndarray:
+        """Apply both constant and proportional smoothing.
+
+        Args:
+            loss_weights: Loss weights.
+            win_weights: Win weights.
+
+        Returns:
+            Denominators with both constant and proportional smoothing.
+        """
+        return loss_weights + self.epsilon + self.gamma * win_weights
 
 
-def get_smoothing_strategy(mode: str, **kwargs) -> SmoothingStrategy:
-    """
-    Factory function to get smoothing strategy by name.
+def get_smoothing_strategy(mode: str, **kwargs: Any) -> SmoothingStrategy:
+    """Factory function to get smoothing strategy by name.
 
     Args:
-        mode: Name of smoothing mode
-        **kwargs: Additional parameters for the strategy
+        mode: Name of smoothing mode.
+        **kwargs: Additional parameters for the strategy.
 
     Returns:
-        SmoothingStrategy instance
+        SmoothingStrategy instance.
+
+    Raises:
+        ValueError: If the smoothing mode is unknown.
     """
-    strategies = {
+    strategy_classes = {
         "none": NoSmoothing,
         "wins_proportional": WinsProportional,
         "constant": ConstantSmoothing,
@@ -140,16 +190,17 @@ def get_smoothing_strategy(mode: str, **kwargs) -> SmoothingStrategy:
         "hybrid": HybridSmoothing,
     }
 
-    strategy_class = strategies.get(mode)
+    strategy_class = strategy_classes.get(mode)
     if strategy_class is None:
         raise ValueError(f"Unknown smoothing mode: {mode}")
 
-    # Filter kwargs to only those accepted by the strategy
     import inspect
 
     if hasattr(strategy_class, "__dataclass_fields__"):
         valid_fields = strategy_class.__dataclass_fields__.keys()
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
+        filtered_kwargs = {
+            key: value for key, value in kwargs.items() if key in valid_fields
+        }
         return strategy_class(**filtered_kwargs)
     else:
         return strategy_class(**kwargs)

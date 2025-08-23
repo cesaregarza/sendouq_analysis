@@ -1,9 +1,6 @@
-"""
-Post-processing utilities for ranking systems.
+"""Post-processing utilities for ranking systems."""
 
-This module provides engine-agnostic post-processing functions
-for formatting and enhancing ranking results.
-"""
+from __future__ import annotations
 
 from rankings.postprocess.grades import (
     EloGradeSystem,

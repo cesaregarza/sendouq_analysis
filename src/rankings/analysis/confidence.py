@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import polars as pl
@@ -121,10 +124,10 @@ class RankingConfidence:
     def calculate_player_confidence(
         self,
         player_id: str,
-        tournaments: List[str],
-        matches: List[Dict],
+        tournaments: list[str],
+        matches: list[dict],
         opponents: set[str],
-        player_ranks: Optional[Dict[str, int]] = None,
+        player_ranks: dict[str, int] | None = None,
     ) -> ConfidenceMetrics:
         """
         Calculate confidence metrics for a single player.
@@ -133,13 +136,13 @@ class RankingConfidence:
         ----------
         player_id : str
             Player identifier
-        tournaments : List[str]
+        tournaments : list[str]
             List of tournament IDs participated in
-        matches : List[Dict]
+        matches : list[dict]
             List of match records
         opponents : set[str]
             Set of unique opponent IDs faced
-        player_ranks : Optional[Dict[str, int]]
+        player_ranks : dict[str, int] | None
             Current rankings for uncertainty calculation
 
         Returns
@@ -147,51 +150,51 @@ class RankingConfidence:
         ConfidenceMetrics
             Detailed confidence metrics
         """
-        n_tournaments = len(tournaments)
-        n_matches = len(matches)
-        n_opponents = len(opponents)
-        connectivity_pct = (
-            100.0 * n_opponents / self.total_players
+        num_tournaments = len(tournaments)
+        num_matches = len(matches)
+        num_opponents = len(opponents)
+        connectivity_percent = (
+            100.0 * num_opponents / self.total_players
             if self.total_players > 0
             else 0
         )
 
-        # Calculate composite confidence score
         confidence_score = self._calculate_composite_score(
-            n_tournaments, n_opponents, connectivity_pct
+            num_tournaments, num_opponents, connectivity_percent
         )
 
-        # Determine tier
         confidence_tier = self._determine_tier(
-            n_tournaments, n_opponents, connectivity_pct, confidence_score
+            num_tournaments,
+            num_opponents,
+            connectivity_percent,
+            confidence_score,
         )
 
-        # Information theory metrics
         information_bits = self._calculate_information_bits(
-            n_matches, n_opponents
+            num_matches, num_opponents
         )
         effective_comparisons = self._calculate_effective_comparisons(
-            n_matches, n_opponents
+            num_matches, num_opponents
         )
 
-        # Graph centrality (simplified - based on connectivity)
-        graph_centrality = min(
-            connectivity_pct / 10.0, 1.0
-        )  # 10%+ = max centrality
+        graph_centrality = min(connectivity_percent / 10.0, 1.0)
 
-        # Uncertainty estimation
         rank_uncertainty, percentile_uncertainty = self._estimate_uncertainty(
-            n_matches, n_opponents, connectivity_pct, player_ranks, player_id
+            num_matches,
+            num_opponents,
+            connectivity_percent,
+            player_ranks,
+            player_id,
         )
 
         return ConfidenceMetrics(
             player_id=player_id,
             confidence_score=confidence_score,
             confidence_tier=confidence_tier,
-            tournament_count=n_tournaments,
-            match_count=n_matches,
-            unique_opponents=n_opponents,
-            connectivity_percent=connectivity_pct,
+            tournament_count=num_tournaments,
+            match_count=num_matches,
+            unique_opponents=num_opponents,
+            connectivity_percent=connectivity_percent,
             information_bits=information_bits,
             effective_comparisons=effective_comparisons,
             graph_centrality=graph_centrality,
@@ -200,14 +203,17 @@ class RankingConfidence:
         )
 
     def _calculate_composite_score(
-        self, n_tournaments: int, n_opponents: int, connectivity_pct: float
+        self,
+        num_tournaments: int,
+        num_opponents: int,
+        connectivity_percent: float,
     ) -> float:
         """Calculate 0-1 composite confidence score."""
         # Normalize each component to 0-1
-        tournament_score = min(n_tournaments / self.min_tournaments_high, 1.0)
-        opponent_score = min(n_opponents / self.min_opponents_high, 1.0)
+        tournament_score = min(num_tournaments / self.min_tournaments_high, 1.0)
+        opponent_score = min(num_opponents / self.min_opponents_high, 1.0)
         connectivity_score = min(
-            connectivity_pct / self.min_connectivity_high, 1.0
+            connectivity_percent / self.min_connectivity_high, 1.0
         )
 
         # Weighted combination (tournaments and opponents equally important)
@@ -219,64 +225,69 @@ class RankingConfidence:
 
     def _determine_tier(
         self,
-        n_tournaments: int,
-        n_opponents: int,
-        connectivity_pct: float,
+        num_tournaments: int,
+        num_opponents: int,
+        connectivity_percent: float,
         confidence_score: float,
     ) -> ConfidenceTier:
         """Determine confidence tier based on thresholds."""
         # High confidence criteria
         if (
-            n_tournaments >= self.min_tournaments_high
-            or (n_tournaments >= 15 and n_opponents >= self.min_opponents_high)
+            num_tournaments >= self.min_tournaments_high
             or (
-                n_tournaments >= 10
-                and connectivity_pct >= self.min_connectivity_high
+                num_tournaments >= 15
+                and num_opponents >= self.min_opponents_high
+            )
+            or (
+                num_tournaments >= 10
+                and connectivity_percent >= self.min_connectivity_high
             )
         ):
             return ConfidenceTier.HIGH
 
         # Medium confidence criteria
         if (
-            n_tournaments >= 10
-            or (n_tournaments >= 5 and n_opponents >= 100)
-            or (n_tournaments >= 5 and connectivity_pct >= 2.0)
+            num_tournaments >= 10
+            or (num_tournaments >= 5 and num_opponents >= 100)
+            or (num_tournaments >= 5 and connectivity_percent >= 2.0)
         ):
             return ConfidenceTier.MEDIUM
 
         # Low confidence criteria
-        if n_tournaments >= 5 or (n_tournaments >= 3 and n_opponents >= 50):
+        if num_tournaments >= 5 or (
+            num_tournaments >= 3 and num_opponents >= 50
+        ):
             return ConfidenceTier.LOW
 
         # Otherwise provisional
         return ConfidenceTier.PROVISIONAL
 
     def _calculate_information_bits(
-        self, n_matches: int, n_opponents: int
+        self, num_matches: int, num_opponents: int
     ) -> float:
         """Calculate estimated bits of ranking information."""
         # Each match provides information, but repeated opponents give less
-        diversity_factor = min(n_opponents / max(n_matches, 1), 1.0)
-        effective_matches = n_matches * diversity_factor
+        diversity_factor = min(num_opponents / max(num_matches, 1), 1.0)
+        effective_matches = num_matches * diversity_factor
         return min(effective_matches * self.bits_per_match, self.bits_needed)
 
     def _calculate_effective_comparisons(
-        self, n_matches: int, n_opponents: int
+        self, num_matches: int, num_opponents: int
     ) -> int:
         """Calculate effective number of comparisons adjusted for diversity."""
-        if n_matches == 0:
+        if num_matches == 0:
             return 0
-        diversity_factor = min(n_opponents / n_matches, 1.0)
-        return int(n_matches * diversity_factor)
+        diversity_factor = min(num_opponents / num_matches, 1.0)
+        return int(num_matches * diversity_factor)
 
     def _estimate_uncertainty(
         self,
-        n_matches: int,
-        n_opponents: int,
-        connectivity_pct: float,
-        player_ranks: Optional[Dict[str, int]],
+        num_matches: int,
+        num_opponents: int,
+        connectivity_percent: float,
+        player_ranks: dict[str, int] | None,
         player_id: str,
-    ) -> Tuple[int, float]:
+    ) -> tuple[int, float]:
         """
         Estimate ranking uncertainty based on data quantity.
 
@@ -288,21 +299,21 @@ class RankingConfidence:
             ± range for percentile at 95% confidence
         """
         # Base uncertainty from match count (binomial confidence interval approximation)
-        if n_matches < 10:
-            base_uncertainty = 0.30  # ±30% uncertainty
-        elif n_matches < 50:
-            base_uncertainty = 0.14  # ±14% uncertainty
-        elif n_matches < 200:
-            base_uncertainty = 0.07  # ±7% uncertainty
+        if num_matches < 10:
+            base_uncertainty = 0.30
+        elif num_matches < 50:
+            base_uncertainty = 0.14
+        elif num_matches < 200:
+            base_uncertainty = 0.07
         else:
-            base_uncertainty = 0.05  # ±5% uncertainty
+            base_uncertainty = 0.05
 
         # Adjust for connectivity (sparse connections increase uncertainty)
-        connectivity_factor = 1.0 + (1.0 - min(connectivity_pct / 5.0, 1.0))
+        connectivity_factor = 1.0 + (1.0 - min(connectivity_percent / 5.0, 1.0))
 
         # Graph distance factor (more hops = more uncertainty)
         avg_path_length = np.log(self.total_players) / np.log(
-            max(n_opponents, 2)
+            max(num_opponents, 2)
         )
         path_uncertainty = 1.0 - self.damping_factor**avg_path_length
 
@@ -318,7 +329,7 @@ class RankingConfidence:
         else:
             rank_uncertainty = int(self.total_players * total_uncertainty / 2)
 
-        percentile_uncertainty = total_uncertainty * 100 / 2  # ± percentile
+        percentile_uncertainty = total_uncertainty * 100 / 2
 
         return rank_uncertainty, percentile_uncertainty
 
@@ -340,10 +351,8 @@ class RankingConfidence:
         pl.DataFrame
             DataFrame with player_id and confidence metrics
         """
-        # Build player statistics
         player_stats = {}
 
-        # Count tournaments per player
         for row in players_df.iter_rows(named=True):
             player_id = row.get("user_id")
             if player_id:
@@ -355,7 +364,6 @@ class RankingConfidence:
                     }
                 player_stats[player_id]["tournaments"].add(row["tournament_id"])
 
-        # Build opponent connections
         for row in matches_df.iter_rows(named=True):
             winner_team = row.get("winner_team_id")
             loser_team = row.get("loser_team_id")
@@ -368,21 +376,20 @@ class RankingConfidence:
                     "user_id"
                 ].to_list()
 
-                for w in winners:
-                    if w and w in player_stats:
-                        player_stats[w]["matches"].append(row)
-                        player_stats[w]["opponents"].update(
-                            [l for l in losers if l]
+                for winner in winners:
+                    if winner and winner in player_stats:
+                        player_stats[winner]["matches"].append(row)
+                        player_stats[winner]["opponents"].update(
+                            [loser for loser in losers if loser]
                         )
 
-                for l in losers:
-                    if l and l in player_stats:
-                        player_stats[l]["matches"].append(row)
-                        player_stats[l]["opponents"].update(
-                            [w for w in winners if w]
+                for loser in losers:
+                    if loser and loser in player_stats:
+                        player_stats[loser]["matches"].append(row)
+                        player_stats[loser]["opponents"].update(
+                            [winner for winner in winners if winner]
                         )
 
-        # Calculate confidence for each player
         confidence_records = []
         for player_id, stats in player_stats.items():
             metrics = self.calculate_player_confidence(

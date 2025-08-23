@@ -1,11 +1,9 @@
-"""
-Loss functions for evaluating tournament rating predictions.
+"""Loss functions for evaluating tournament rating predictions."""
 
-This module implements the cross-entropy loss function described in plan.md,
-which measures how well ratings predict match outcomes.
-"""
+from __future__ import annotations
 
 import logging
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -276,7 +274,7 @@ def compute_tournament_loss(
     threshold: float = 0.75,
     weight_threshold: float = 0.1,
     weight_exp_base: float = 2.0,
-) -> tuple[float, dict[str, any]]:
+) -> tuple[float, dict[str, Any]]:
     """
     Compute aggregated loss for a tournament.
 
@@ -284,7 +282,7 @@ def compute_tournament_loss(
     ----------
     matches_df : pl.DataFrame
         Matches dataframe with winner and loser ID columns
-    rating_map : Dict[int, float]
+    rating_map : dict[int, float]
         Mapping from team/player ID to rating
     alpha : float
         Temperature parameter
@@ -314,7 +312,7 @@ def compute_tournament_loss(
 
     Returns
     -------
-    Tuple[float, Dict[str, any]]
+    tuple[float, dict[str, any]
         (tournament_loss, metrics_dict with optional predictions)
     """
     logger = get_logger(__name__)
@@ -444,7 +442,7 @@ def compute_cross_tournament_loss(tournament_losses: list[float]) -> float:
 
     Parameters
     ----------
-    tournament_losses : List[float]
+    tournament_losses : list[float]
         Loss values for each tournament
 
     Returns
@@ -571,9 +569,9 @@ def fit_alpha_parameter(
     ----------
     train_matches_df : pl.DataFrame
         Training matches
-    rating_map : Dict[int, float]
+    rating_map : dict[int, float]
         Pre-computed ratings
-    alpha_bounds : Tuple[float, float]
+    alpha_bounds : tuple[float, float]
         Bounds for alpha search
     score_transform : str
         Transform to apply: "bradley_terry", "logistic", or "identity"

@@ -9,8 +9,9 @@ This module implements the metrics suite described in plan.md:
 - Spearman correlation: Tournament-level ranking order
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Dict, List, Tuple
 
 import numpy as np
 import polars as pl
@@ -22,7 +23,7 @@ from rankings.evaluation.loss import compute_tournament_loss
 
 def concordance(
     matches_df: pl.DataFrame,
-    rating_map: Dict[int, float],
+    rating_map: dict[int, float],
     *,
     winner_col: str = "winner_team_id",
     loser_col: str = "loser_team_id",
@@ -38,7 +39,7 @@ def concordance(
     ----------
     matches_df : pl.DataFrame
         DataFrame containing match results
-    rating_map : Dict[int, float]
+    rating_map : dict[int, float]
         Mapping from team/player ID to rating
     winner_col : str
         Column name for winner ID
@@ -90,7 +91,7 @@ def concordance(
 
 def skill_score(
     matches_df: pl.DataFrame,
-    rating_map: Dict[int, float],
+    rating_map: dict[int, float],
     *,
     alpha: float = 1.0,
     score_transform: str = "bradley_terry",
@@ -109,7 +110,7 @@ def skill_score(
     ----------
     matches_df : pl.DataFrame
         DataFrame containing match results
-    rating_map : Dict[int, float]
+    rating_map : dict[int, float]
         Mapping from team/player ID to rating
     alpha : float
         Temperature parameter
@@ -267,7 +268,7 @@ def accuracy_threshold(
 
 
 def placement_spearman(
-    pre_ratings: Dict[int, float], placements: Dict[int, int]
+    pre_ratings: dict[int, float], placements: dict[int, int]
 ) -> float:
     """
     Compute Spearman correlation between pre-tournament ratings and final placements.
@@ -277,9 +278,9 @@ def placement_spearman(
 
     Parameters
     ----------
-    pre_ratings : Dict[int, float]
+    pre_ratings : dict[int, float]
         Pre-tournament ratings by team/player ID
-    placements : Dict[int, int]
+    placements : dict[int, int]
         Final tournament placements by team/player ID (1=best, 2=second, etc.)
 
     Returns
@@ -312,7 +313,7 @@ def placement_spearman(
     return float(-corr)
 
 
-def alpha_std(alphas: List[float]) -> float:
+def alpha_std(alphas: list[float]) -> float:
     """
     Compute standard deviation of alpha values across CV splits.
 
@@ -321,7 +322,7 @@ def alpha_std(alphas: List[float]) -> float:
 
     Parameters
     ----------
-    alphas : List[float]
+    alphas : list[float]
         Alpha values from different CV splits
 
     Returns

@@ -7,7 +7,7 @@ impact on player rankings.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rankings.analysis.engine import RatingEngine
@@ -103,20 +103,20 @@ def _get_engine_attributes(engine):
                     else result.scores
                 )
                 data = {"id": result.ids, "score": scores_list}
-                if result.win_pr is not None:
-                    attrs["win_pagerank"] = result.win_pr
+                if result.win_pagerank is not None:
+                    attrs["win_pagerank"] = result.win_pagerank
                     win_pr_list = (
-                        result.win_pr.tolist()
-                        if hasattr(result.win_pr, "tolist")
-                        else result.win_pr
+                        result.win_pagerank.tolist()
+                        if hasattr(result.win_pagerank, "tolist")
+                        else result.win_pagerank
                     )
                     data["win_pr"] = win_pr_list
-                if result.loss_pr is not None:
-                    attrs["loss_pagerank"] = result.loss_pr
+                if result.loss_pagerank is not None:
+                    attrs["loss_pagerank"] = result.loss_pagerank
                     loss_pr_list = (
-                        result.loss_pr.tolist()
-                        if hasattr(result.loss_pr, "tolist")
-                        else result.loss_pr
+                        result.loss_pagerank.tolist()
+                        if hasattr(result.loss_pagerank, "tolist")
+                        else result.loss_pagerank
                     )
                     data["loss_pr"] = loss_pr_list
                 attrs["ratings_df"] = pl.DataFrame(data)
@@ -869,7 +869,7 @@ def get_player_match_history(
     players_df: pl.DataFrame,
     teams_df: pl.DataFrame,
     tournament_data: list[dict],
-    limit: Optional[int] = None,
+    limit: int | None = None,
 ) -> pl.DataFrame:
     """
     Get a player's complete match history with names and context.

@@ -7,7 +7,6 @@ This module provides functions to format DataFrames and results for display.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import polars as pl
 
@@ -19,7 +18,7 @@ def format_top_rankings(
     top_n: int = 10,
     title: str = "Top Rankings",
     show_score: bool = True,
-    show_extra_cols: Optional[list[str]] = None,
+    show_extra_cols: list[str] | None = None,
 ) -> str:
     """
     Format top rankings for display.
@@ -93,7 +92,7 @@ def format_top_rankings(
 def display_player_rankings(
     player_summary: pl.DataFrame,
     top_n: int = 15,
-    min_tournaments: Optional[int] = None,
+    min_tournaments: int | None = None,
 ) -> str:
     """
     Display player rankings in a formatted way.
@@ -123,10 +122,10 @@ def display_player_rankings(
 
 def format_influential_matches(
     influential_matches: dict[str, pl.DataFrame],
-    player_name: Optional[str] = None,
-    tournament_names: Optional[dict[int, str]] = None,
+    player_name: str | None = None,
+    tournament_names: dict[int, str] | None = None,
     max_opponent_length: int = 50,
-    loo_impacts: Optional[dict[int, float]] = None,
+    loo_impacts: dict[int, float] | None = None,
 ) -> str:
     """
     Format influential matches for display using flux-based metrics.
@@ -382,8 +381,8 @@ def format_influential_matches(
 
 def format_tournament_influence_summary(
     tournament_influence: dict[int, float],
-    tournament_strength: Optional[pl.DataFrame] = None,
-    tournament_names: Optional[dict[int, str]] = None,
+    tournament_strength: pl.DataFrame | None = None,
+    tournament_names: dict[int, str] | None = None,
     top_n: int = 10,
 ) -> str:
     """

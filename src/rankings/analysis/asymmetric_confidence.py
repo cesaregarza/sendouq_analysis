@@ -14,7 +14,10 @@ Optimized version with:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Dict, List, Optional, Set
 
 import numpy as np
 
@@ -87,7 +90,7 @@ class AsymmetricConfidenceCalculator:
     def __init__(
         self,
         total_players: int,
-        player_ranks: Optional[Dict[str, int]] = None,
+        player_ranks: dict[str, int] | None = None,
         top_player_percentile: float = 0.1,
         quality_weight: float = 2.0,
         tournament_winner_boost: float = 3.0,
@@ -99,7 +102,7 @@ class AsymmetricConfidenceCalculator:
         ----------
         total_players : int
             Total number of players
-        player_ranks : Dict[str, int]
+        player_ranks : dict[str, int]
             Current rankings (1 = best) - required for optimization
         top_player_percentile : float
             Percentile for "top" players (default 0.1 = top 10%)
@@ -116,8 +119,8 @@ class AsymmetricConfidenceCalculator:
         self.tournament_winner_boost = tournament_winner_boost
 
         # Pre-computed structures (initialized lazily if ranks provided later)
-        self.top_players: Set[str] = set()
-        self.player_percentiles: Dict[str, float] = {}
+        self.top_players: set[str] = set()
+        self.player_percentiles: dict[str, float] = {}
 
         if player_ranks is not None:
             # Pre-compute top player set for O(1) lookups
@@ -135,9 +138,9 @@ class AsymmetricConfidenceCalculator:
     def calculate_asymmetric_confidence(
         self,
         player_id: str,
-        matches: List[Dict],
-        tournament_wins: Optional[Set[str]] = None,
-        player_ranks: Optional[Dict[str, int]] = None,
+        matches: list[dict],
+        tournament_wins: set[str] | None = None,
+        player_ranks: dict[str, int] | None = None,
     ) -> AsymmetricConfidenceMetrics:
         """
         Calculate asymmetric confidence for a player (optimized).
@@ -146,9 +149,9 @@ class AsymmetricConfidenceCalculator:
         ----------
         player_id : str
             Player to evaluate
-        matches : List[Dict]
+        matches : list[dict]
             Match records involving this player
-        tournament_wins : Optional[Set[str]]
+        tournament_wins : set[str] | None
             Set of tournament IDs this player won
 
         Returns
@@ -289,13 +292,13 @@ class AsymmetricConfidenceCalculator:
             rankability=rankability,
         )
 
-    def _calculate_edge_quality_fast(self, player_list: List[str]) -> float:
+    def _calculate_edge_quality_fast(self, player_list: list[str]) -> float:
         """
         Fast edge quality calculation using pre-computed percentiles.
 
         Parameters
         ----------
-        player_list : List[str]
+        player_list : list[str]
             List of player IDs (may contain duplicates)
 
         Returns
@@ -321,25 +324,25 @@ class AsymmetricConfidenceCalculator:
 
     def calculate_batch(
         self,
-        player_matches: Dict[str, List[Dict]],
-        tournament_wins: Optional[Dict[str, Set[str]]] = None,
+        player_matches: dict[str, list[dict]],
+        tournament_wins: dict[str, set[str]] | None = None,
         n_workers: int = 1,
-    ) -> Dict[str, AsymmetricConfidenceMetrics]:
+    ) -> dict[str, AsymmetricConfidenceMetrics]:
         """
         Calculate confidence for multiple players efficiently.
 
         Parameters
         ----------
-        player_matches : Dict[str, List[Dict]]
+        player_matches : dict[str, list[dict]]
             Mapping of player_id to their matches
-        tournament_wins : Optional[Dict[str, Set[str]]]
+        tournament_wins : dict[str, set[str]] | None
             Mapping of player_id to tournament IDs they won
         n_workers : int
             Number of parallel workers (future enhancement)
 
         Returns
         -------
-        Dict[str, AsymmetricConfidenceMetrics]
+        dict[str, AsymmetricConfidenceMetrics]
             Mapping of player_id to their metrics
         """
         results = {}
@@ -353,14 +356,14 @@ class AsymmetricConfidenceCalculator:
         return results
 
     def identify_special_cases(
-        self, all_metrics: List[AsymmetricConfidenceMetrics]
-    ) -> Dict[str, List[str]]:
+        self, all_metrics: list[AsymmetricConfidenceMetrics]
+    ) -> dict[str, list[str]]:
         """
         Identify special player categories.
 
         Returns
         -------
-        Dict mapping category to player IDs
+        dict mapping category to player IDs
         """
         categories = {
             "tournament_winners": [],

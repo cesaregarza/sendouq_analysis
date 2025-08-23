@@ -6,15 +6,15 @@ assignment using Shannon entropy to measure team balance and adjust ratings acco
 Suitable for any tournament structure with skill-based groupings.
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
 
 
 def compute_team_entropy(
-    skill_values: List[float], exposure_weights: Optional[List[float]] = None
-) -> Tuple[float, float, np.ndarray]:
+    skill_values: list[float], exposure_weights: list[float] | None = None
+) -> tuple[float, float, np.ndarray]:
     """
     Compute Shannon entropy for a team's skill distribution.
 
@@ -59,10 +59,10 @@ def compute_team_entropy(
 
 
 def compute_entropy_controlled_rating(
-    skill_values: List[float],
-    exposure_weights: Optional[List[float]] = None,
+    skill_values: list[float],
+    exposure_weights: list[float] | None = None,
     top_n: int = 4,
-) -> Tuple[float, Dict[str, float]]:
+) -> tuple[float, dict[str, float]]:
     """
     Compute entropy-controlled team rating.
 
@@ -131,10 +131,8 @@ def compute_entropy_controlled_rating(
 def assign_divisions(
     teams: pl.DataFrame,
     rating_column: str = "entropy_rating",
-    division_config: Optional[
-        Union[List[Tuple[str, int]], Dict[str, int]]
-    ] = None,
-    overflow_division: Optional[str] = None,
+    division_config: list[tuple[str, int]] | dict[str, int] | None = None,
+    overflow_division: str | None = None,
 ) -> pl.DataFrame:
     """
     Assign teams to divisions based on their entropy-controlled ratings.
@@ -221,9 +219,9 @@ class EntropySeedingSystem:
 
     def compute_team_ratings(
         self,
-        teams: List[Dict],
+        teams: list[dict],
         skill_field: str = "score",
-        exposure_field: Optional[str] = None,
+        exposure_field: str | None = None,
     ) -> pl.DataFrame:
         """
         Compute entropy-controlled ratings for all teams.
@@ -278,7 +276,7 @@ class EntropySeedingSystem:
         team_id_col: str = "team_id",
         player_team_col: str = "team_id",
         skill_col: str = "score",
-        exposure_col: Optional[str] = None,
+        exposure_col: str | None = None,
     ) -> pl.DataFrame:
         """
         Compute ratings from existing polars DataFrames.
@@ -337,10 +335,8 @@ class EntropySeedingSystem:
 
     def assign_divisions(
         self,
-        division_config: Optional[
-            Union[List[Tuple[str, int]], Dict[str, int]]
-        ] = None,
-        overflow_division: Optional[str] = None,
+        division_config: list[tuple[str, int]] | dict[str, int] | None = None,
+        overflow_division: str | None = None,
     ) -> pl.DataFrame:
         """
         Assign teams to divisions based on computed ratings.
@@ -398,7 +394,7 @@ class EntropySeedingSystem:
         actual_divisions: pl.DataFrame,
         team_id_col: str = "team_id",
         actual_div_col: str = "actual_division",
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Evaluate assignment accuracy against actual divisions.
 
@@ -496,7 +492,7 @@ class EntropySeedingSystem:
         ).with_columns(pl.Series("seed", range(1, len(self.teams_data) + 1)))
 
     def create_brackets(
-        self, bracket_sizes: List[int], naming_pattern: str = "Bracket {}"
+        self, bracket_sizes: list[int], naming_pattern: str = "Bracket {}"
     ) -> pl.DataFrame:
         """
         Create tournament brackets of specified sizes.
@@ -537,7 +533,7 @@ class EntropySeedingSystem:
 
     def apply_manual_adjustments(
         self,
-        adjustments: Dict[str, float],
+        adjustments: dict[str, float],
         adjustment_column: str = "manual_adjustment",
     ) -> pl.DataFrame:
         """

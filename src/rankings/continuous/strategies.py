@@ -1,16 +1,16 @@
-"""
-Scraping strategies for different tournament states and scenarios.
+"""Scraping strategies for different tournament states and scenarios."""
 
-Defines when and how often to scrape tournaments based on their state
-and other factors.
-"""
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Optional, Set
+from typing import TYPE_CHECKING
 
 from rankings.continuous.state import TournamentMetadata, TournamentState
+
+if TYPE_CHECKING:
+    from rankings.continuous.state import TournamentStateTracker
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ScrapingPrioritizer:
     def __init__(
         self,
         strategy: ScrapingStrategy,
-        state_tracker: "TournamentStateTracker",
+        state_tracker: TournamentStateTracker,
     ):
         """
         Initialize the prioritizer.
@@ -73,8 +73,8 @@ class ScrapingPrioritizer:
         self.state_tracker = state_tracker
 
     def get_tournaments_to_scrape(
-        self, max_tournaments: Optional[int] = None
-    ) -> List[int]:
+        self, max_tournaments: int | None = None
+    ) -> list[int]:
         """
         Get prioritized list of tournaments to scrape.
 
@@ -130,7 +130,7 @@ class ScrapingPrioritizer:
         state: TournamentState,
         interval_minutes: int,
         limit: Optional[int] = None,
-    ) -> List[int]:
+    ) -> list[int]:
         """
         Get tournaments of a specific state that are due for scraping.
 
@@ -164,7 +164,7 @@ class ScrapingPrioritizer:
 
         return due
 
-    def _get_discovery_ids(self) -> List[int]:
+    def _get_discovery_ids(self) -> list[int]:
         """
         Get new tournament IDs to probe for discovery.
 
@@ -238,7 +238,7 @@ class ScrapingPrioritizer:
             # Never successfully scraped
             return meta.consecutive_404s >= self.strategy.max_consecutive_404s
 
-    def get_stale_scheduled(self) -> List[int]:
+    def get_stale_scheduled(self) -> list[int]:
         """
         Get scheduled tournaments that should be marked as stale.
 

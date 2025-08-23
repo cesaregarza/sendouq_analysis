@@ -1,5 +1,4 @@
-"""
-Compatibility shim for the engine module.
+"""Compatibility shim for the engine module.
 
 This file maintains backward compatibility for code that imports from
 rankings.analysis.engine directly. New code should import from the
@@ -9,6 +8,8 @@ DEPRECATED: This file will be removed in a future version.
 Please update imports to use:
     from rankings.analysis.engine import RatingEngine, make_participation_inverse_teleport
 """
+
+from __future__ import annotations
 
 import warnings
 

@@ -1,13 +1,17 @@
-"""
-Leave-One-Match-Out (LOO) Analyzer for ExposureLogOddsEngine.
+"""Leave-One-Match-Out (LOO) Analyzer for ExposureLogOddsEngine.
 
 This module implements exact, efficient leave-one-match-out impact analysis
 using low-rank PageRank updates via Sherman-Morrison-Woodbury formula.
 """
 
+from __future__ import annotations
+
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import polars as pl
@@ -34,44 +38,49 @@ class LinearSolveBackend:
     """
 
     def __init__(
-        self, A_csc: sp.csc_matrix, alpha: float, method: str = "splu"
+        self, adjacency_csc: sp.csc_matrix, alpha: float, method: str = "splu"
     ):
-        self.n = A_csc.shape[0]
-        M = sp.eye(self.n, format="csc") - alpha * A_csc
+        self.num_nodes = adjacency_csc.shape[0]
+        system_matrix = (
+            sp.eye(self.num_nodes, format="csc") - alpha * adjacency_csc
+        )
 
         if method == "splu":
-            # One-time factorization; reuse for all RHS
-            self._lu = spla.splu(
-                M
-            )  # you can tune permc_spec / diag_pivot_thresh if needed
-            self._solve = lambda B: self._lu.solve(B)
+            self._lu = spla.splu(system_matrix)
+            self._solve = lambda rhs: self._lu.solve(rhs)
         elif method == "gmres":
-            # ILU preconditioner + GMRES (use if splu memory is an issue)
-            ilu = spla.spilu(M, drop_tol=1e-4, fill_factor=10)
-            P = spla.LinearOperator(M.shape, matvec=lambda x: ilu.solve(x))
+            ilu = spla.spilu(system_matrix, drop_tol=1e-4, fill_factor=10)
+            preconditioner = spla.LinearOperator(
+                system_matrix.shape, matvec=lambda x: ilu.solve(x)
+            )
 
-            def _solve(B):
-                if B.ndim == 1:
-                    B = B[:, None]
-                X = np.empty_like(B, dtype=float)
-                for j in range(B.shape[1]):
+            def _solve(rhs):
+                if rhs.ndim == 1:
+                    rhs = rhs[:, None]
+                solution = np.empty_like(rhs, dtype=float)
+                for col_idx in range(rhs.shape[1]):
                     x, info = spla.gmres(
-                        M, B[:, j], M=P, tol=1e-10, restart=50, maxiter=200
+                        system_matrix,
+                        rhs[:, col_idx],
+                        M=preconditioner,
+                        tol=1e-10,
+                        restart=50,
+                        maxiter=200,
                     )
                     if info != 0:
                         logger.warning(
-                            f"GMRES did not fully converge (col {j}, info={info})"
+                            f"GMRES did not fully converge (col {col_idx}, info={info})"
                         )
-                    X[:, j] = x
-                return X
+                    solution[:, col_idx] = x
+                return solution
 
             self._solve = _solve
         else:
             raise ValueError(f"Unknown method {method}")
 
-    def solve(self, B: np.ndarray) -> np.ndarray:
-        """Return X solving (I - alpha A) X = B. Accepts (n,) or (n,k)."""
-        return self._solve(B)
+    def solve(self, rhs: np.ndarray) -> np.ndarray:
+        """Return X solving (I - alpha A) X = rhs. Accepts (n,) or (n,k)."""
+        return self._solve(rhs)
 
 
 # -------------------------
@@ -79,69 +88,72 @@ class LinearSolveBackend:
 # -------------------------
 
 
-def _normalize_and_fill_dangling(A_csr, rho):
-    """Efficiently normalize columns and fill dangling with rho."""
-    A = A_csr.tocsc()
-    col_sums = np.asarray(A.sum(axis=0)).ravel()
-    counts = np.diff(A.indptr)
-    inv_sums = np.zeros_like(col_sums, dtype=float)
-    nz = col_sums > 0
-    inv_sums[nz] = 1.0 / col_sums[nz]
-    A.data *= inv_sums.repeat(counts)
+def _normalize_and_fill_dangling(adjacency_csr, teleport_vector):
+    """Efficiently normalize columns and fill dangling with teleport vector."""
+    adjacency = adjacency_csr.tocsc()
+    col_sums = np.asarray(adjacency.sum(axis=0)).ravel()
+    counts = np.diff(adjacency.indptr)
+    inverse_sums = np.zeros_like(col_sums, dtype=float)
+    nonzero_mask = col_sums > 0
+    inverse_sums[nonzero_mask] = 1.0 / col_sums[nonzero_mask]
+    adjacency.data *= inverse_sums.repeat(counts)
 
-    # Add columns equal to rho where column-sum was zero:
-    if (~nz).any():
-        # Construct sparse matrix with those columns set to rho
-        cols = np.where(~nz)[0]
-        # Repeat rho for each dangling column
-        nnz = len(cols) * len(rho)
-        data = np.tile(rho, len(cols))
-        row_idx = np.tile(np.arange(len(rho)), len(cols))
-        col_idx = np.repeat(cols, len(rho))
-        D = sp.csc_matrix((data, (row_idx, col_idx)), shape=A.shape)
-        A = A + D
-    return A, col_sums
+    if (~nonzero_mask).any():
+        dangling_cols = np.where(~nonzero_mask)[0]
+        data = np.tile(teleport_vector, len(dangling_cols))
+        row_idx = np.tile(np.arange(len(teleport_vector)), len(dangling_cols))
+        col_idx = np.repeat(dangling_cols, len(teleport_vector))
+        dangling_matrix = sp.csc_matrix(
+            (data, (row_idx, col_idx)), shape=adjacency.shape
+        )
+        adjacency = adjacency + dangling_matrix
+    return adjacency, col_sums
 
 
 def get_sparse_matrices(
     engine,
     matches_df: pl.DataFrame,
-    node_to_idx: Dict[int, int],
-    rho: np.ndarray,
-) -> Tuple[sp.csc_matrix, sp.csc_matrix, np.ndarray, np.ndarray]:
+    node_to_idx: dict[int, int],
+    teleport_vector: np.ndarray,
+) -> tuple[sp.csc_matrix, sp.csc_matrix, np.ndarray, np.ndarray]:
     """
     Build sparse adjacency matrices from engine state with dangling redistribution.
 
     Returns:
-        A_win: Win graph adjacency (column-stochastic with dangling → rho)
-        A_loss: Loss graph adjacency (column-stochastic with dangling → rho)
+        A_win: Win graph adjacency (column-stochastic with dangling → teleport)
+        A_loss: Loss graph adjacency (column-stochastic with dangling → teleport)
         T_win: Raw column sums for win graph
         T_loss: Raw column sums for loss graph
     """
     from rankings.core import build_exposure_triplets
 
-    # Get triplets from the matches dataframe
     rows, cols, data = build_exposure_triplets(matches_df, node_to_idx)
-    n = len(node_to_idx)
+    num_nodes = len(node_to_idx)
 
-    # Win graph: A_win[i,j] = W_ij / sum_k(W_kj)
-    A_win_raw = sp.csr_matrix((data, (rows, cols)), shape=(n, n))
-    A_win, col_sums_win = _normalize_and_fill_dangling(A_win_raw, rho)
+    adjacency_win_raw = sp.csr_matrix(
+        (data, (rows, cols)), shape=(num_nodes, num_nodes)
+    )
+    adjacency_win, col_sums_win = _normalize_and_fill_dangling(
+        adjacency_win_raw, teleport_vector
+    )
 
-    # Loss graph: transpose structure
-    A_loss_raw = sp.csr_matrix((data, (cols, rows)), shape=(n, n))
-    A_loss, col_sums_loss = _normalize_and_fill_dangling(A_loss_raw, rho)
+    adjacency_loss_raw = sp.csr_matrix(
+        (data, (cols, rows)), shape=(num_nodes, num_nodes)
+    )
+    adjacency_loss, col_sums_loss = _normalize_and_fill_dangling(
+        adjacency_loss_raw, teleport_vector
+    )
 
-    return A_win, A_loss, col_sums_win, col_sums_loss
+    return adjacency_win, adjacency_loss, col_sums_win, col_sums_loss
 
 
 def exposures_for_match(
     match_id: int,
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
-    node_to_idx: Dict[int, int],
+    node_to_idx: dict[int, int],
     graph: str = "win",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Returns triplets (rows_i, cols_j, raw_weights) for a specific match.
 
@@ -248,9 +260,9 @@ def delta_rho_for_match(
     match_id: int,
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
-    node_to_idx: Dict[int, int],
+    node_to_idx: dict[int, int],
     total_exposure: float,
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """
     Returns the change in teleport vector if this match is removed.
 
@@ -364,7 +376,7 @@ def build_U_alpha_for_graph(
     cols: np.ndarray,
     weights: np.ndarray,
     n: int,
-) -> Tuple[List[int], np.ndarray]:
+) -> tuple[List[int], np.ndarray]:
     """
     Build per-source-column updates u_j for a match removal.
 
@@ -442,7 +454,7 @@ def loo_update_graph_exact(
     tol: float = 1e-10,
     max_iter: int = 400,
     R_solve=None,  # Pre-factorized solver for (I - alpha A)^{-1}
-) -> Tuple[np.ndarray, Dict[str, Any]]:
+) -> tuple[np.ndarray, Dict[str, Any]]:
     """
     Exact LOO update for a single match on a single PageRank vector.
 
@@ -623,8 +635,8 @@ class LOOAnalyzer:
         self.n = len(self.node_ids)
 
         # Current PageRank vectors
-        self.s_win = engine.last_result.win_pr.astype(float)
-        self.s_loss = engine.last_result.loss_pr.astype(float)
+        self.s_win = engine.last_result.win_pagerank.astype(float)
+        self.s_loss = engine.last_result.loss_pagerank.astype(float)
 
         # Store actual scores from engine
         self.actual_scores = engine.last_result.scores.astype(float)
@@ -722,13 +734,13 @@ class LOOAnalyzer:
 
     def exposures_for_match(
         self, match_id: int, graph: str = "win"
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get match triplets for specified graph."""
         return exposures_for_match(
             match_id, self.matches_df, self.players_df, self.node_to_idx, graph
         )
 
-    def delta_rho_for_match(self, match_id: int) -> Optional[np.ndarray]:
+    def delta_rho_for_match(self, match_id: int) -> np.ndarray | None:
         """Get teleport vector change for match removal."""
         return delta_rho_for_match(
             match_id,
@@ -808,7 +820,7 @@ class LOOAnalyzer:
         include_teleport: bool = True,
         tol: float = 1e-10,
         max_iter: int = 400,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compute exact change in player's log-odds score if match is removed.
 

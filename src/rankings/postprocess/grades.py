@@ -1,12 +1,8 @@
-"""
-Grade systems for ranking classifications.
+"""Grade systems for ranking classifications."""
 
-This module provides various grade systems to categorize players based on
-their scores, percentiles, or other metrics.
-"""
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
 
 import polars as pl
 
@@ -42,8 +38,8 @@ class ScoreGradeSystem(GradeSystem):
     def __init__(
         self,
         score_column: str = "score",
-        thresholds: Optional[List[float]] = None,
-        labels: Optional[List[str]] = None,
+        thresholds: list[float] | None = None,
+        labels: list[str] | None = None,
     ):
         """
         Initialize score-based grade system.
@@ -52,9 +48,9 @@ class ScoreGradeSystem(GradeSystem):
         ----------
         score_column : str
             Column containing scores
-        thresholds : List[float], optional
+        thresholds : list[float], optional
             Score thresholds for grades
-        labels : List[str], optional
+        labels : list[str], optional
             Grade labels
         """
         self.score_column = score_column
@@ -95,8 +91,8 @@ class PercentileGradeSystem(GradeSystem):
     def __init__(
         self,
         rank_column: str = "rank",
-        percentiles: Optional[List[float]] = None,
-        labels: Optional[List[str]] = None,
+        percentiles: list[float] | None = None,
+        labels: list[str] | None = None,
     ):
         """
         Initialize percentile-based grade system.
@@ -105,9 +101,9 @@ class PercentileGradeSystem(GradeSystem):
         ----------
         rank_column : str
             Column containing ranks
-        percentiles : List[float], optional
+        percentiles : list[float], optional
             Percentile cutoffs (0.0 to 1.0)
-        labels : List[str], optional
+        labels : list[str], optional
             Grade labels
         """
         self.rank_column = rank_column
@@ -304,8 +300,8 @@ def create_grade_system(system_type: str = "score", **kwargs) -> GradeSystem:
 
 def add_multiple_grade_systems(
     df: pl.DataFrame,
-    systems: List[Union[str, tuple[str, dict], GradeSystem]],
-    prefixes: Optional[List[str]] = None,
+    systems: list[str | tuple[str, dict] | GradeSystem],
+    prefixes: list[str] | None = None,
 ) -> pl.DataFrame:
     """
     Add multiple grade systems to a DataFrame.
@@ -314,12 +310,12 @@ def add_multiple_grade_systems(
     ----------
     df : pl.DataFrame
         DataFrame with ranking data
-    systems : List[Union[str, tuple, GradeSystem]]
+    systems : list[str | tuple | GradeSystem]
         List of grade systems to apply. Each can be:
         - str: Grade system type name
         - tuple: (system_type, kwargs_dict)
         - GradeSystem: Instance of a grade system
-    prefixes : List[str], optional
+    prefixes : list[str], optional
         Prefixes for each grade column
 
     Returns
@@ -358,7 +354,7 @@ def add_multiple_grade_systems(
 
 def compare_grade_distributions(
     df: pl.DataFrame,
-    grade_columns: List[str],
+    grade_columns: list[str],
 ) -> pl.DataFrame:
     """
     Compare grade distributions across multiple grade systems.
@@ -367,7 +363,7 @@ def compare_grade_distributions(
     ----------
     df : pl.DataFrame
         DataFrame with multiple grade columns
-    grade_columns : List[str]
+    grade_columns : list[str]
         Names of grade columns to compare
 
     Returns

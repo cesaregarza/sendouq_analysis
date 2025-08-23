@@ -1,9 +1,6 @@
-"""
-Teleport vector utilities for PageRank calculations.
+"""Teleport vector utilities for PageRank calculations."""
 
-This module provides functions for creating custom teleport vectors
-used in PageRank-based ranking algorithms.
-"""
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
@@ -63,10 +60,8 @@ def make_participation_inverse_teleport(
     >>> len(teleport)
     3
     """
-    # One row per (user_id, tournament_id) with representative event_ts
     base = players.select(["user_id", "tournament_id", "event_ts"]).unique()
 
-    # Calculate decayed event participation for each user
     decayed = (
         base.with_columns(
             (
@@ -76,17 +71,17 @@ def make_participation_inverse_teleport(
             ).alias("w")
         )
         .group_by("user_id")
-        .agg(pl.col("w").sum().alias("dec_evts"))
+        .agg(pl.col("w").sum().alias("decayed_events"))
     )
 
-    # Compute participation-inverse scores: 1 / (epsilon + decayed_events)^gamma
-    v_vol = (epsilon + decayed["dec_evts"]).pow(-gamma)
-    v_vol = v_vol / v_vol.sum()
+    volume_vector = (epsilon + decayed["decayed_events"]).pow(-gamma)
+    volume_vector = volume_vector / volume_vector.sum()
 
-    # Get user IDs and create mixed teleport vector
-    uids = decayed["user_id"].to_list()
-    n = len(uids)
-    v_uniform = np.ones(n) / n
-    v = (1 - eta) * v_uniform + eta * v_vol.to_numpy()
+    user_ids = decayed["user_id"].to_list()
+    num_users = len(user_ids)
+    uniform_vector = np.ones(num_users) / num_users
+    teleport_vector = (
+        1 - eta
+    ) * uniform_vector + eta * volume_vector.to_numpy()
 
-    return dict(zip(uids, v.tolist()))
+    return dict(zip(user_ids, teleport_vector.tolist()))

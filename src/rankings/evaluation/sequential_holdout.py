@@ -1,8 +1,13 @@
 # evaluation/sequential_holdout.py
-from typing import Any, Optional, Type
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
+
+if TYPE_CHECKING:
+    from rankings.analysis.engine import RatingEngine
 
 from rankings.analysis.engine import RatingEngine
 from rankings.analysis.utils.summaries import derive_team_ratings_from_players
@@ -16,7 +21,7 @@ from rankings.evaluation.loss import (
 
 def sequential_holdout_loss(
     *,
-    engine_class: Type[RatingEngine] = RatingEngine,
+    engine_class: type[RatingEngine] = RatingEngine,
     engine_params: dict[str, Any],
     matches_df: pl.DataFrame,
     players_df: pl.DataFrame,
@@ -27,9 +32,8 @@ def sequential_holdout_loss(
     min_history_tournaments: int = MIN_TOURNAMENTS_BEFORE_CV,
     fit_alpha: bool = True,
     alpha_bounds: tuple[float, float] = (0.1, 10.0),
-    n_splits: Optional[
-        int
-    ] = None,  # NEW: number of spaced-out holdouts (None=all)
+    n_splits: int
+    | None = None,  # NEW: number of spaced-out holdouts (None=all)
     weighting_scheme: str = "none",
 ) -> tuple[float, pl.DataFrame]:
     """

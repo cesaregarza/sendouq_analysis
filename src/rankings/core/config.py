@@ -1,7 +1,8 @@
 """Configuration dataclasses for ranking algorithms."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -12,7 +13,11 @@ class DecayConfig:
 
     @property
     def decay_rate(self) -> float:
-        """Calculate decay rate from half-life."""
+        """Calculate decay rate from half-life.
+
+        Returns:
+            Decay rate calculated from half-life.
+        """
         import numpy as np
 
         return (
@@ -40,14 +45,14 @@ class EngineConfig:
     beta: float = 1.0
 
     # Minimum exposure threshold
-    min_exposure: Optional[float] = None
+    min_exposure: float | None = None
 
     # Score decay parameters
     score_decay_delay_days: float = 30.0
     score_decay_rate: float = 0.01
 
     # Smoothing parameter
-    lambda_smooth: Optional[float] = None
+    lambda_smooth: float | None = None
 
     # Gamma for wins-proportional smoothing
     gamma: float = 0.02
@@ -110,7 +115,7 @@ class ExposureLogOddsConfig:
 
     # Lambda selection
     lambda_mode: str = "auto"  # "auto", "fixed", "adaptive"
-    fixed_lambda: Optional[float] = None
+    fixed_lambda: float | None = None
 
     # Score transformation
     apply_log_transform: bool = True
@@ -147,10 +152,13 @@ class PipelineConfig:
 
 
 def merge_configs(*configs: dict) -> dict:
-    """
-    Merge multiple configuration dictionaries.
+    """Merge multiple configuration dictionaries.
 
-    Later configs override earlier ones.
+    Args:
+        *configs: Variable number of configuration dictionaries.
+
+    Returns:
+        Merged configuration dictionary.
     """
     result = {}
     for config in configs:

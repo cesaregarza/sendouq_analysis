@@ -5,7 +5,7 @@ This module extends the evaluation framework with metrics specifically
 designed for tournament seeding and prediction evaluation.
 """
 
-from typing import Dict, List, Optional, Tuple
+from __future__ import annotations
 
 import numpy as np
 from scipy import stats
@@ -13,7 +13,7 @@ from sklearn.metrics import log_loss as sklearn_log_loss
 
 
 def ndcg_at_k(
-    predicted_order: List[int], true_order: List[int], k: Optional[int] = None
+    predicted_order: list[int], true_order: list[int], k: int | None = None
 ) -> float:
     """
     Calculate Normalized Discounted Cumulative Gain at k.
@@ -23,11 +23,11 @@ def ndcg_at_k(
 
     Parameters
     ----------
-    predicted_order : List[int]
+    predicted_order : list[int]
         Predicted ranking order (team IDs in order)
-    true_order : List[int]
+    true_order : list[int]
         True ranking order based on final placements
-    k : Optional[int]
+    k : int | None
         Cutoff position (None for all positions)
 
     Returns
@@ -60,20 +60,20 @@ def ndcg_at_k(
 
 
 def weighted_spearman_correlation(
-    predicted_seeds: List[int],
-    final_placements: List[int],
-    weights: Optional[List[float]] = None,
+    predicted_seeds: list[int],
+    final_placements: list[int],
+    weights: list[float] | None = None,
 ) -> float:
     """
     Calculate weighted Spearman correlation emphasizing top positions.
 
     Parameters
     ----------
-    predicted_seeds : List[int]
+    predicted_seeds : list[int]
         Predicted seed order
-    final_placements : List[int]
+    final_placements : list[int]
         Actual final placements for those teams
-    weights : Optional[List[float]]
+    weights : list[float] | None
         Weights for each position (default: exponential decay)
 
     Returns
@@ -105,20 +105,20 @@ def weighted_spearman_correlation(
 
 
 def mean_absolute_seed_error(
-    predicted_seeds: Dict[int, int],
-    final_placements: Dict[int, int],
-    top_k: Optional[int] = None,
+    predicted_seeds: dict[int, int],
+    final_placements: dict[int, int],
+    top_k: int | None = None,
 ) -> float:
     """
     Calculate mean absolute error between seeds and final placements.
 
     Parameters
     ----------
-    predicted_seeds : Dict[int, int]
+    predicted_seeds : dict[int, int]
         Mapping of team_id to predicted seed
-    final_placements : Dict[int, int]
+    final_placements : dict[int, int]
         Mapping of team_id to final placement
-    top_k : Optional[int]
+    top_k : int | None
         Only consider top k teams (useful for focusing on top seeds)
 
     Returns
@@ -138,23 +138,23 @@ def mean_absolute_seed_error(
 
 
 def calibration_error(
-    predictions: List[float], outcomes: List[bool], n_bins: int = 10
-) -> Tuple[float, np.ndarray, np.ndarray]:
+    predictions: list[float], outcomes: list[bool], n_bins: int = 10
+) -> tuple[float, np.ndarray, np.ndarray]:
     """
     Calculate expected calibration error for probability predictions.
 
     Parameters
     ----------
-    predictions : List[float]
+    predictions : list[float]
         Predicted probabilities
-    outcomes : List[bool]
+    outcomes : list[bool]
         Actual outcomes
     n_bins : int
         Number of bins for calibration
 
     Returns
     -------
-    Tuple[float, np.ndarray, np.ndarray]
+    tuple[float, np.ndarray, np.ndarray]
         (ECE, bin_accuracies, bin_confidences)
     """
     predictions = np.array(predictions)
@@ -207,25 +207,25 @@ def calibration_error(
 
 
 def upset_rate_analysis(
-    predictions: List[float],
-    outcomes: List[bool],
-    prob_buckets: Optional[List[Tuple[float, float]]] = None,
-) -> Dict[str, Dict[str, float]]:
+    predictions: list[float],
+    outcomes: list[bool],
+    prob_buckets: list[tuple[float, float]] | None = None,
+) -> dict[str, dict[str, float]]:
     """
     Analyze upset rates by probability bucket.
 
     Parameters
     ----------
-    predictions : List[float]
+    predictions : list[float]
         Predicted probabilities
-    outcomes : List[bool]
+    outcomes : list[bool]
         Actual outcomes (True if prediction was correct)
-    prob_buckets : Optional[List[Tuple[float, float]]]
+    prob_buckets : list[tuple[float, float]] | None
         List of (min_prob, max_prob) tuples for buckets
 
     Returns
     -------
-    Dict[str, Dict[str, float]]
+    dict[str, dict[str, float]]
         Upset analysis by probability bucket
     """
     if prob_buckets is None:
@@ -266,7 +266,7 @@ def upset_rate_analysis(
     return upset_rates
 
 
-def pairwise_agreement(order1: List[int], order2: List[int]) -> float:
+def pairwise_agreement(order1: list[int], order2: list[int]) -> float:
     """
     Calculate pairwise agreement between two orderings.
 
@@ -274,9 +274,9 @@ def pairwise_agreement(order1: List[int], order2: List[int]) -> float:
 
     Parameters
     ----------
-    order1 : List[int]
+    order1 : list[int]
         First ordering (e.g., model seeds)
-    order2 : List[int]
+    order2 : list[int]
         Second ordering (e.g., manual seeds)
 
     Returns
@@ -313,21 +313,21 @@ def pairwise_agreement(order1: List[int], order2: List[int]) -> float:
 
 
 def kendall_tau_distance(
-    order1: List[int], order2: List[int]
-) -> Tuple[float, int]:
+    order1: list[int], order2: list[int]
+) -> tuple[float, int]:
     """
     Calculate Kendall tau distance between two orderings.
 
     Parameters
     ----------
-    order1 : List[int]
+    order1 : list[int]
         First ordering
-    order2 : List[int]
+    order2 : list[int]
         Second ordering
 
     Returns
     -------
-    Tuple[float, int]
+    tuple[float, int]
         (normalized_distance, number_of_discordant_pairs)
     """
     common_items = list(set(order1) & set(order2))
@@ -362,8 +362,8 @@ def kendall_tau_distance(
 
 
 def mcnemar_test(
-    model_correct: List[bool], manual_correct: List[bool]
-) -> Tuple[float, float]:
+    model_correct: list[bool], manual_correct: list[bool]
+) -> tuple[float, float]:
     """
     McNemar's test for comparing two prediction methods.
 
@@ -371,14 +371,14 @@ def mcnemar_test(
 
     Parameters
     ----------
-    model_correct : List[bool]
+    model_correct : list[bool]
         List of whether model prediction was correct
-    manual_correct : List[bool]
+    manual_correct : list[bool]
         List of whether manual prediction was correct
 
     Returns
     -------
-    Tuple[float, float]
+    tuple[float, float]
         (statistic, p-value)
     """
     # Build contingency table
@@ -412,31 +412,31 @@ def mcnemar_test(
 
 
 def tournament_prediction_summary(
-    predicted_seeds: Dict[int, int],
-    final_placements: Dict[int, int],
-    match_predictions: Optional[List[float]] = None,
-    match_outcomes: Optional[List[bool]] = None,
-    manual_seeds: Optional[Dict[int, int]] = None,
-) -> Dict[str, float]:
+    predicted_seeds: dict[int, int],
+    final_placements: dict[int, int],
+    match_predictions: list[float] | None = None,
+    match_outcomes: list[bool] | None = None,
+    manual_seeds: dict[int, int] | None = None,
+) -> dict[str, float]:
     """
     Generate comprehensive tournament prediction summary.
 
     Parameters
     ----------
-    predicted_seeds : Dict[int, int]
+    predicted_seeds : dict[int, int]
         Model's predicted seeds
-    final_placements : Dict[int, int]
+    final_placements : dict[int, int]
         Actual final placements
-    match_predictions : Optional[List[float]]
+    match_predictions : list[float] | None
         Match-level win probabilities
-    match_outcomes : Optional[List[bool]]
+    match_outcomes : list[bool] | None
         Actual match outcomes
-    manual_seeds : Optional[Dict[int, int]]
+    manual_seeds : dict[int, int] | None
         Manual seeds for comparison
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Comprehensive metrics summary
     """
     summary = {}
@@ -507,25 +507,25 @@ def tournament_prediction_summary(
 
 
 def confidence_interval_coverage(
-    predictions: List[Tuple[float, float, float]],
-    outcomes: List[bool],
+    predictions: list[tuple[float, float, float]],
+    outcomes: list[bool],
     confidence_level: float = 0.95,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Evaluate confidence interval coverage for probabilistic predictions.
 
     Parameters
     ----------
-    predictions : List[Tuple[float, float, float]]
+    predictions : list[tuple[float, float, float]
         List of (point_estimate, lower_bound, upper_bound)
-    outcomes : List[bool]
+    outcomes : list[bool]
         Actual binary outcomes
     confidence_level : float
         Expected coverage level
 
     Returns
     -------
-    Dict[str, float]
+    dict[str, float]
         Coverage statistics
     """
     if not predictions:

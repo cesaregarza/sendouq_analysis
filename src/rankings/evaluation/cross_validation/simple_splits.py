@@ -8,7 +8,6 @@ cross-validation. The approach is:
 """
 
 import logging
-from typing import List, Tuple
 
 import numpy as np
 import polars as pl
@@ -22,7 +21,7 @@ def create_simple_time_splits(
     test_tournaments_per_split: int = 20,
     test_samples_per_split: int = 5,
     min_train_tournaments: int = 50,
-) -> List[Tuple[pl.DataFrame, pl.DataFrame, List[str]]]:
+) -> list[tuple[pl.DataFrame, pl.DataFrame, list[str]]]:
     """Create simple time-based train/test splits for cross-validation.
 
     This function implements temporal cross-validation where:
@@ -120,7 +119,7 @@ def create_simple_time_splits(
 
 
 def visualize_splits(
-    splits: List[Tuple[pl.DataFrame, pl.DataFrame, List[str]]]
+    splits: list[tuple[pl.DataFrame, pl.DataFrame, list[str]]],
 ) -> None:
     """Visualize train/test splits with ASCII art.
 

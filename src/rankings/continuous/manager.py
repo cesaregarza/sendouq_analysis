@@ -1,16 +1,12 @@
-"""
-Main continuous scraping manager.
+"""Main continuous scraping manager."""
 
-Orchestrates the continuous scraping process, managing state,
-applying strategies, and handling the scraping lifecycle.
-"""
+from __future__ import annotations
 
 import json
 import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -41,8 +37,8 @@ class ContinuousScraper:
         self,
         output_dir: str = "data/tournaments",
         state_file: str = "data/tournament_state.json",
-        strategy: Optional[ScrapingStrategy] = None,
-        session: Optional[requests.Session] = None,
+        strategy: ScrapingStrategy | None = None,
+        session: requests.Session | None = None,
     ):
         """
         Initialize the continuous scraper.
@@ -65,9 +61,9 @@ class ContinuousScraper:
         self.session = session or requests.Session()
         self.request_count = 0
         self.last_request_time = None
-        self.hourly_request_times: List[datetime] = []
+        self.hourly_request_times: list[datetime] = []
 
-    def run_once(self) -> Dict[str, int]:
+    def run_once(self) -> dict[str, int]:
         """
         Run a single scraping cycle.
 
@@ -105,7 +101,7 @@ class ContinuousScraper:
         return results
 
     def run_continuous(
-        self, interval_minutes: int = 60, max_cycles: Optional[int] = None
+        self, interval_minutes: int = 60, max_cycles: int | None = None
     ) -> None:
         """
         Run continuous scraping.
@@ -163,7 +159,7 @@ class ContinuousScraper:
 
         logger.info(f"Continuous scraping stopped after {cycles} cycles")
 
-    def _scrape_batch(self, tournament_ids: List[int]) -> Dict[str, int]:
+    def _scrape_batch(self, tournament_ids: list[int]) -> dict[str, int]:
         """
         Scrape a batch of tournaments.
 
@@ -207,9 +203,7 @@ class ContinuousScraper:
 
         return {"scraped": scraped, "failed": failed, "discovered": discovered}
 
-    def _scrape_tournament_with_state(
-        self, tournament_id: int
-    ) -> Optional[Dict]:
+    def _scrape_tournament_with_state(self, tournament_id: int) -> dict | None:
         """
         Scrape a tournament and update its state.
 
@@ -354,7 +348,7 @@ class ContinuousScraper:
         # Default to scheduled if we can't determine
         return TournamentState.SCHEDULED
 
-    def _extract_scheduled_date(self, data: Dict) -> Optional[datetime]:
+    def _extract_scheduled_date(self, data: dict) -> datetime | None:
         """
         Extract scheduled start date from tournament data.
 
@@ -379,7 +373,7 @@ class ContinuousScraper:
             self.state_tracker.mark_stale(stale_ids)
             logger.info(f"Marked {len(stale_ids)} tournaments as stale")
 
-    def _save_batch(self, batch_data: List[Dict]) -> None:
+    def _save_batch(self, batch_data: list[dict]) -> None:
         """
         Save a batch of tournament data.
 

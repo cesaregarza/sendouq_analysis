@@ -236,10 +236,10 @@ class TTLEngine:
         self.last_result = ExposureLogOddsResult(
             scores=scores,
             ids=player_ids,
-            win_pr=rating_result["win_pr"].to_numpy()
+            win_pagerank=rating_result["win_pr"].to_numpy()
             if "win_pr" in rating_result.columns
             else None,
-            loss_pr=rating_result["loss_pr"].to_numpy()
+            loss_pagerank=rating_result["loss_pr"].to_numpy()
             if "loss_pr" in rating_result.columns
             else None,
             exposure=rating_result["exposure"].to_numpy()

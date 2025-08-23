@@ -1,4 +1,6 @@
-# === PATCH: LogOddsBackend (parity to legacy log-odds semantics) ===
+"""Fixed log-odds rating computation backend for tick-tock orchestration."""
+
+from __future__ import annotations
 
 import numpy as np
 import polars as pl
@@ -14,6 +16,12 @@ from rankings.core.logging import get_logger
 
 
 class LogOddsBackend:
+    """Fixed log-odds rating backend.
+
+    Implements log-odds ratings using PageRank computations with
+    exposure-based teleport vectors and lambda smoothing.
+    """
+
     def __init__(
         self,
         decay_rate: float = 0.00385,
@@ -24,7 +32,19 @@ class LogOddsBackend:
         pagerank_tol: float = 1e-8,
         pagerank_max_iter: int = 200,
         epsilon: float = 1e-9,
-    ):
+    ) -> None:
+        """Initialize the fixed log-odds backend.
+
+        Args:
+            decay_rate: Time decay rate for match weights.
+            beta: Tournament influence exponent.
+            alpha: PageRank damping factor.
+            lambda_mode: Lambda computation mode ('auto' or 'fixed').
+            fixed_lambda: Fixed lambda value when mode is 'fixed'.
+            pagerank_tol: PageRank convergence tolerance.
+            pagerank_max_iter: Maximum PageRank iterations.
+            epsilon: Small value for numerical stability.
+        """
         self.decay_rate = decay_rate
         self.beta = beta
         self.alpha = alpha
@@ -42,17 +62,29 @@ class LogOddsBackend:
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame | None,
-        active_ids: list,
+        active_ids: list[int],
         tournament_influence: dict[int, float],
         **kwargs,
     ) -> pl.DataFrame:
+        """Compute fixed log-odds ratings for players.
+
+        Args:
+            matches: Match data.
+            players: Player/roster data.
+            active_ids: Active player IDs (not used in this backend).
+            tournament_influence: Tournament influence scores.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            DataFrame with player ratings and metrics.
+        """
         if players is None:
             self.logger.warning(
                 "No player data provided, cannot compute ratings"
             )
             return pl.DataFrame()
 
-        mdf = convert_matches_dataframe(
+        matches_df = convert_matches_dataframe(
             matches,
             players,
             tournament_influence or {},
@@ -62,48 +94,47 @@ class LogOddsBackend:
             include_share=True,
             streaming=False,
         )
-        if mdf.is_empty():
+        if matches_df.is_empty():
             self.logger.warning("No valid matches after conversion")
             return pl.DataFrame()
 
-        # Nodes = ALL who appeared in converted matches (legacy backend doesn't filter to 'active_ids')
-        all_ids = set()
-        for row in mdf.iter_rows(named=True):
-            all_ids.update(row["winners"])
-            all_ids.update(row["losers"])
-        node_ids = sorted(list(all_ids))
-        node_to_idx = {pid: i for i, pid in enumerate(node_ids)}
-        n = len(node_ids)
+        all_player_ids = set()
+        for row in matches_df.iter_rows(named=True):
+            all_player_ids.update(row["winners"])
+            all_player_ids.update(row["losers"])
+        node_ids = sorted(list(all_player_ids))
+        node_to_idx = {player_id: idx for idx, player_id in enumerate(node_ids)}
+        num_nodes = len(node_ids)
 
-        # Teleport ρ from exposure share
         winners_share = (
-            mdf.select(["winners", "share"])
+            matches_df.select(["winners", "share"])
             .explode("winners")
             .rename({"winners": "id"})
         )
         losers_share = (
-            mdf.select(["losers", "share"])
+            matches_df.select(["losers", "share"])
             .explode("losers")
             .rename({"losers": "id"})
         )
-        e_df = (
+        exposure_share_df = (
             pl.concat([winners_share, losers_share])
             .group_by("id")
             .agg(pl.col("share").sum().alias("e_share"))
         )
 
-        rho = np.full(n, self.epsilon, dtype=float)
-        for row in e_df.iter_rows(named=True):
+        teleport_vector = np.full(num_nodes, self.epsilon, dtype=float)
+        for row in exposure_share_df.iter_rows(named=True):
             idx = node_to_idx.get(row["id"])
             if idx is not None:
-                rho[idx] += float(row["e_share"])
-        rho /= rho.sum() if rho.sum() > 0 else 1.0
-        self._last_rho = rho
+                teleport_vector[idx] += float(row["e_share"])
+        teleport_vector /= (
+            teleport_vector.sum() if teleport_vector.sum() > 0 else 1.0
+        )
+        self._last_rho = teleport_vector
 
-        # Triplets
-        rows, cols, data = build_exposure_triplets(mdf, node_to_idx)
+        rows, cols, data = build_exposure_triplets(matches_df, node_to_idx)
 
-        pr_cfg = PageRankConfig(
+        pagerank_config = PageRankConfig(
             alpha=self.alpha,
             tol=self.pagerank_tol,
             max_iter=self.pagerank_max_iter,
@@ -111,43 +142,51 @@ class LogOddsBackend:
             redistribute_dangling=True,
         )
 
-        s = pagerank_sparse(rows, cols, data, n, rho, pr_cfg)
-        l = pagerank_sparse(cols, rows, data, n, rho, pr_cfg)
+        win_pagerank = pagerank_sparse(
+            rows, cols, data, num_nodes, teleport_vector, pagerank_config
+        )
+        loss_pagerank = pagerank_sparse(
+            cols, rows, data, num_nodes, teleport_vector, pagerank_config
+        )
 
-        # Lambda (legacy auto rule)
         if self.lambda_mode == "fixed" and self.fixed_lambda is not None:
-            lam = float(self.fixed_lambda)
+            lambda_smooth = float(self.fixed_lambda)
         elif self.lambda_mode == "auto":
-            target = 0.025 * float(np.median(s))
-            med_rho = float(np.median(rho))
-            lam = 0.0 if med_rho == 0.0 else max(target / med_rho, 0.0)
+            target = 0.025 * float(np.median(win_pagerank))
+            median_teleport = float(np.median(teleport_vector))
+            lambda_smooth = (
+                0.0
+                if median_teleport == 0.0
+                else max(target / median_teleport, 0.0)
+            )
         else:
-            lam = 1e-4
+            lambda_smooth = 1e-4
 
-        s_s = s + lam * rho
-        l_s = l + lam * rho
-        scores = np.log(s_s / l_s)
-        quality_mass = s_s / (s_s + l_s)
+        smoothed_win_pagerank = win_pagerank + lambda_smooth * teleport_vector
+        smoothed_loss_pagerank = loss_pagerank + lambda_smooth * teleport_vector
+        scores = np.log(smoothed_win_pagerank / smoothed_loss_pagerank)
+        quality_mass = smoothed_win_pagerank / (
+            smoothed_win_pagerank + smoothed_loss_pagerank
+        )
 
-        # Reporting exposure = sum of 'weight' (legacy)
-        winners_w = (
-            mdf.select(["winners", "weight"])
+        winners_weight = (
+            matches_df.select(["winners", "weight"])
             .explode("winners")
             .rename({"winners": "id"})
         )
-        losers_w = (
-            mdf.select(["losers", "weight"])
+        losers_weight = (
+            matches_df.select(["losers", "weight"])
             .explode("losers")
             .rename({"losers": "id"})
         )
-        ew_df = (
-            pl.concat([winners_w, losers_w])
+        exposure_weight_df = (
+            pl.concat([winners_weight, losers_weight])
             .group_by("id")
             .agg(pl.col("weight").sum().alias("exposure"))
         )
 
-        exposure = np.zeros(n, dtype=float)
-        for row in ew_df.iter_rows(named=True):
+        exposure = np.zeros(num_nodes, dtype=float)
+        for row in exposure_weight_df.iter_rows(named=True):
             idx = node_to_idx.get(row["id"])
             if idx is not None:
                 exposure[idx] = float(row["exposure"])
@@ -157,9 +196,9 @@ class LogOddsBackend:
                 "id": node_ids,
                 "score": scores.tolist(),
                 "quality_mass": quality_mass.tolist(),
-                "win_pr": s.tolist(),
-                "loss_pr": l.tolist(),
-                "exposure": exposure.tolist(),  # reporting exposure
-                "lambda_used": [lam] * n,
+                "win_pagerank": win_pagerank.tolist(),
+                "loss_pagerank": loss_pagerank.tolist(),
+                "exposure": exposure.tolist(),
+                "lambda_used": [lambda_smooth] * num_nodes,
             }
         )

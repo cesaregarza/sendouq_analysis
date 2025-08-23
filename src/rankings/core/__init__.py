@@ -1,5 +1,7 @@
 """Core components for ranking algorithms."""
 
+from __future__ import annotations
+
 # Keep existing parser import for backward compatibility
 from rankings.core.config import (
     DecayConfig,

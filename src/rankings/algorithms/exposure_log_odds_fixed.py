@@ -47,7 +47,7 @@ class ExposureLogOddsEngine:
             self.clock = clock
         else:
             self.clock = Clock(
-                now_ts=(now_ts if now_ts is not None else time.time())
+                now_timestamp=(now_ts if now_ts is not None else time.time())
             )
 
         self.last_result: Optional[ExposureLogOddsResult] = None
@@ -222,8 +222,8 @@ class ExposureLogOddsEngine:
         self.last_result = ExposureLogOddsResult(
             scores=scores,
             ids=node_ids,
-            win_pr=s,
-            loss_pr=l,
+            win_pagerank=s,
+            loss_pagerank=l,
             exposure=rho,  # store teleport used for scoring
             lambda_used=lam,
             active_mask=mask,

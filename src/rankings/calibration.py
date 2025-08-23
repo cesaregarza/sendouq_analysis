@@ -1,13 +1,9 @@
-"""
-Logistic regression calibration for match predictions.
+"""Logistic regression calibration for match predictions."""
 
-This module implements proper calibration of win probabilities using
-logistic regression as described in plan.md.
-"""
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import polars as pl
@@ -29,10 +25,10 @@ class CalibrationResult:
     brier_score: float  # Cross-validated Brier score
     accuracy: float  # Cross-validated accuracy
     n_matches: int  # Number of matches used
-    format_betas: Optional[Dict[str, float]] = None  # Format-specific betas
+    format_betas: dict[str, float] | None = None  # Format-specific betas
 
     def predict_probability(
-        self, rating_diff: float, format: Optional[str] = None
+        self, rating_diff: float, format: str | None = None
     ) -> float:
         """Calculate win probability given rating difference."""
         beta = self.beta
@@ -56,14 +52,14 @@ class MatchCalibrator:
             Whether to fit separate parameters for different match formats
         """
         self.use_format_specific = use_format_specific
-        self.result: Optional[CalibrationResult] = None
+        self.result: CalibrationResult | None = None
 
     def prepare_match_data(
         self,
         matches_df: pl.DataFrame,
-        team_ratings: Dict[int, float],
-        match_format_col: Optional[str] = None,
-    ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+        team_ratings: dict[int, float],
+        match_format_col: str | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
         """
         Prepare match data for calibration.
 
@@ -71,14 +67,14 @@ class MatchCalibrator:
         ----------
         matches_df : pl.DataFrame
             DataFrame with match results including winner_team_id and loser_team_id
-        team_ratings : Dict[int, float]
+        team_ratings : dict[int, float]
             Pre-calculated team log-ratings
-        match_format_col : Optional[str]
+        match_format_col : str | None
             Column name for match format (e.g., 'best_of')
 
         Returns
         -------
-        Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]
+        tuple[np.ndarray, np.ndarray, np.ndarray | None]
             (rating_differences, outcomes, formats)
         """
         rating_diffs = []
@@ -115,7 +111,7 @@ class MatchCalibrator:
         self,
         rating_diffs: np.ndarray,
         outcomes: np.ndarray,
-        formats: Optional[np.ndarray] = None,
+        formats: np.ndarray | None = None,
         cv_splits: int = 5,
     ) -> CalibrationResult:
         """
@@ -127,7 +123,7 @@ class MatchCalibrator:
             Rating differences (team_a - team_b)
         outcomes : np.ndarray
             Match outcomes (1 if team_a won, 0 otherwise)
-        formats : Optional[np.ndarray]
+        formats : np.ndarray | None
             Match formats for format-specific calibration
         cv_splits : int
             Number of cross-validation splits
@@ -208,7 +204,7 @@ class MatchCalibrator:
         formats: np.ndarray,
         base_beta: float,
         base_bias: float,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Fit format-specific beta multipliers.
 
@@ -227,7 +223,7 @@ class MatchCalibrator:
 
         Returns
         -------
-        Dict[str, float]
+        dict[str, float]
             Format-specific beta values
         """
         unique_formats = np.unique(formats)
@@ -264,8 +260,8 @@ class MatchCalibrator:
     def calibrate_from_matches(
         self,
         matches_df: pl.DataFrame,
-        team_ratings: Dict[int, float],
-        match_format_col: Optional[str] = None,
+        team_ratings: dict[int, float],
+        match_format_col: str | None = None,
     ) -> CalibrationResult:
         """
         Complete calibration pipeline from match data.
@@ -274,9 +270,9 @@ class MatchCalibrator:
         ----------
         matches_df : pl.DataFrame
             Match results DataFrame
-        team_ratings : Dict[int, float]
+        team_ratings : dict[int, float]
             Pre-calculated team ratings
-        match_format_col : Optional[str]
+        match_format_col : str | None
             Column for match format
 
         Returns
@@ -297,7 +293,7 @@ class MatchCalibrator:
 
     def evaluate_calibration(
         self, rating_diffs: np.ndarray, outcomes: np.ndarray, n_bins: int = 10
-    ) -> Dict[str, Union[float, np.ndarray]]:
+    ) -> dict[str, float | np.ndarray]:
         """
         Evaluate calibration quality.
 
@@ -312,7 +308,7 @@ class MatchCalibrator:
 
         Returns
         -------
-        Dict[str, Union[float, np.ndarray]]
+        dict[str, float | np.ndarray]
             Calibration metrics and bin statistics
         """
         if self.result is None:
@@ -481,11 +477,11 @@ class AdaptiveCalibrator:
 
 def calibrate_tournament_predictions(
     historical_matches: pl.DataFrame,
-    team_ratings: Dict[int, float],
-    test_matches: Optional[pl.DataFrame] = None,
+    team_ratings: dict[int, float],
+    test_matches: pl.DataFrame | None = None,
     use_format_specific: bool = False,
-    match_format_col: Optional[str] = None,
-) -> Tuple[CalibrationResult, Optional[Dict]]:
+    match_format_col: str | None = None,
+) -> tuple[CalibrationResult, dict | None]:
     """
     Complete calibration pipeline for tournament predictions.
 
@@ -495,7 +491,7 @@ def calibrate_tournament_predictions(
         Historical matches for training
     team_ratings : Dict[int, float]
         Pre-calculated team ratings
-    test_matches : Optional[pl.DataFrame]
+    test_matches : pl.DataFrame | None
         Test matches for evaluation
     use_format_specific : bool
         Whether to use format-specific calibration
@@ -504,7 +500,7 @@ def calibrate_tournament_predictions(
 
     Returns
     -------
-    Tuple[CalibrationResult, Optional[Dict]]
+    tuple[CalibrationResult, dict | None]
         Calibration result and optional evaluation metrics
     """
     # Initialize calibrator

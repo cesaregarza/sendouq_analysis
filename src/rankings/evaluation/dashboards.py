@@ -5,7 +5,9 @@ This module provides clean tabular summaries of the metrics suite
 described in plan.md.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -20,8 +22,8 @@ from rankings.evaluation.tournament_metrics import (
 
 
 def format_metrics_table(
-    results: Dict[str, Any],
-    metrics: Optional[List[str]] = None,
+    results: dict[str, Any],
+    metrics: list[str] | None = None,
     precision: int = 4,
 ) -> str:
     """
@@ -29,9 +31,9 @@ def format_metrics_table(
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Results from cross_validate_ratings()
-    metrics : Optional[List[str]]
+    metrics : list[str] | None
         Specific metrics to include. If None, uses default set.
     precision : int
         Number of decimal places for numeric values
@@ -131,13 +133,13 @@ def format_metrics_table(
     return _format_dataframe_table(df)
 
 
-def format_split_summary(results: Dict[str, Any]) -> str:
+def format_split_summary(results: dict[str, Any]) -> str:
     """
     Format a summary of cross-validation splits.
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Results from cross_validate_ratings()
 
     Returns
@@ -177,14 +179,15 @@ Key Performance Indicators:
 
 
 def format_tournament_metrics(
-    per_tournament_metrics: List[Dict[str, Any]], top_n: int = 5
+    per_tournament_metrics: list[dict[str, Any]],
+    top_n: int = 5,
 ) -> str:
     """
     Format per-tournament metrics showing best and worst performing tournaments.
 
     Parameters
     ----------
-    per_tournament_metrics : List[Dict[str, Any]]
+    per_tournament_metrics : list[dict[str, Any]
         Per-tournament metrics from evaluation results
     top_n : int
         Number of top/bottom tournaments to show
@@ -202,7 +205,7 @@ def format_tournament_metrics(
         per_tournament_metrics, key=lambda x: x.get("weighted_loss", np.inf)
     )
 
-    def format_tournament_row(t: Dict[str, Any]) -> str:
+    def format_tournament_row(t: dict[str, Any]) -> str:
         tid = t.get("tournament_id", "Unknown")
         loss = t.get("weighted_loss", np.nan)
         c_stat = t.get("c_stat", np.nan)
@@ -278,13 +281,13 @@ def _format_dataframe_table(df: pl.DataFrame) -> str:
     return "\n".join([header_sep, header_row, separator, *data_rows, footer])
 
 
-def format_calibration_table(results: Dict[str, Any]) -> str:
+def format_calibration_table(results: dict[str, Any]) -> str:
     """
     Format reliability diagram data as a calibration table.
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Results from cross_validate_ratings() with predictions
 
     Returns
@@ -337,14 +340,14 @@ def format_calibration_table(results: Dict[str, Any]) -> str:
 
 
 def print_evaluation_dashboard(
-    results: Dict[str, Any], calibration: bool = False
+    results: dict[str, Any], calibration: bool = False
 ) -> None:
     """
     Print a comprehensive dashboard of evaluation results.
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Results from cross_validate_ratings()
     calibration : bool, default=False
         If True, include calibration analysis table
@@ -378,8 +381,8 @@ def print_evaluation_dashboard(
 
 
 def format_tournament_prediction_table(
-    results: Dict[str, Any],
-    metrics: Optional[List[Tuple[str, str]]] = None,
+    results: dict[str, Any],
+    metrics: list[tuple[str, str]] | None = None,
     precision: int = 4,
 ) -> str:
     """
@@ -387,9 +390,9 @@ def format_tournament_prediction_table(
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Results from tournament prediction evaluation
-    metrics : Optional[List[Tuple[str, str]]]
+    metrics : list[tuple[str, str]] | None
         List of (display_name, key) tuples for metrics to show
     precision : int
         Number of decimal places
@@ -505,9 +508,9 @@ def format_tournament_prediction_table(
 
 
 def format_seeding_comparison(
-    model_seeds: List[Tuple[int, float, float]],
-    manual_seeds: Optional[Dict[int, int]] = None,
-    final_placements: Optional[Dict[int, int]] = None,
+    model_seeds: list[tuple[int, float, float]],
+    manual_seeds: dict[int, int] | None = None,
+    final_placements: dict[int, int] | None = None,
     top_k: int = 10,
 ) -> str:
     """
@@ -515,11 +518,11 @@ def format_seeding_comparison(
 
     Parameters
     ----------
-    model_seeds : List[Tuple[int, float, float]]
+    model_seeds : list[tuple[int, float, float]
         List of (team_id, rating, confidence) from model
-    manual_seeds : Optional[Dict[int, int]]
+    manual_seeds : dict[int, int] | None
         Manual seeds for comparison
-    final_placements : Optional[Dict[int, int]]
+    final_placements : dict[int, int] | None
         Actual final placements
     top_k : int
         Number of top seeds to show
@@ -580,7 +583,7 @@ def format_seeding_comparison(
 
 
 def format_upset_analysis(
-    upset_rates: Dict[str, Dict[str, float]],
+    upset_rates: dict[str, dict[str, float]],
     precision: int = 3,
 ) -> str:
     """
@@ -588,7 +591,7 @@ def format_upset_analysis(
 
     Parameters
     ----------
-    upset_rates : Dict[str, Dict[str, float]]
+    upset_rates : dict[str, dict[str, float]]
         Upset analysis by probability bucket
     precision : int
         Number of decimal places
@@ -632,7 +635,7 @@ def format_upset_analysis(
 
 
 def print_tournament_prediction_dashboard(
-    results: Dict[str, Any],
+    results: dict[str, Any],
     show_seeding: bool = True,
     show_upsets: bool = True,
     show_comparison: bool = True,
@@ -642,7 +645,7 @@ def print_tournament_prediction_dashboard(
 
     Parameters
     ----------
-    results : Dict[str, Any]
+    results : dict[str, Any]
         Tournament prediction evaluation results
     show_seeding : bool
         Show seeding comparison table

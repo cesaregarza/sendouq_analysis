@@ -5,6 +5,8 @@ This module centralizes all default parameters used by both scraping and advance
 ranking implementations to ensure consistency and easy tuning.
 """
 
+from __future__ import annotations
+
 import math
 from datetime import datetime
 from zoneinfo import ZoneInfo

@@ -1,7 +1,9 @@
 """Tournament seeding generation from team ratings."""
 
+from __future__ import annotations
+
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from rankings.tournament_prediction.match_predictor import MatchPredictor
 from rankings.tournament_prediction.team_strength import TeamStrengthCalculator
@@ -13,7 +15,7 @@ class TournamentSeeder:
     def __init__(
         self,
         team_calculator: TeamStrengthCalculator,
-        match_predictor: Optional[MatchPredictor] = None,
+        match_predictor: MatchPredictor | None = None,
     ):
         """Initialize seeder with rating calculator and predictor.
 
@@ -26,10 +28,10 @@ class TournamentSeeder:
 
     def generate_seeds(
         self,
-        player_ratings: Dict[int, float],
-        team_rosters: Dict[int, List[int]],
-        exposure_weights: Optional[Dict[Tuple[int, int], float]] = None,
-    ) -> List[Tuple[int, float, float]]:
+        player_ratings: dict[int, float],
+        team_rosters: dict[int, list[int]],
+        exposure_weights: dict[tuple[int, int], float] | None = None,
+    ) -> list[tuple[int, float, float]]:
         """Generate tournament seeds from team ratings.
 
         Args:
@@ -84,9 +86,9 @@ class TournamentSeeder:
 
     def apply_bracket_constraints(
         self,
-        seeds: List[Tuple[int, float, float]],
-        constraints: Optional[Dict[str, Any]] = None,
-    ) -> List[Tuple[int, float, float]]:
+        seeds: list[tuple[int, float, float]],
+        constraints: dict[str, Any] | None = None,
+    ) -> list[tuple[int, float, float]]:
         """Apply bracket-specific constraints to seeding.
 
         Args:

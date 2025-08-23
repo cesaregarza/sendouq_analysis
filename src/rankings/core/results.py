@@ -1,150 +1,146 @@
 """Result dataclasses for ranking algorithms."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 @dataclass
 class RankResult:
     """Results from a ranking algorithm run."""
 
-    # Core results
     scores: np.ndarray
-    ids: list
+    ids: list[Any]
 
-    # PageRank vectors
-    win_pr: Optional[np.ndarray] = None
-    loss_pr: Optional[np.ndarray] = None
+    win_pagerank: np.ndarray | None = None
+    loss_pagerank: np.ndarray | None = None
 
-    # Teleport and exposure
-    teleport: Optional[np.ndarray] = None
-    exposure: Optional[np.ndarray] = None
+    teleport: np.ndarray | None = None
+    exposure: np.ndarray | None = None
 
-    # Algorithm parameters used
-    lambda_used: Optional[float] = None
-    iterations: Optional[int] = None
+    lambda_used: float | None = None
+    iterations: int | None = None
     converged: bool = True
 
-    # Diagnostics
-    convergence_history: Optional[List[float]] = None
-    computation_time: Optional[float] = None
+    convergence_history: list[float] | None = None
+    computation_time: float | None = None
 
     def to_dataframe(
         self,
-        id_col: str = "player_id",
-        score_col: str = "score",
+        id_column: str = "player_id",
+        score_column: str = "score",
     ) -> pl.DataFrame:
-        """
-        Convert results to a Polars DataFrame.
+        """Convert results to a Polars DataFrame.
 
         Args:
-            id_col: Name for ID column
-            score_col: Name for score column
+            id_column: Name for ID column. Defaults to "player_id".
+            score_column: Name for score column. Defaults to "score".
 
         Returns:
-            DataFrame with results
+            DataFrame with results.
         """
-        df = pl.DataFrame({id_col: self.ids, score_col: self.scores.tolist()})
+        dataframe = pl.DataFrame(
+            {id_column: self.ids, score_column: self.scores.tolist()}
+        )
 
-        if self.win_pr is not None:
-            df = df.with_columns(pl.Series("win_pr", self.win_pr))
+        if self.win_pagerank is not None:
+            dataframe = dataframe.with_columns(
+                pl.Series("win_pagerank", self.win_pagerank)
+            )
 
-        if self.loss_pr is not None:
-            df = df.with_columns(pl.Series("loss_pr", self.loss_pr))
+        if self.loss_pagerank is not None:
+            dataframe = dataframe.with_columns(
+                pl.Series("loss_pagerank", self.loss_pagerank)
+            )
 
         if self.exposure is not None:
-            df = df.with_columns(pl.Series("exposure", self.exposure))
+            dataframe = dataframe.with_columns(
+                pl.Series("exposure", self.exposure)
+            )
 
         if self.teleport is not None:
-            df = df.with_columns(pl.Series("teleport", self.teleport))
+            dataframe = dataframe.with_columns(
+                pl.Series("teleport", self.teleport)
+            )
 
-        return df
+        return dataframe
 
-    def get_top_n(self, n: int = 10) -> pl.DataFrame:
-        """Get top N ranked entities."""
-        df = self.to_dataframe()
-        return df.sort("score", descending=True).head(n)
+    def get_top_n(self, count: int = 10) -> pl.DataFrame:
+        """Get top N ranked entities.
+
+        Args:
+            count: Number of top entities to return. Defaults to 10.
+
+        Returns:
+            DataFrame with top N entities sorted by score.
+        """
+        dataframe = self.to_dataframe()
+        return dataframe.sort("score", descending=True).head(count)
 
 
 @dataclass
 class TickTockResult(RankResult):
     """Results specific to Tick-Tock algorithm."""
 
-    # Tournament influence
-    tournament_influence: Optional[Dict[Any, float]] = None
-
-    # Retrospective strength
-    retrospective_strength: Optional[np.ndarray] = None
-
-    # Tick history
-    tick_history: Optional[List[np.ndarray]] = None
-    tock_history: Optional[List[np.ndarray]] = None
-
-    # Denominators used
-    denominators: Optional[np.ndarray] = None
+    tournament_influence: dict[Any, float] | None = None
+    retrospective_strength: np.ndarray | None = None
+    tick_history: list[np.ndarray] | None = None
+    tock_history: list[np.ndarray] | None = None
+    denominators: np.ndarray | None = None
 
 
 @dataclass
 class ExposureLogOddsResult(RankResult):
     """Results specific to Exposure Log-Odds algorithm."""
 
-    # Surprisal weights
-    surprisal_weights: Optional[np.ndarray] = None
-
-    # Active player mask
-    active_mask: Optional[np.ndarray] = None
-
-    # Raw scores before transformation
-    raw_scores: Optional[np.ndarray] = None
-
-    # Decay factors applied
-    decay_factors: Optional[np.ndarray] = None
+    surprisal_weights: np.ndarray | None = None
+    active_mask: np.ndarray | None = None
+    raw_scores: np.ndarray | None = None
+    decay_factors: np.ndarray | None = None
 
 
 @dataclass
 class PipelineResult:
     """Complete pipeline execution results."""
 
-    # Main result
     result: RankResult
-
-    # Algorithm used
     algorithm: str
-
-    # Configuration used
-    config: Dict[str, Any] = field(default_factory=dict)
-
-    # Intermediate results (if requested)
-    intermediate: Optional[Dict[str, Any]] = None
-
-    # Diagnostics
-    total_time: Optional[float] = None
-    memory_usage: Optional[float] = None
-
-    # Graded results (if post-processing applied)
-    graded_df: Optional[pl.DataFrame] = None
+    config: dict[str, Any] = field(default_factory=dict)
+    intermediate: dict[str, Any] | None = None
+    total_time: float | None = None
+    memory_usage: float | None = None
+    graded_dataframe: pl.DataFrame | None = None
 
     def to_dataframe(self) -> pl.DataFrame:
-        """Get main result as DataFrame."""
-        df = self.result.to_dataframe()
+        """Get main result as DataFrame.
 
-        # Add algorithm column
-        df = df.with_columns(pl.lit(self.algorithm).alias("algorithm"))
+        Returns:
+            DataFrame with algorithm results and optional grading.
+        """
+        dataframe = self.result.to_dataframe()
 
-        # Add grading if available
-        if self.graded_df is not None:
-            # Join grading columns
-            id_col = df.columns[0]
-            df = df.join(
-                self.graded_df.select([id_col, "grade", "display_score"]),
-                on=id_col,
+        dataframe = dataframe.with_columns(
+            pl.lit(self.algorithm).alias("algorithm")
+        )
+
+        if self.graded_dataframe is not None:
+            id_column = dataframe.columns[0]
+            dataframe = dataframe.join(
+                self.graded_dataframe.select(
+                    [id_column, "grade", "display_score"]
+                ),
+                on=id_column,
                 how="left",
             )
 
-        return df
+        return dataframe
 
 
 @dataclass
@@ -152,24 +148,27 @@ class ValidationResult:
     """Results from validation checks."""
 
     is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
-    # Detailed checks
     pagerank_normalized: bool = True
     teleport_normalized: bool = True
     scores_finite: bool = True
     no_duplicates: bool = True
 
     def __str__(self) -> str:
-        """String representation of validation results."""
+        """String representation of validation results.
+
+        Returns:
+            Human-readable validation status.
+        """
         if self.is_valid:
-            msg = "Validation passed"
+            message = "Validation passed"
             if self.warnings:
-                msg += f" with {len(self.warnings)} warning(s)"
+                message += f" with {len(self.warnings)} warning(s)"
         else:
-            msg = f"Validation failed with {len(self.errors)} error(s)"
-        return msg
+            message = f"Validation failed with {len(self.errors)} error(s)"
+        return message
 
 
 @dataclass
@@ -179,22 +178,23 @@ class BenchmarkResult:
     algorithm: str
     dataset_size: int
 
-    # Timing
     total_time: float
     pagerank_time: float
     preprocessing_time: float
     postprocessing_time: float
 
-    # Memory
     peak_memory_mb: float
 
-    # Convergence
     iterations: int
     converged: bool
     final_error: float
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for easy serialization."""
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for easy serialization.
+
+        Returns:
+            Dictionary with all benchmark results.
+        """
         return {
             "algorithm": self.algorithm,
             "dataset_size": self.dataset_size,

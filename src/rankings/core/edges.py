@@ -1,96 +1,106 @@
 """Edge building utilities for ranking algorithms."""
 
+from __future__ import annotations
+
 import math
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, Tuple
 
 
 def build_player_edges(
     matches: pl.DataFrame,
     players: pl.DataFrame,
-    tournament_influence: Dict[int, float],
-    now_ts: float,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
     decay_rate: float,
     beta: float = 0.0,
-    ts_col: Optional[str] = None,
+    timestamp_column: str | None = None,
 ) -> pl.DataFrame:
-    """
-    Build player-level edges with tournament strength weighting.
+    """Build player-level edges with tournament strength weighting.
 
     Args:
-        matches: Match data
-        players: Player/roster data
-        tournament_influence: Tournament ID to influence mapping
-        now_ts: Current timestamp
-        decay_rate: Time decay rate
-        beta: Tournament influence exponent
-        ts_col: Optional timestamp column name
+        matches: Match data.
+        players: Player/roster data.
+        tournament_influence: Tournament ID to influence mapping.
+        now_timestamp: Current timestamp.
+        decay_rate: Time decay rate.
+        beta: Tournament influence exponent.
+        timestamp_column: Optional timestamp column name. Defaults to None.
 
     Returns:
-        Edge DataFrame with columns: loser_user_id, winner_user_id, w_sum
+        Edge DataFrame with columns: loser_user_id, winner_user_id, weight_sum.
     """
     if matches.is_empty() or players.is_empty():
         return pl.DataFrame([])
 
-    # Tournament strength lookup
     if tournament_influence:
-        s_df = pl.DataFrame(
+        strength_dataframe = pl.DataFrame(
             {
                 "tournament_id": list(tournament_influence.keys()),
-                "S": list(tournament_influence.values()),
+                "tournament_strength": list(tournament_influence.values()),
             }
         )
     else:
-        s_df = None
+        strength_dataframe = None
 
-    # Filter out byes and null teams
-    filter_expr = (
+    filter_expression = (
         pl.col("winner_team_id").is_not_null()
         & pl.col("loser_team_id").is_not_null()
     )
 
     if "is_bye" in matches.columns:
-        filter_expr = filter_expr & ~pl.col("is_bye").fill_null(False)
+        filter_expression = filter_expression & ~pl.col("is_bye").fill_null(
+            False
+        )
 
-    m = matches.filter(filter_expr)
+    match_data = matches.filter(filter_expression)
 
-    # Join tournament influence
-    if s_df is not None:
-        m = m.join(s_df, on="tournament_id", how="left").fill_null(1.0)
+    if strength_dataframe is not None:
+        match_data = match_data.join(
+            strength_dataframe, on="tournament_id", how="left"
+        ).fill_null(1.0)
     else:
-        m = m.with_columns(pl.lit(1.0).alias("S"))
+        match_data = match_data.with_columns(
+            pl.lit(1.0).alias("tournament_strength")
+        )
 
-    # Add timestamp
-    if ts_col and ts_col in m.columns:
-        m = m.with_columns(pl.col(ts_col).alias("ts"))
+    if timestamp_column and timestamp_column in match_data.columns:
+        match_data = match_data.with_columns(
+            pl.col(timestamp_column).alias("ts")
+        )
     else:
-        # Use fallback timestamp logic
-        ts_exprs = []
-        if "last_game_finished_at" in m.columns:
-            ts_exprs.append(pl.col("last_game_finished_at"))
-        if "match_created_at" in m.columns:
-            ts_exprs.append(pl.col("match_created_at"))
-        ts_exprs.append(pl.lit(now_ts))
-        m = m.with_columns(pl.coalesce(ts_exprs).alias("ts"))
+        timestamp_expressions = []
+        if "last_game_finished_at" in match_data.columns:
+            timestamp_expressions.append(pl.col("last_game_finished_at"))
+        if "match_created_at" in match_data.columns:
+            timestamp_expressions.append(pl.col("match_created_at"))
+        timestamp_expressions.append(pl.lit(now_timestamp))
+        match_data = match_data.with_columns(
+            pl.coalesce(timestamp_expressions).alias("ts")
+        )
 
-    # Compute match weight with decay and tournament influence
-    time_decay = (
-        ((pl.lit(now_ts) - pl.col("ts").cast(pl.Float64)) / 86400.0)
+    time_decay_factor = (
+        ((pl.lit(now_timestamp) - pl.col("ts").cast(pl.Float64)) / 86400.0)
         .mul(-decay_rate)
         .exp()
     )
 
     if beta == 0.0:
-        match_weight = time_decay
+        match_weight = time_decay_factor
     else:
-        match_weight = time_decay * (pl.col("S") ** beta)
+        match_weight = time_decay_factor * (
+            pl.col("tournament_strength") ** beta
+        )
 
-    m = m.with_columns(match_weight.alias("match_w"))
+    match_data = match_data.with_columns(match_weight.alias("match_weight"))
 
     # Player selection for joins
-    pl_sel = players.select(
+    player_selection = players.select(
         ["tournament_id", "team_id", "user_id"]
     ).with_columns(
         [
@@ -101,7 +111,9 @@ def build_player_edges(
 
     # Expand winning teams to winning players
     winners = (
-        m.select(["match_id", "tournament_id", "winner_team_id", "match_w"])
+        match_data.select(
+            ["match_id", "tournament_id", "winner_team_id", "match_weight"]
+        )
         .with_columns(
             [
                 pl.col("tournament_id").cast(pl.Int64),
@@ -109,18 +121,20 @@ def build_player_edges(
             ]
         )
         .join(
-            pl_sel,
+            player_selection,
             left_on=["tournament_id", "winner_team_id"],
             right_on=["tournament_id", "team_id"],
             how="inner",
         )
         .rename({"user_id": "winner_user_id"})
-        .select(["match_id", "winner_user_id", "match_w"])
+        .select(["match_id", "winner_user_id", "match_weight"])
     )
 
     # Expand losing teams to losing players
     losers = (
-        m.select(["match_id", "tournament_id", "loser_team_id", "match_w"])
+        match_data.select(
+            ["match_id", "tournament_id", "loser_team_id", "match_weight"]
+        )
         .with_columns(
             [
                 pl.col("tournament_id").cast(pl.Int64),
@@ -128,18 +142,18 @@ def build_player_edges(
             ]
         )
         .join(
-            pl_sel,
+            player_selection,
             left_on=["tournament_id", "loser_team_id"],
             right_on=["tournament_id", "team_id"],
             how="inner",
         )
         .rename({"user_id": "loser_user_id"})
-        .select(["match_id", "loser_user_id", "match_w"])
+        .select(["match_id", "loser_user_id", "match_weight"])
     )
 
     # Create player-to-player pairs
     pairs = losers.join(winners, on="match_id", how="inner").select(
-        ["loser_user_id", "winner_user_id", "match_w"]
+        ["loser_user_id", "winner_user_id", "match_weight"]
     )
 
     if pairs.is_empty():
@@ -147,7 +161,7 @@ def build_player_edges(
 
     # Aggregate raw pair weights
     edges = pairs.group_by(["loser_user_id", "winner_user_id"]).agg(
-        pl.col("match_w").sum().alias("w_sum")
+        pl.col("match_weight").sum().alias("weight_sum")
     )
 
     return edges
@@ -155,100 +169,108 @@ def build_player_edges(
 
 def build_team_edges(
     matches: pl.DataFrame,
-    tournament_influence: Dict[int, float],
-    now_ts: float,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
     decay_rate: float,
     beta: float = 0.0,
 ) -> pl.DataFrame:
-    """
-    Build team-level edges from matches.
+    """Build team-level edges from matches.
 
     Args:
-        matches: Match data with team IDs
-        tournament_influence: Tournament ID to influence mapping
-        now_ts: Current timestamp
-        decay_rate: Time decay rate
-        beta: Tournament influence exponent
+        matches: Match data with team IDs.
+        tournament_influence: Tournament ID to influence mapping.
+        now_timestamp: Current timestamp.
+        decay_rate: Time decay rate.
+        beta: Tournament influence exponent.
 
     Returns:
-        Edge DataFrame with columns: loser_team_id, winner_team_id, w_sum
+        Edge DataFrame with columns: loser_team_id, winner_team_id, weight_sum.
     """
     if matches.is_empty():
         return pl.DataFrame([])
 
     # Filter out byes and null teams
-    filter_expr = (
+    filter_expression = (
         pl.col("winner_team_id").is_not_null()
         & pl.col("loser_team_id").is_not_null()
     )
 
     if "is_bye" in matches.columns:
-        filter_expr = filter_expr & ~pl.col("is_bye").fill_null(False)
+        filter_expression = filter_expression & ~pl.col("is_bye").fill_null(
+            False
+        )
 
-    m = matches.filter(filter_expr)
+    match_data = matches.filter(filter_expression)
 
     # Add tournament influence
     if tournament_influence:
-        s_df = pl.DataFrame(
+        strength_dataframe = pl.DataFrame(
             {
                 "tournament_id": list(tournament_influence.keys()),
-                "S": list(tournament_influence.values()),
+                "tournament_strength": list(tournament_influence.values()),
             }
         )
-        m = m.join(s_df, on="tournament_id", how="left").fill_null(1.0)
+        match_data = match_data.join(
+            strength_dataframe, on="tournament_id", how="left"
+        ).fill_null(1.0)
     else:
-        m = m.with_columns(pl.lit(1.0).alias("S"))
+        match_data = match_data.with_columns(
+            pl.lit(1.0).alias("tournament_strength")
+        )
 
     # Add timestamp
-    ts_exprs = []
-    if "last_game_finished_at" in m.columns:
-        ts_exprs.append(pl.col("last_game_finished_at"))
-    if "match_created_at" in m.columns:
-        ts_exprs.append(pl.col("match_created_at"))
-    ts_exprs.append(pl.lit(now_ts))
-    m = m.with_columns(pl.coalesce(ts_exprs).alias("ts"))
+    timestamp_expressions = []
+    if "last_game_finished_at" in match_data.columns:
+        timestamp_expressions.append(pl.col("last_game_finished_at"))
+    if "match_created_at" in match_data.columns:
+        timestamp_expressions.append(pl.col("match_created_at"))
+    timestamp_expressions.append(pl.lit(now_timestamp))
+    match_data = match_data.with_columns(
+        pl.coalesce(timestamp_expressions).alias("ts")
+    )
 
     # Compute match weight
-    time_decay = (
-        ((pl.lit(now_ts) - pl.col("ts").cast(pl.Float64)) / 86400.0)
+    time_decay_factor = (
+        ((pl.lit(now_timestamp) - pl.col("ts").cast(pl.Float64)) / 86400.0)
         .mul(-decay_rate)
         .exp()
     )
 
     if beta == 0.0:
-        match_weight = time_decay
+        match_weight = time_decay_factor
     else:
-        match_weight = time_decay * (pl.col("S") ** beta)
+        match_weight = time_decay_factor * (
+            pl.col("tournament_strength") ** beta
+        )
 
-    m = m.with_columns(match_weight.alias("match_w"))
+    match_data = match_data.with_columns(match_weight.alias("match_weight"))
 
     # Aggregate team-to-team edges
-    edges = m.group_by(["loser_team_id", "winner_team_id"]).agg(
-        pl.col("match_w").sum().alias("w_sum")
+    edges = match_data.group_by(["loser_team_id", "winner_team_id"]).agg(
+        pl.col("match_weight").sum().alias("weight_sum")
     )
 
     return edges
 
 
 def build_exposure_triplets(
-    matches_df: pl.DataFrame,
-    node_to_idx: Dict,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Produce COO triplets (row=winner_idx, col=loser_idx, data=share).
+    matches_dataframe: pl.DataFrame,
+    node_to_index: dict[Any, int],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Produce COO triplets (row=winner_idx, col=loser_idx, data=share).
 
     Uses list-explode to form the cartesian product winner×loser per match.
 
     Args:
-        matches_df: DataFrame with winners, losers, share columns
-        node_to_idx: Mapping from node IDs to indices
+        matches_dataframe: DataFrame with winners, losers, share columns.
+        node_to_index: Mapping from node IDs to indices.
 
     Returns:
-        Tuple of (row_indices, col_indices, weights)
+        Tuple of (row_indices, col_indices, weights).
     """
     # Explode both lists to pairs
     pairs = (
-        matches_df.explode("winners")
+        matches_dataframe.explode("winners")
         .explode("losers")
         .select(
             [
@@ -260,130 +282,137 @@ def build_exposure_triplets(
     )
 
     # Map IDs to indices - ensure proper dtypes
-    # Filter out any None keys and ensure consistent types
-    valid_items = [(k, v) for k, v in node_to_idx.items() if k is not None]
+    valid_items = [
+        (key, value) for key, value in node_to_index.items() if key is not None
+    ]
     if not valid_items:
-        # Return empty arrays if no valid items
         return (
             np.array([], dtype=np.int64),
             np.array([], dtype=np.int64),
             np.array([], dtype=np.float64),
         )
 
-    ids, indices = zip(*valid_items)
-    idx_map = pl.DataFrame({"id": list(ids), "idx": list(indices)})
+    node_ids, node_indices = zip(*valid_items)
+    index_mapping = pl.DataFrame(
+        {"id": list(node_ids), "idx": list(node_indices)}
+    )
 
     # Ensure winner_id and loser_id have matching dtypes with id column
-    # Cast both to the same type (use the type of the id column)
-    id_dtype = idx_map["id"].dtype
+    id_dtype = index_mapping["id"].dtype
     pairs = pairs.with_columns(
         [pl.col("winner_id").cast(id_dtype), pl.col("loser_id").cast(id_dtype)]
     )
 
     pairs = (
-        pairs.join(idx_map, left_on="winner_id", right_on="id", how="inner")
-        .rename({"idx": "w_idx"})
-        .join(idx_map, left_on="loser_id", right_on="id", how="inner")
-        .rename({"idx": "l_idx"})
-        .select(["w_idx", "l_idx", "share"])
+        pairs.join(
+            index_mapping, left_on="winner_id", right_on="id", how="inner"
+        )
+        .rename({"idx": "winner_idx"})
+        .join(index_mapping, left_on="loser_id", right_on="id", how="inner")
+        .rename({"idx": "loser_idx"})
+        .select(["winner_idx", "loser_idx", "share"])
     )
 
     # Aggregate duplicate pairs
-    pairs = pairs.group_by(["w_idx", "l_idx"]).agg(
-        pl.col("share").sum().alias("w_sum")
+    pairs = pairs.group_by(["winner_idx", "loser_idx"]).agg(
+        pl.col("share").sum().alias("weight_sum")
     )
 
     # Convert to numpy arrays
-    rows = pairs["w_idx"].to_numpy()
-    cols = pairs["l_idx"].to_numpy()
-    data = pairs["w_sum"].to_numpy()
+    row_indices = pairs["winner_idx"].to_numpy()
+    col_indices = pairs["loser_idx"].to_numpy()
+    weights = pairs["weight_sum"].to_numpy()
 
-    return rows, cols, data
+    return row_indices, col_indices, weights
 
 
 def compute_denominators(
     edges: pl.DataFrame,
     smoothing_strategy,
-    loser_col: str = "loser_user_id",
-    winner_col: str = "winner_user_id",
-    weight_col: str = "w_sum",
+    loser_column: str = "loser_user_id",
+    winner_column: str = "winner_user_id",
+    weight_column: str = "weight_sum",
 ) -> pl.DataFrame:
-    """
-    Compute denominators with smoothing for edge normalization.
+    """Compute denominators with smoothing for edge normalization.
 
     Args:
-        edges: Edge DataFrame
-        smoothing_strategy: Smoothing strategy object with denom() method
-        loser_col: Column name for loser/source nodes
-        winner_col: Column name for winner/target nodes
-        weight_col: Column name for edge weights
+        edges: Edge DataFrame.
+        smoothing_strategy: Smoothing strategy object with denom() method.
+        loser_column: Column name for loser/source nodes.
+        winner_column: Column name for winner/target nodes.
+        weight_column: Column name for edge weights.
 
     Returns:
-        DataFrame with columns: node_id, W_loss, W_win, denom, lambda
+        DataFrame with columns: node_id, loss_weights, win_weights, denom, lambda.
     """
     # Compute loss mass (outgoing edges)
-    loss_tot = edges.group_by(loser_col).agg(
-        pl.col(weight_col).sum().alias("W_loss")
+    loss_totals = edges.group_by(loser_column).agg(
+        pl.col(weight_column).sum().alias("loss_weights")
     )
 
     # Compute win mass (incoming edges)
-    wins_tot = (
-        edges.group_by(winner_col)
-        .agg(pl.col(weight_col).sum().alias("W_win"))
-        .rename({winner_col: loser_col})
+    win_totals = (
+        edges.group_by(winner_column)
+        .agg(pl.col(weight_column).sum().alias("win_weights"))
+        .rename({winner_column: loser_column})
     )
 
     # Join and fill nulls
-    denoms = loss_tot.join(wins_tot, on=loser_col, how="left").with_columns(
-        pl.col("W_win").fill_null(0.0)
-    )
+    denominators = loss_totals.join(
+        win_totals, on=loser_column, how="left"
+    ).with_columns(pl.col("win_weights").fill_null(0.0))
 
     # Apply smoothing strategy
     if smoothing_strategy:
-        # Convert to numpy for smoothing calculation
-        W_loss = denoms["W_loss"].to_numpy()
-        W_win = denoms["W_win"].to_numpy()
-        denom_values = smoothing_strategy.denom(W_loss, W_win)
+        loss_weights_array = denominators["loss_weights"].to_numpy()
+        win_weights_array = denominators["win_weights"].to_numpy()
+        denominator_values = smoothing_strategy.denom(
+            loss_weights_array, win_weights_array
+        )
 
-        denoms = denoms.with_columns(pl.Series("denom", denom_values))
+        denominators = denominators.with_columns(
+            pl.Series("denom", denominator_values)
+        )
     else:
-        # No smoothing
-        denoms = denoms.with_columns(pl.col("W_loss").alias("denom"))
+        denominators = denominators.with_columns(
+            pl.col("loss_weights").alias("denom")
+        )
 
     # Compute lambda (smoothing term)
-    denoms = denoms.with_columns(
-        (pl.col("denom") - pl.col("W_loss")).alias("lambda")
+    denominators = denominators.with_columns(
+        (pl.col("denom") - pl.col("loss_weights")).alias("lambda")
     )
 
-    return denoms
+    return denominators
 
 
 def normalize_edges(
     edges: pl.DataFrame,
-    denoms: pl.DataFrame,
-    loser_col: str = "loser_user_id",
-    weight_col: str = "w_sum",
+    denominators: pl.DataFrame,
+    loser_column: str = "loser_user_id",
+    weight_column: str = "weight_sum",
 ) -> pl.DataFrame:
-    """
-    Normalize edge weights by denominators.
+    """Normalize edge weights by denominators.
 
     Args:
-        edges: Edge DataFrame
-        denoms: Denominator DataFrame
-        loser_col: Column name for source nodes
-        weight_col: Column name for weights
+        edges: Edge DataFrame.
+        denominators: Denominator DataFrame.
+        loser_column: Column name for source nodes.
+        weight_column: Column name for weights.
 
     Returns:
-        Normalized edge DataFrame
+        Normalized edge DataFrame.
     """
     # Join denominators
     edges = edges.join(
-        denoms.select([loser_col, "denom"]), on=loser_col, how="left"
+        denominators.select([loser_column, "denom"]),
+        on=loser_column,
+        how="left",
     )
 
     # Normalize weights
     edges = edges.with_columns(
-        (pl.col(weight_col) / pl.col("denom")).alias("normalized_weight")
+        (pl.col(weight_column) / pl.col("denom")).alias("normalized_weight")
     )
 
     return edges
@@ -391,40 +420,41 @@ def normalize_edges(
 
 def edges_to_triplets(
     edges: pl.DataFrame,
-    node_to_idx: Dict,
-    source_col: str,
-    target_col: str,
-    weight_col: str = "w_sum",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Convert edge DataFrame to COO triplets.
+    node_to_index: dict[Any, int],
+    source_column: str,
+    target_column: str,
+    weight_column: str = "weight_sum",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Convert edge DataFrame to COO triplets.
 
     Args:
-        edges: Edge DataFrame
-        node_to_idx: Node ID to index mapping
-        source_col: Source node column
-        target_col: Target node column
-        weight_col: Weight column
+        edges: Edge DataFrame.
+        node_to_index: Node ID to index mapping.
+        source_column: Source node column.
+        target_column: Target node column.
+        weight_column: Weight column.
 
     Returns:
-        Tuple of (row_indices, col_indices, weights)
+        Tuple of (row_indices, col_indices, weights).
     """
     # Map node IDs to indices
-    idx_map = pl.DataFrame(
-        {"id": list(node_to_idx.keys()), "idx": list(node_to_idx.values())}
+    index_mapping = pl.DataFrame(
+        {"id": list(node_to_index.keys()), "idx": list(node_to_index.values())}
     )
 
     # Join to get indices
-    edges_idx = (
-        edges.join(idx_map, left_on=source_col, right_on="id", how="inner")
-        .rename({"idx": "src_idx"})
-        .join(idx_map, left_on=target_col, right_on="id", how="inner")
-        .rename({"idx": "tgt_idx"})
+    edges_with_indices = (
+        edges.join(
+            index_mapping, left_on=source_column, right_on="id", how="inner"
+        )
+        .rename({"idx": "source_idx"})
+        .join(index_mapping, left_on=target_column, right_on="id", how="inner")
+        .rename({"idx": "target_idx"})
     )
 
     # Extract arrays
-    rows = edges_idx["src_idx"].to_numpy()
-    cols = edges_idx["tgt_idx"].to_numpy()
-    weights = edges_idx[weight_col].to_numpy()
+    row_indices = edges_with_indices["source_idx"].to_numpy()
+    col_indices = edges_with_indices["target_idx"].to_numpy()
+    weights = edges_with_indices[weight_column].to_numpy()
 
-    return rows, cols, weights
+    return row_indices, col_indices, weights

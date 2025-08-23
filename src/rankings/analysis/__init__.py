@@ -1,10 +1,11 @@
-"""
-Tournament analysis and ranking algorithms.
+"""Tournament analysis and ranking algorithms.
 
 This module contains the advanced analysis capabilities:
 - engine: Advanced RatingEngine with tick-tock algorithm
 - utils: Analysis utilities and result formatting
 """
+
+from __future__ import annotations
 
 from rankings.analysis.engine import RatingEngine
 from rankings.analysis.loo_analyzer import LOOAnalyzer

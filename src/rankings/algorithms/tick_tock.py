@@ -59,7 +59,7 @@ class TickTockEngine:
             self.clock = clock
         else:
             self.clock = Clock(
-                now_ts=(now_ts if now_ts is not None else time.time())
+                now_timestamp=(now_ts if now_ts is not None else time.time())
             )
 
         # Teleport
@@ -161,7 +161,7 @@ class TickTockEngine:
         self.last_result = TickTockResult(
             scores=tick_result["pagerank"],
             ids=tick_result["node_ids"],
-            win_pr=tick_result["pagerank"],
+            win_pagerank=tick_result["pagerank"],
             iterations=(it + 1),
             converged=converged,
             tournament_influence=self.tournament_influence,
@@ -215,18 +215,18 @@ class TickTockEngine:
         denoms = compute_denominators(
             edges,
             self.smoothing_strategy,
-            loser_col="loser_user_id",
-            winner_col="winner_user_id",
+            loser_column="loser_user_id",
+            winner_column="winner_user_id",
         )
-        edges = normalize_edges(edges, denoms, loser_col="loser_user_id")
+        edges = normalize_edges(edges, denoms, loser_column="loser_user_id")
 
         # Triplets
         rows, cols, w = edges_to_triplets(
             edges,
             node_to_idx,
-            source_col="loser_user_id",
-            target_col="winner_user_id",
-            weight_col="normalized_weight",
+            source_column="loser_user_id",
+            target_column="winner_user_id",
+            weight_column="normalized_weight",
         )
 
         # Teleport

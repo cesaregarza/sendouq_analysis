@@ -1,8 +1,6 @@
-"""
-Tournament state tracking and lifecycle management.
+"""Tournament state tracking and lifecycle management."""
 
-Tracks tournament states and metadata to make intelligent scraping decisions.
-"""
+from __future__ import annotations
 
 import json
 import logging
@@ -10,7 +8,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -32,15 +29,15 @@ class TournamentMetadata:
 
     tournament_id: int
     state: TournamentState
-    scheduled_date: Optional[datetime] = None
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
-    last_checked: Optional[datetime] = None
-    last_modified: Optional[datetime] = None  # From API response headers
+    scheduled_date: datetime | None = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+    last_checked: datetime | None = None
+    last_modified: datetime | None = None  # From API response headers
     consecutive_404s: int = 0
     scrape_count: int = 0
     error_count: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -59,7 +56,7 @@ class TournamentMetadata:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TournamentMetadata":
+    def from_dict(cls, data: dict) -> TournamentMetadata:
         """Create from dictionary."""
         # Convert state string back to enum
         data["state"] = TournamentState(data["state"])
@@ -92,7 +89,7 @@ class TournamentStateTracker:
             state_file: Path to persist tournament state data
         """
         self.state_file = Path(state_file)
-        self.tournaments: Dict[int, TournamentMetadata] = {}
+        self.tournaments: dict[int, TournamentMetadata] = {}
         self.load_state()
 
     def load_state(self) -> None:
@@ -124,20 +121,18 @@ class TournamentStateTracker:
             json.dump(data, f, indent=2)
         logger.debug(f"Saved state for {len(self.tournaments)} tournaments")
 
-    def get_tournament(
-        self, tournament_id: int
-    ) -> Optional[TournamentMetadata]:
+    def get_tournament(self, tournament_id: int) -> TournamentMetadata | None:
         """Get metadata for a tournament."""
         return self.tournaments.get(tournament_id)
 
     def update_tournament(
         self,
         tournament_id: int,
-        state: Optional[TournamentState] = None,
-        scheduled_date: Optional[datetime] = None,
-        last_modified: Optional[datetime] = None,
+        state: TournamentState | None = None,
+        scheduled_date: datetime | None = None,
+        last_modified: datetime | None = None,
         is_404: bool = False,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> TournamentMetadata:
         """
         Update or create tournament metadata.
@@ -190,7 +185,7 @@ class TournamentStateTracker:
 
         return meta
 
-    def get_stale_scheduled_tournaments(self, stale_days: int = 7) -> List[int]:
+    def get_stale_scheduled_tournaments(self, stale_days: int = 7) -> list[int]:
         """
         Get scheduled tournaments that should be marked as stale.
 
@@ -214,20 +209,20 @@ class TournamentStateTracker:
 
         return stale_ids
 
-    def mark_stale(self, tournament_ids: List[int]) -> None:
+    def mark_stale(self, tournament_ids: list[int]) -> None:
         """Mark tournaments as stale."""
         for tid in tournament_ids:
             if tid in self.tournaments:
                 self.tournaments[tid].state = TournamentState.STALE
                 logger.info(f"Marked tournament {tid} as stale")
 
-    def get_tournaments_by_state(self, state: TournamentState) -> List[int]:
+    def get_tournaments_by_state(self, state: TournamentState) -> list[int]:
         """Get all tournament IDs with a specific state."""
         return [
             tid for tid, meta in self.tournaments.items() if meta.state == state
         ]
 
-    def get_active_tournaments(self) -> List[int]:
+    def get_active_tournaments(self) -> list[int]:
         """Get tournaments that should be actively monitored."""
         active_states = {TournamentState.SCHEDULED, TournamentState.IN_PROGRESS}
         return [

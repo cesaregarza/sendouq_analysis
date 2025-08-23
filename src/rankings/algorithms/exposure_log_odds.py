@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import time
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -16,11 +18,14 @@ from rankings.core import (
 )
 from rankings.core.logging import get_logger, log_timing
 
+if TYPE_CHECKING:
+    from rankings.analysis.loo_analyzer import LOOAnalyzer
+
 
 class ExposureLogOddsEngine:
-    """
-    Exposure Log-Odds rating engine using modular components, updated to mirror the
-    legacy implementation semantics:
+    """Exposure Log-Odds rating engine using modular components.
+
+    Updated to mirror the legacy implementation semantics:
       - Teleport ρ is exposure-based (sum of match pair 'share' per player)
       - Two PageRanks with the SAME ρ (col-stochastic)
       - Lambda auto-tuned to ~2.5% of median PR per node (dividing by median ρ)
@@ -31,42 +36,47 @@ class ExposureLogOddsEngine:
 
     def __init__(
         self,
-        config: Optional[ExposureLogOddsConfig] = None,
+        config: ExposureLogOddsConfig | None = None,
         *,
-        now_ts: Optional[float] = None,
-        clock: Optional[Clock] = None,
-    ):
+        now_ts: float | None = None,
+        clock: Clock | None = None,
+    ) -> None:
         self.config = config or ExposureLogOddsConfig()
         self.logger = get_logger(self.__class__.__name__)
 
-        # Deterministic time if provided; otherwise wall-clock
         if clock is not None:
             self.clock = clock
         else:
             self.clock = Clock(
-                now_ts=(now_ts if now_ts is not None else time.time())
+                now_timestamp=(now_ts if now_ts is not None else time.time())
             )
 
-        self.last_result: Optional[ExposureLogOddsResult] = None
-        # keep last teleport for diagnostics
-        self._last_rho: Optional[np.ndarray] = None
-
-        # LOO analyzer infrastructure (lazily initialized)
-        self._loo_analyzer = None
-        self._loo_matches_df = None
-        self._loo_players_df = None
-        # Store converted matches for LOO
-        self._converted_matches_df = None
+        self.last_result: ExposureLogOddsResult | None = None
+        self._last_rho: np.ndarray | None = None
+        self._loo_analyzer: LOOAnalyzer | None = None
+        self._loo_matches_df: pl.DataFrame | None = None
+        self._loo_players_df: pl.DataFrame | None = None
+        self._converted_matches_df: pl.DataFrame | None = None
 
     def rank_players(
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame,
-        tournament_influence: Optional[Dict[int, float]] = None,
+        tournament_influence: dict[int, float] | None = None,
     ) -> pl.DataFrame:
+        """Rank players using the Exposure Log-Odds algorithm.
+
+        Args:
+            matches: DataFrame containing match data.
+            players: DataFrame containing player data.
+            tournament_influence: Optional mapping of tournament IDs to influence weights.
+
+        Returns:
+            DataFrame containing player rankings.
+        """
         start_time = time.time()
 
-        # 1) Get active players and tournament influences via tick‑tock, like the legacy path
+        # 1) Get active players and tournament influences via tick‑tock
         if self.config.use_tick_tock_active:
             self.logger.info(
                 "Running tick-tock to obtain active players & tournament influences..."
@@ -80,7 +90,6 @@ class ExposureLogOddsEngine:
                 )
                 return pl.DataFrame()
         else:
-            # Skip tick-tock, use all players
             self.logger.info("Skipping tick-tock (use_tick_tock_active=False)")
             active_players = players["player_id"].to_list()
             tournament_influence = tournament_influence or {}
@@ -94,10 +103,9 @@ class ExposureLogOddsEngine:
             self.clock.now,
             self.config.decay.decay_rate,
             self.config.engine.beta,
-            include_share=True,  # IMPORTANT: we need 'share' for exposure teleport
+            include_share=True,
             streaming=False,
         )
-        # Store for LOO analyzer
         self._converted_matches_df = mdf
         if mdf.is_empty():
             self.logger.warning(
@@ -105,13 +113,12 @@ class ExposureLogOddsEngine:
             )
             return pl.DataFrame()
 
-        # 3) Restrict nodes to *active players*, preserving legacy behavior
+        # 3) Restrict nodes to active players
         node_ids = active_players
-        node_to_idx = {pid: i for i, pid in enumerate(node_ids)}
-        n = len(node_ids)
+        node_to_idx = {pid: idx for idx, pid in enumerate(node_ids)}
+        num_nodes = len(node_ids)
 
-        # 4) Build teleport ρ from exposure mass (sum of 'share' over winners+losers)
-        #    This mirrors the legacy optimized path (_exposure_logodds_optimized).
+        # 4) Build teleport ρ from exposure mass
         winners_share = (
             mdf.select(["winners", "share"])
             .explode("winners")
@@ -127,16 +134,16 @@ class ExposureLogOddsEngine:
             .group_by("id")
             .agg(pl.col("share").sum().alias("e_share"))
         )
-        e_share = np.zeros(n, dtype=float)
+        e_share = np.zeros(num_nodes, dtype=float)
         for row in exp_share_df.iter_rows(named=True):
             idx = node_to_idx.get(row["id"])
             if idx is not None:
                 e_share[idx] = float(row["e_share"])
 
-        eps = 1e-12  # Use a small epsilon for numerical stability
+        eps = 1e-12
         rho = e_share + eps
         if rho.sum() == 0.0 or not np.isfinite(rho.sum()):
-            rho[:] = 1.0  # fallback to uniform if degenerate
+            rho[:] = 1.0
         rho = rho / rho.sum()
         self._last_rho = rho
 
@@ -147,39 +154,43 @@ class ExposureLogOddsEngine:
             alpha=self.config.pagerank.alpha,
             tol=self.config.pagerank.tol,
             max_iter=self.config.pagerank.max_iter,
-            orientation="col",  # Column-stochastic (A[dst, src])
-            redistribute_dangling=True,  # Mirror legacy handling
+            orientation="col",
+            redistribute_dangling=True,
         )
 
         # 6) Win & loss PageRanks with SAME ρ
         self.logger.info("Computing win PageRank...")
-        s = pagerank_sparse(rows, cols, data, n, rho, pr_cfg)
+        win_pagerank = pagerank_sparse(rows, cols, data, num_nodes, rho, pr_cfg)
         self.logger.info("Computing loss PageRank...")
-        l = pagerank_sparse(cols, rows, data, n, rho, pr_cfg)  # transpose graph
-
-        # 7) Lambda smoothing (legacy calibration)
-        if self.config.fixed_lambda is not None:
-            lam = float(self.config.fixed_lambda)
-        elif self.config.lambda_mode == "auto":
-            target = 0.025 * float(np.median(s))
-            med_rho = float(np.median(rho))
-            lam = 0.0 if med_rho == 0.0 else max(target / med_rho, 0.0)
-        else:
-            lam = self.config.engine.lambda_smooth or 1e-4
-        self.logger.info(f"Lambda used: {lam:.6f}")
-
-        # 8) Log-odds scores
-        s_smooth = s + lam * rho
-        l_smooth = l + lam * rho
-        scores = (
-            np.log(s_smooth / l_smooth)
-            if self.config.apply_log_transform
-            else (s_smooth / l_smooth)
+        loss_pagerank = pagerank_sparse(
+            cols, rows, data, num_nodes, rho, pr_cfg
         )
 
-        # 9) Inactivity decay (same semantics as legacy)
+        # 7) Lambda smoothing
+        if self.config.fixed_lambda is not None:
+            lambda_smooth = float(self.config.fixed_lambda)
+        elif self.config.lambda_mode == "auto":
+            target = 0.025 * float(np.median(win_pagerank))
+            median_rho = float(np.median(rho))
+            lambda_smooth = (
+                0.0 if median_rho == 0.0 else max(target / median_rho, 0.0)
+            )
+        else:
+            lambda_smooth = self.config.engine.lambda_smooth or 1e-4
+        self.logger.info(f"Lambda used: {lambda_smooth:.6f}")
+
+        # 8) Log-odds scores
+        win_smooth = win_pagerank + lambda_smooth * rho
+        loss_smooth = loss_pagerank + lambda_smooth * rho
+        scores = (
+            np.log(win_smooth / loss_smooth)
+            if self.config.apply_log_transform
+            else (win_smooth / loss_smooth)
+        )
+
+        # 9) Inactivity decay
         if self.config.engine.score_decay_rate > 0:
-            last_ts = self._last_activity_times(mdf, node_to_idx, n)
+            last_ts = self._last_activity_times(mdf, node_to_idx, num_nodes)
             scores = apply_inactivity_decay(
                 scores,
                 last_ts,
@@ -188,7 +199,7 @@ class ExposureLogOddsEngine:
                 decay_rate=self.config.engine.score_decay_rate,
             )
 
-        # 10) Reporting exposure (legacy: sum of match 'weight' over winners+losers)
+        # 10) Calculate reporting exposure
         winners_w = (
             mdf.select(["winners", "weight"])
             .explode("winners")
@@ -204,26 +215,26 @@ class ExposureLogOddsEngine:
             .group_by("id")
             .agg(pl.col("weight").sum().alias("exposure"))
         )
-        exposure = np.zeros(n, dtype=float)
+        exposure = np.zeros(num_nodes, dtype=float)
         for row in exp_w_df.iter_rows(named=True):
             idx = node_to_idx.get(row["id"])
             if idx is not None:
                 exposure[idx] = float(row["exposure"])
 
-        # 11) Optional minimum exposure filter (legacy semantics use reporting exposure)
-        mask = np.ones(n, dtype=bool)
+        # 11) Apply minimum exposure filter if configured
+        mask = np.ones(num_nodes, dtype=bool)
         if self.config.engine.min_exposure is not None:
             mask = exposure >= float(self.config.engine.min_exposure)
 
-        # 12) Build result with legacy column names + score for compatibility
+        # 12) Build result dataframe
         result = (
             pl.DataFrame(
                 {
                     "id": node_ids,
                     "player_rank": scores.tolist(),
-                    "score": scores.tolist(),  # Add score as alias for player_rank
-                    "win_pr": s.tolist(),
-                    "loss_pr": l.tolist(),
+                    "score": scores.tolist(),
+                    "win_pr": win_pagerank.tolist(),
+                    "loss_pr": loss_pagerank.tolist(),
                     "exposure": exposure.tolist(),
                 }
             )
@@ -235,10 +246,10 @@ class ExposureLogOddsEngine:
         self.last_result = ExposureLogOddsResult(
             scores=scores,
             ids=node_ids,
-            win_pr=s,
-            loss_pr=l,
-            exposure=rho,  # store teleport used for scoring
-            lambda_used=lam,
+            win_pagerank=win_pagerank,
+            loss_pagerank=loss_pagerank,
+            exposure=rho,
+            lambda_used=lambda_smooth,
             active_mask=mask,
             raw_scores=scores.copy(),
         )
@@ -251,8 +262,8 @@ class ExposureLogOddsEngine:
 
     def prepare_loo_analyzer(
         self,
-        matches_df: Optional[pl.DataFrame] = None,
-        players_df: Optional[pl.DataFrame] = None,
+        matches_df: pl.DataFrame | None = None,
+        players_df: pl.DataFrame | None = None,
         force_rebuild: bool = False,
     ) -> None:
         """
@@ -326,7 +337,7 @@ class ExposureLogOddsEngine:
 
     def analyze_match_impact(
         self, match_id: int, player_id: int, include_teleport: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze the impact of removing a match on a player's score.
 
@@ -353,7 +364,7 @@ class ExposureLogOddsEngine:
     def analyze_player_matches(
         self,
         player_id: int,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         include_teleport: bool = True,
         parallel: bool = True,
         max_workers: int = 4,
@@ -404,7 +415,7 @@ class ExposureLogOddsEngine:
         self,
         matches: pl.DataFrame,
         players: pl.DataFrame,
-    ) -> Dict:
+    ) -> dict[str, Any]:
         from rankings.algorithms.tick_tock import TickTockEngine
 
         engine = TickTockEngine(self.config.tick_tock)
@@ -421,20 +432,31 @@ class ExposureLogOddsEngine:
             if "player_id" in tt_df.columns
             else (tt_df["id"].to_list() if "id" in tt_df.columns else [])
         )
-        t_infl = getattr(engine, "tournament_influence", {}) or {}
+        tournament_influence_data = (
+            getattr(engine, "tournament_influence", {}) or {}
+        )
         return {
             "active_players": active_players,
-            "tournament_influence": t_infl,
+            "tournament_influence": tournament_influence_data,
         }
 
     def _last_activity_times(
         self,
         matches_df: pl.DataFrame,
-        node_to_idx: Dict,
-        n: int,
+        node_to_idx: dict[int, int],
+        num_nodes: int,
     ) -> np.ndarray:
-        """Max ts over appearances; fill missing with 'now' (legacy behavior)."""
-        last_ts = np.zeros(n, dtype=float)
+        """Get the last activity timestamp for each player.
+
+        Args:
+            matches_df: DataFrame containing match data.
+            node_to_idx: Mapping from node IDs to indices.
+            num_nodes: Total number of nodes.
+
+        Returns:
+            Array of last activity timestamps.
+        """
+        last_ts = np.zeros(num_nodes, dtype=float)
 
         winners_ts = (
             matches_df.select(["winners", "ts"])
@@ -456,6 +478,5 @@ class ExposureLogOddsEngine:
             if idx is not None:
                 last_ts[idx] = float(row["last_ts"])
 
-        # players that never matched in window: treat as "just now" (no decay)
         last_ts[last_ts == 0.0] = float(self.clock.now)
         return last_ts

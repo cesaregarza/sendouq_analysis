@@ -1,26 +1,7 @@
 #!/usr/bin/env python
-"""
-Command-line interface for the continuous tournament scraper.
+"""Command-line interface for the continuous tournament scraper."""
 
-Usage:
-    python -m rankings.continuous.cli [options]
-    
-Examples:
-    # Run continuously with default settings (hourly)
-    python -m rankings.continuous.cli
-    
-    # Run once
-    python -m rankings.continuous.cli --once
-    
-    # Custom interval (30 minutes)
-    python -m rankings.continuous.cli --interval 30
-    
-    # With custom directories
-    python -m rankings.continuous.cli --output-dir data/tournaments --state-file data/state.json
-    
-    # Show status only
-    python -m rankings.continuous.cli --status
-"""
+from __future__ import annotations
 
 import argparse
 import logging

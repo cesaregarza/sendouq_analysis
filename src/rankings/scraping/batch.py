@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 import requests
 from tqdm import tqdm
@@ -27,12 +26,12 @@ from rankings.scraping.storage import save_tournament_batch
 
 
 def scrape_tournament_batch(
-    tournament_ids: List[int],
+    tournament_ids: list[int],
     output_dir: str = "data/tournaments",
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_failures: int = DEFAULT_MAX_FAILURES,
-    session: Optional[requests.Session] = None,
-) -> Dict[str, Union[int, List[int]]]:
+    session: requests.Session | None = None,
+) -> dict[str, int | list[int]]:
     """
     Scrape multiple tournaments and save to JSON files.
 
@@ -116,7 +115,7 @@ def scrape_tournament_range(
     output_dir: str = "data/tournaments",
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_failures: int = DEFAULT_MAX_FAILURES,
-) -> Dict[str, Union[int, List[int]]]:
+) -> dict[str, int | list[int]]:
     """
     Scrape a range of tournament IDs.
 
@@ -151,7 +150,7 @@ def scrape_tournaments_from_calendar(
     output_dir: str = "data/tournaments",
     batch_size: int = DEFAULT_BATCH_SIZE,
     calendar_url: str = CALENDAR_URL,
-) -> Dict[str, Union[int, List[int]]]:
+) -> dict[str, int | list[int]]:
     """
     Discover and scrape tournaments from the calendar.
 
@@ -190,7 +189,7 @@ def scrape_latest_tournaments(
     count: int = 100,
     output_dir: str = "data/tournaments",
     batch_size: int = DEFAULT_BATCH_SIZE,
-) -> Dict[str, Union[int, List[int]]]:
+) -> dict[str, int | list[int]]:
     """
     Scrape the latest tournaments by working backwards from the highest ID.
 
@@ -232,11 +231,11 @@ def scrape_latest_tournaments(
 
 
 def scrape_to_database(
-    tournament_ids: List[int],
+    tournament_ids: list[int],
     db_path: str = "data/tournaments.db",
     batch_size: int = 10,
     max_failures: int = DEFAULT_MAX_FAILURES,
-) -> Dict[str, Union[int, List[int]]]:
+) -> dict[str, int | list[int]]:
     """
     Scrape tournaments directly to database using existing scraper.
 

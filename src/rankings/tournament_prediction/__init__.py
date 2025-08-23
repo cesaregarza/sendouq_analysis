@@ -1,12 +1,6 @@
-"""Tournament prediction and seeding system based on player ratings.
+"""Tournament prediction and seeding system based on player ratings."""
 
-This module implements the complete tournament prediction pipeline:
-1. Team strength calculation from player ratings
-2. Win probability estimation with calibrated logistic regression
-3. Tournament seeding based on team ratings
-4. Monte Carlo simulation for tournament outcome predictions
-5. Backtesting framework for validation
-"""
+from __future__ import annotations
 
 from rankings.tournament_prediction.backtester import TournamentBacktester
 from rankings.tournament_prediction.match_predictor import MatchPredictor

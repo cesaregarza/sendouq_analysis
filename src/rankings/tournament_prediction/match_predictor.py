@@ -1,7 +1,8 @@
 """Match outcome prediction using calibrated logistic regression."""
 
+from __future__ import annotations
+
 import math
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -46,9 +47,9 @@ class MatchPredictor:
 
     def calibrate(
         self,
-        historical_matches: List[Tuple[float, float, bool]],
-        format_info: Optional[List[str]] = None,
-    ) -> Dict[str, float]:
+        historical_matches: list[tuple[float, float, bool]],
+        format_info: list[str] | None = None,
+    ) -> dict[str, float]:
         """Calibrate logistic parameters on historical data.
 
         Args:
@@ -106,9 +107,9 @@ class MatchPredictor:
 
     def calibration_curve(
         self,
-        historical_matches: List[Tuple[float, float, bool]],
+        historical_matches: list[tuple[float, float, bool]],
         n_bins: int = 10,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Generate calibration curve for model evaluation.
 
         Args:
