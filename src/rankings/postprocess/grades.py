@@ -54,20 +54,32 @@ class ScoreGradeSystem(GradeSystem):
             Grade labels
         """
         self.score_column = score_column
-        self.thresholds = thresholds or [-3, -1, 0, 0.8, 1.5, 2.4, 4, 5]
-        # Based on +3, +2, and +1 thresholds of 20, 37.5, and 60 points when
-        # score_multiplier=25
-        self.labels = labels or [
-            "A-",
-            "A",
-            "A+",
-            "S-",
-            "S",
-            "S+",
-            "X",
-            "X+",
-            "X★",
+        # Define default grade scale as list of (threshold, label) tuples
+        default_grade_scale = [
+            (-5, "XB-"),
+            (-4, "XB"),
+            (-3, "XB+"),
+            (-2, "XA-"),
+            (-1, "XA"),
+            (0, "XA+"),
+            (0.8, "XS-"),
+            (1.5, "XS"),
+            (2.4, "XS+"),
+            (4, "XX"),
+            (5, "XX+"),
+            (float("inf"), "XX★"),
         ]
+        # If user provides thresholds/labels, use them; otherwise extract from tuples
+        if thresholds is not None:
+            self.thresholds = thresholds
+        else:
+            self.thresholds = [
+                t for t, _ in default_grade_scale[:-1]
+            ]  # exclude last inf for cut
+        if labels is not None:
+            self.labels = labels
+        else:
+            self.labels = [l for _, l in default_grade_scale]
 
     def assign_grades(
         self, df: pl.DataFrame, column_name: str = "grade"
