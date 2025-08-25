@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import polars as pl
 
+from rankings.postprocess.grades import ScoreGradeSystem
+
 
 def post_process_rankings(
     rankings: pl.DataFrame,
     players_df: pl.DataFrame,
     min_tournaments: int = 3,
+    inactivity_drop_days: float | None = None,
     rank_cutoffs: list[float] | None = None,
     rank_labels: list[str] | None = None,
     score_multiplier: float = 25.0,
@@ -16,6 +19,7 @@ def post_process_rankings(
     tournaments_df: pl.DataFrame | None = None,
     id_column: str = "id",
     score_column: str = "score",
+    use_score_grade_system: bool = True,
 ) -> pl.DataFrame:
     """
     Post-process rankings with tournament filtering and grade assignment.
@@ -31,10 +35,13 @@ def post_process_rankings(
         Players DataFrame with tournament_id, user_id, username
     min_tournaments : int, default=3
         Minimum tournaments required for inclusion
+    inactivity_drop_days : float | None, default=None
+        If specified, drops players who haven't played in this many days
+        If None, allows normal decay via add_activity_decay
     rank_cutoffs : list[float] | None, default=None
-        Score cutoffs for rank labels
+        Score cutoffs for rank labels (used only if use_score_grade_system=False)
     rank_labels : list[str] | None, default=None
-        Labels for rank grades
+        Labels for rank grades (used only if use_score_grade_system=False)
     score_multiplier : float, default=25.0
         Multiplier for final score display
     score_offset : float, default=0.0
@@ -46,17 +53,20 @@ def post_process_rankings(
         Name of the player ID column in rankings
     score_column : str, default="score"
         Name of the score column in rankings
+    use_score_grade_system : bool, default=True
+        If True, uses ScoreGradeSystem for grades. If False, uses legacy cut method
 
     Returns
     -------
     pl.DataFrame
         Processed rankings with grades and filtered players
     """
-    # Default rank cutoffs and labels if not provided
-    if rank_cutoffs is None:
-        rank_cutoffs = [-3, -1, 0, 1, 2, 3, 4, 5]
-    if rank_labels is None:
-        rank_labels = ["A-", "A", "A+", "S-", "S", "S+", "X", "X+", "X★"]
+    # Default rank cutoffs and labels if not provided (only used for legacy method)
+    if not use_score_grade_system:
+        if rank_cutoffs is None:
+            rank_cutoffs = [-3, -1, 0, 1, 2, 3, 4, 5]
+        if rank_labels is None:
+            rank_labels = ["A-", "A", "A+", "S-", "S", "S+", "X", "X+", "X★"]
 
     # Normalize column names
     if id_column != "id":
@@ -126,6 +136,23 @@ def post_process_rankings(
         pl.col("tournament_count") >= min_tournaments
     )
 
+    # Filter by inactivity threshold if specified
+    if (
+        inactivity_drop_days is not None
+        and "last_active" in final_rankings.columns
+    ):
+        import time
+
+        current_timestamp = time.time()
+        days_inactive_threshold = (
+            inactivity_drop_days * 86400.0
+        )  # Convert days to seconds
+
+        final_rankings = final_rankings.filter(
+            (current_timestamp - pl.col("last_active"))
+            <= days_inactive_threshold
+        )
+
     # Re-rank after filtering
     final_rankings = final_rankings.sort("score", descending=True)
     final_rankings = final_rankings.with_columns(
@@ -152,11 +179,19 @@ def post_process_rankings(
         )
 
     # Add grade labels
-    final_rankings = final_rankings.with_columns(
-        pl.col("score")
-        .cut(breaks=rank_cutoffs, labels=rank_labels)
-        .alias("rank_label")
-    )
+    if use_score_grade_system:
+        # Use the ScoreGradeSystem
+        grade_system = ScoreGradeSystem()
+        final_rankings = grade_system.assign_grades(
+            final_rankings, column_name="rank_label"
+        )
+    else:
+        # Legacy method with custom cutoffs
+        final_rankings = final_rankings.with_columns(
+            pl.col("score")
+            .cut(breaks=rank_cutoffs, labels=rank_labels)
+            .alias("rank_label")
+        )
 
     # Calculate display score
     final_rankings = final_rankings.with_columns(

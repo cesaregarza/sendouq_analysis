@@ -1122,11 +1122,13 @@ class ExposureLogOddsEngine(RatingEngine):
         rankings: pl.DataFrame,
         players_df: pl.DataFrame,
         min_tournaments: int = 3,
+        inactivity_drop_days: float | None = None,
         rank_cutoffs: list[float] | None = None,
         rank_labels: list[str] | None = None,
         score_multiplier: float = 25.0,
         score_offset: float = 0.0,
         tournaments_df: pl.DataFrame | None = None,
+        use_score_grade_system: bool = True,
     ) -> pl.DataFrame:
         """
         Post-process rankings with tournament filtering and grade assignment.
@@ -1143,10 +1145,13 @@ class ExposureLogOddsEngine(RatingEngine):
             Players DataFrame with tournament_id, user_id, username
         min_tournaments : int, default=3
             Minimum tournaments required (filters to > min_tournaments-1)
+        inactivity_drop_days : float | None, default=None
+            If specified, drops players who haven't played in this many days
+            If None, allows normal decay via add_activity_decay
         rank_cutoffs : Optional[List[float]], default=None
-            Score cutoffs for rank labels
+            Score cutoffs for rank labels (used only if use_score_grade_system=False)
         rank_labels : Optional[List[str]], default=None
-            Labels for rank grades
+            Labels for rank grades (used only if use_score_grade_system=False)
         score_multiplier : float, default=25.0
             Multiplier for final score display
         score_offset : float, default=0.0
@@ -1154,6 +1159,8 @@ class ExposureLogOddsEngine(RatingEngine):
         tournaments_df : Optional[pl.DataFrame], default=None
             Tournaments DataFrame with tournament_id and start_time columns
             If provided, adds last_active date for each player
+        use_score_grade_system : bool, default=True
+            If True, uses ScoreGradeSystem for grades. If False, uses legacy cut method
 
         Returns
         -------
@@ -1178,6 +1185,7 @@ class ExposureLogOddsEngine(RatingEngine):
             rankings=rankings_formatted,
             players_df=players_df,
             min_tournaments=min_tournaments,
+            inactivity_drop_days=inactivity_drop_days,
             rank_cutoffs=rank_cutoffs,
             rank_labels=rank_labels,
             score_multiplier=score_multiplier,
@@ -1185,4 +1193,5 @@ class ExposureLogOddsEngine(RatingEngine):
             tournaments_df=tournaments_df,
             id_column="id",
             score_column="score",
+            use_score_grade_system=use_score_grade_system,
         )
