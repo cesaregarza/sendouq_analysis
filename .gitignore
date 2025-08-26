@@ -171,6 +171,7 @@ reports/flake8/*.css
 geckodriver
 scraping/splatoon3_ink.py
 data
+codex_scripts/
 build_scraper.sh
 terraform/scraper/hidden.tfvars
 terraform/scraper/.terraform.lock.hcl
