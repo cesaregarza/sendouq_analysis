@@ -188,3 +188,5 @@ docs/images/*.png
 
 # Claude scripts directory
 claude_scripts/
+AGENTS.md
+CODING_STYLE_NOTES.md

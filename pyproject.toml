@@ -7,6 +7,7 @@ readme = "README.md"
 packages = [
     {include = "sendouq_analysis", from = "src"},
     {include = "sendouq_dashboard", from = "src"},
+    {include = "rankings", from = "src"},
 ]
 
 
@@ -43,6 +44,8 @@ build-backend = "poetry.core.masonry.api"
 scrape = "sendouq_analysis.endpoints.scrape:update_database"
 aggregate = "sendouq_analysis.endpoints.aggregate:run"
 debug_dashboard = "sendouq_dashboard.app:debug_run"
+scrape_weekly = "rankings.cli.weekly:main"
+ranked = "rankings.cli.ranked:main"
 
 [tool.black]
 line-length = 80

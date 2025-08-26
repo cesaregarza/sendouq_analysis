@@ -47,12 +47,18 @@ def save_tournament_batch(
 
 def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
     """
-    Load all scraped tournament data from JSON files.
+    Load all scraped tournament data from JSON files, recursively.
+
+    - Recurses into subdirectories of `data_dir`.
+    - Includes per-ID files (e.g., `tournament_2090.json`).
+    - Includes batch files (e.g., `tournament_0.json`, lists of tournaments).
+    - Includes snapshot files (e.g., `tournaments_*.json` and
+      `tournaments_continuous_*.json`).
 
     Parameters
     ----------
     data_dir : str, optional
-        Directory containing tournament JSON files
+        Directory containing tournament JSON files (root; searched recursively)
 
     Returns
     -------
@@ -64,31 +70,49 @@ def load_scraped_tournaments(data_dir: str = "data/tournaments") -> List[Dict]:
         logger.warning(f"Data directory {data_dir} does not exist")
         return []
 
-    all_tournaments = []
+    all_tournaments: List[Dict] = []
 
-    # Load both regular tournament files and continuous scraping files
-    regular_files = list(data_path.glob("tournament_*.json"))
-    continuous_files = list(data_path.glob("tournaments_continuous_*.json"))
-    json_files = regular_files + continuous_files
+    # Recursively gather files by pattern
+    per_id_files = list(data_path.rglob("tournament_*.json"))
+    snapshot_files = list(data_path.rglob("tournaments_*.json"))
+    continuous_files = list(data_path.rglob("tournaments_continuous_*.json"))
+
+    # Avoid double counting continuous files in snapshot_files if patterns overlap
+    snapshot_only = [
+        p
+        for p in snapshot_files
+        if p.name.startswith("tournaments_")
+        and not p.name.startswith("tournaments_continuous_")
+    ]
+
+    json_files = sorted(set(per_id_files + snapshot_only + continuous_files))
 
     if not json_files:
-        logger.warning(f"No tournament JSON files found in {data_dir}")
+        logger.warning(
+            f"No tournament JSON files found under {data_dir} (recursive)"
+        )
         return []
 
     logger.info(
-        f"Loading {len(json_files)} tournament files ({len(regular_files)} regular, {len(continuous_files)} continuous)..."
+        "Loading %d JSON files recursively (%d per-id/batch, %d snapshots, %d continuous)"
+        % (
+            len(json_files),
+            len(per_id_files),
+            len(snapshot_only),
+            len(continuous_files),
+        )
     )
 
-    for json_file in tqdm(sorted(json_files), desc="Loading files"):
+    for json_file in tqdm(json_files, desc="Loading files"):
         try:
             with open(json_file, "r") as f:
-                tournaments = json.load(f)
-                if isinstance(tournaments, list):
-                    all_tournaments.extend(tournaments)
-                else:
-                    all_tournaments.append(tournaments)
+                payload = json.load(f)
+            if isinstance(payload, list):
+                all_tournaments.extend(payload)
+            else:
+                all_tournaments.append(payload)
         except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Failed to load {json_file}: {e}")
+            logger.error(f"Failed to load %s: %s", json_file, e)
 
     logger.info(f"Loaded {len(all_tournaments)} tournaments total")
     return all_tournaments

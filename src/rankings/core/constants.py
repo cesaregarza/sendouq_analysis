@@ -33,6 +33,7 @@ SECONDS_PER_DAY: float = 86_400.0
 SENDOU_BASE_URL = "https://sendou.ink/to/"
 SENDOU_DATA_SUFFIX = "?_data=features%2Ftournament%2Froutes%2Fto.%24id"
 CALENDAR_URL = "https://sendou.ink/calendar.ics?tournament=true"
+SENDOU_PUBLIC_API_BASE_URL = "https://sendou.ink/api"
 
 # Scraping defaults
 DEFAULT_TIMEOUT = 10.0

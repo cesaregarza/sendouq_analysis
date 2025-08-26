@@ -18,61 +18,54 @@ logger = logging.getLogger(__name__)
 
 def get_existing_tournament_ids(data_dir: str = "data/tournaments") -> Set[int]:
     """
-    Get list of existing tournament IDs from files.
+    Recursively collect existing tournament IDs from JSON files.
 
-    Parameters
-    ----------
-    data_dir : str
-        Directory containing tournament data files
+    Recognized formats (mixed in the repo):
+    - Per-ID JSON: files like `tournament_2090.json` (single dict).
+    - Batch JSON: files like `tournament_0.json` (list of tournaments).
+    - Snapshots: `tournaments_*.json`, `tournaments_continuous_*.json` (lists).
 
-    Returns
-    -------
-    Set[int]
-        Set of existing tournament IDs
+    Extraction logic focuses on the public scraper shape where each object has
+    top-level key `tournament` with nested `ctx.id`.
     """
-    existing_ids = set()
+    existing_ids: Set[int] = set()
 
-    if not os.path.exists(data_dir):
+    root = Path(data_dir)
+    if not root.exists():
         return existing_ids
 
-    # Check individual tournament files
-    for file in os.listdir(data_dir):
-        if file.startswith("tournament_") and file.endswith(".json"):
-            match = re.search(r"tournament_(\d+)\.json", file)
-            if match:
-                existing_ids.add(int(match.group(1)))
+    def _extract_ids(obj) -> Set[int]:
+        out: Set[int] = set()
+        if isinstance(obj, list):
+            for item in obj:
+                out.update(_extract_ids(item))
+            return out
+        if isinstance(obj, dict):
+            # Preferred: tournament -> ctx -> id
+            t = obj.get("tournament")
+            if isinstance(t, dict):
+                ctx = t.get("ctx", {})
+                tid = ctx.get("id")
+                if isinstance(tid, int):
+                    out.add(tid)
+                    return out
+            # Fallback: rarely, the id might be at top-level
+            tid = obj.get("id")
+            if isinstance(tid, int):
+                out.add(tid)
+            return out
+        return out
 
-    # Also check the scraped file
-    scraped_file = os.path.join(data_dir, "tournaments_20250814_scraped.json")
-    if os.path.exists(scraped_file):
+    # Walk recursively and parse any JSON payloads we find
+    for path in root.rglob("*.json"):
         try:
-            with open(scraped_file, "r") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    for tournament in data:
-                        if "id" in tournament:
-                            existing_ids.add(tournament["id"])
-                elif isinstance(data, dict):
-                    for tid in data.keys():
-                        if tid.isdigit():
-                            existing_ids.add(int(tid))
+            with open(path, "r") as f:
+                payload = json.load(f)
+            ids = _extract_ids(payload)
+            if ids:
+                existing_ids.update(ids)
         except Exception as e:
-            logger.warning(f"Error reading scraped file: {e}")
-
-    # Check continuous scraping files
-    for file in os.listdir(data_dir):
-        if file.startswith("tournaments_continuous_") and file.endswith(
-            ".json"
-        ):
-            try:
-                with open(os.path.join(data_dir, file), "r") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for tournament in data:
-                            if "id" in tournament:
-                                existing_ids.add(tournament["id"])
-            except Exception as e:
-                logger.warning(f"Error reading continuous file {file}: {e}")
+            logger.warning(f"Error reading {path}: {e}")
 
     return existing_ids
 
