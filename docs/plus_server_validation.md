@@ -83,6 +83,30 @@ Interpretation: Agreement is strong across tiers, especially +2. Filtering out l
 
 ---
 
+## Visualizations
+
+The following panels show, per tier, the ROC curve (using the score as the predictor), a reliability plot with ECE, and the score distribution by pass/fail with the Youden‑J score threshold overlaid and annotated with its percentile among all ranked players.
+
+### How To Read The Panels
+
+- ROC: Blue curve vs. gray diagonal (chance). AUC in the legend; higher AUC means better pass/fail separation by the score at all cutoffs.
+- Reliability: Dots are binned mean predicted probability vs. observed pass rate; the dashed 45° line is perfect calibration. ECE summarizes the average weighted gap; lower is better.
+- Score distribution: KDEs for pass (blue) and fail (orange). Red dashed vertical line is the Youden‑J score threshold; the label shows its percentile among all ranked players (e.g., 98.5% means 98.5% of all ranked players have scores at or below that line).
+
+### Tier Notes
+
+- +1: AUC ≈ 0.769; ECE ≈ 0.017 (well‑calibrated). J‑threshold ≈ 38.6, at the ≈98.5th percentile globally — only the very top of the overall ranked pool exceed it.
+- +2: AUC ≈ 0.847; ECE ≈ 0.075. J‑threshold ≈ 26.1, ≈96.8th percentile globally — clear separation with a high but less extreme cutoff than +1.
+- +3: AUC ≈ 0.798; ECE ≈ 0.097. J‑threshold ≈ 7.0, ≈90.6th percentile globally — distributions overlap more than +2, consistent with a broader, heterogeneous pool.
+
+![Tier +1 Overview](images/plus_validation/tier_1_overview.png)
+
+![Tier +2 Overview](images/plus_validation/tier_2_overview.png)
+
+![Tier +3 Overview](images/plus_validation/tier_3_overview.png)
+
+---
+
 ## Behavioral Interpretation by Tier (Hypotheses)
 
 - +1 (lower AUC): includes selective/semi‑retired talent; votes may reflect reputation and sporadic activity, increasing mismatch with outcomes‑only signals.  
@@ -107,13 +131,13 @@ By participation (unique tournaments in last 90d):
 
 ## Calibration & Thresholds (Youden’s J)
 
-We fit Platt scaling per tier (logistic map from `display_score` → P(pass)), compute ECE (10 bins), and report Youden‑J optimal thresholds.
+We fit Platt scaling per tier (logistic map from `display_score` → P(pass)), compute ECE (10 bins), and report Youden‑J optimal thresholds. We also include the score‑threshold percentile: the fraction of all ranked players whose display score is at or below the J‑threshold.
 
-| Tier | ECE | J‑prob threshold (95% CI) | Score threshold (95% CI) |
-|---|---:|:---|:---|
-| +1 | ≈ 0.017 | 0.732 (0.590–0.916) | 38.6 (29.4–53.2) |
-| +2 | ≈ 0.075 | 0.658 (0.294–0.764) | 26.1 (16.1–29.4) |
-| +3 | ≈ 0.097 | 0.646 (0.420–0.731) | 7.0 (−4.0–10.2) |
+| Tier | ECE | J‑prob threshold (95% CI) | Score threshold (95% CI) | Score threshold percentile |
+|---|---:|:---|:---|:---:|
+| +1 | ≈ 0.017 | 0.732 (0.590–0.916) | 38.6 (29.4–53.2) | 98.5% |
+| +2 | ≈ 0.075 | 0.658 (0.294–0.764) | 26.1 (16.1–29.4) | 96.8% |
+| +3 | ≈ 0.097 | 0.646 (0.420–0.731) | 7.0 (−4.0–10.2) | 90.6% |
 
 Note: Thresholds summarize where separation is sharpest within each tier; use for triage, not as hard gates. Calibration quality varies by tier and sample size.
 
@@ -142,4 +166,3 @@ Note: Thresholds summarize where separation is sharpest within each tier; use fo
 - Tier‑normalized “combined” predictor (z‑scores or delta‑to‑median) to make cross‑tier micro AUC fair.
 - Baselines: naive recent‑winrate and simpler models for context.
 - Repro UX: add CLI flags and JSON summaries for automated pipelines.
-
