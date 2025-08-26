@@ -139,6 +139,18 @@ We fit Platt scaling per tier (logistic map from `display_score` → P(pass)), c
 | +2 | ≈ 0.075 | 0.658 (0.294–0.764) | 26.1 (16.1–29.4) | 96.8% |
 | +3 | ≈ 0.097 | 0.646 (0.420–0.731) | 7.0 (−4.0–10.2) | 90.6% |
 
+### What Is Youden’s J?
+
+- Definition: `J(threshold) = TPR(threshold) + TNR(threshold) − 1 = TPR − FPR`.
+- Interpretation: Maximizes the vertical distance between the ROC curve and the chance line; equivalent to maximizing balanced accuracy `((TPR + TNR)/2)`.
+- Why we use it: Provides a single, prevalence‑agnostic operating point that balances sensitivity and specificity when costs are symmetric.
+- How we compute it here:
+  - Fit Platt scaling per tier to map `display_score → P(pass)`.
+  - Compute ROC on both calibrated probability and raw score.
+  - Choose the threshold that maximizes `TPR − FPR` in each domain.
+  - Report 95% bootstrap CIs by resampling players within a tier and refitting the calibration each replicate.
+- Caveats: If costs are asymmetric (e.g., prefer higher recall), another operating point may be better. Small sample sizes can make J unstable; see the confidence intervals and ECE for context.
+
 Note: Thresholds summarize where separation is sharpest within each tier; use for triage, not as hard gates. Calibration quality varies by tier and sample size.
 
 ---
