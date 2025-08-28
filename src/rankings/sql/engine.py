@@ -22,22 +22,42 @@ def _build_url_from_env() -> str | None:
       - USER, PASSWORD
       - SSLMODE (optional)
     """
-    host = os.getenv("RANKINGS_DB_HOST") or os.getenv("POSTGRES_HOST")
-    user = os.getenv("RANKINGS_DB_USER") or os.getenv("POSTGRES_USER")
+    # Accept both canonical RANKINGS_DB_* and legacy RANKING_DB_* envs
+    host = (
+        os.getenv("RANKINGS_DB_HOST")
+        or os.getenv("RANKING_DB_HOST")
+        or os.getenv("POSTGRES_HOST")
+    )
+    user = (
+        os.getenv("RANKINGS_DB_USER")
+        or os.getenv("RANKING_DB_USER")
+        or os.getenv("POSTGRES_USER")
+    )
     if not host or not user:
         return None
-    port = os.getenv("RANKINGS_DB_PORT") or os.getenv("POSTGRES_PORT") or "5432"
+    port = (
+        os.getenv("RANKINGS_DB_PORT")
+        or os.getenv("RANKING_DB_PORT")
+        or os.getenv("POSTGRES_PORT")
+        or "5432"
+    )
     name = (
         os.getenv("RANKINGS_DB_NAME")
+        or os.getenv("RANKING_DB_NAME")
         or os.getenv("POSTGRES_DB")
         or "rankings_db"
     )
     password = (
         os.getenv("RANKINGS_DB_PASSWORD")
+        or os.getenv("RANKING_DB_PASSWORD")
         or os.getenv("POSTGRES_PASSWORD")
         or ""
     )
-    sslmode = os.getenv("RANKINGS_DB_SSLMODE") or os.getenv("POSTGRES_SSLMODE")
+    sslmode = (
+        os.getenv("RANKINGS_DB_SSLMODE")
+        or os.getenv("RANKING_DB_SSLMODE")
+        or os.getenv("POSTGRES_SSLMODE")
+    )
 
     auth = f"{user}:{password}" if password != "" else f"{user}"
     url = f"postgresql://{auth}@{host}:{port}/{name}"
