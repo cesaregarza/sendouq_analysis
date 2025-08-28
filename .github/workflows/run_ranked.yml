@@ -62,20 +62,19 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
-            export RANKINGS_DATABASE_URL=${{ secrets.RANKINGS_DATABASE_URL }}
-            export RANKINGS_DB_HOST=${{ secrets.RANKINGS_DB_HOST }}
+            export RANKINGS_DB_HOST=${{ secrets.POSTGRES_HOST }}
             export RANKINGS_DB_USER=${{ secrets.RANKINGS_DB_USER }}
             export RANKINGS_DB_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
-            export RANKINGS_DB_PORT=${{ secrets.RANKINGS_DB_PORT }}
+            export RANKINGS_DB_PORT=${{ secrets.POSTGRES_PORT }}
             export RANKINGS_DB_NAME=${{ secrets.RANKINGS_DB_NAME }}
             export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
             export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
             # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
+            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
+            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
             export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
             export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
             # Provide sane defaults if not set via secrets
