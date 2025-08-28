@@ -179,19 +179,24 @@ def import_file(
     if max_remaining is not None and max_remaining >= 0:
         payload = payload[:max_remaining]
 
-    # Ensure new columns exist (forward-compatible schema upgrade)
-    with engine.begin() as conn:
-        conn.exec_driver_sql(
-            f"""
-            ALTER TABLE {RANKINGS_SCHEMA}.tournaments
-              ADD COLUMN IF NOT EXISTS team_count INTEGER,
-              ADD COLUMN IF NOT EXISTS match_count INTEGER,
-              ADD COLUMN IF NOT EXISTS stage_count INTEGER,
-              ADD COLUMN IF NOT EXISTS group_count INTEGER,
-              ADD COLUMN IF NOT EXISTS round_count INTEGER,
-              ADD COLUMN IF NOT EXISTS participated_users_count INTEGER
-            """
-        )
+    # Ensure new columns exist (forward-compatible schema upgrade).
+    # If lacking ALTER privilege (typical for app user), skip silently.
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                f"""
+                ALTER TABLE {RANKINGS_SCHEMA}.tournaments
+                  ADD COLUMN IF NOT EXISTS team_count INTEGER,
+                  ADD COLUMN IF NOT EXISTS match_count INTEGER,
+                  ADD COLUMN IF NOT EXISTS stage_count INTEGER,
+                  ADD COLUMN IF NOT EXISTS group_count INTEGER,
+                  ADD COLUMN IF NOT EXISTS round_count INTEGER,
+                  ADD COLUMN IF NOT EXISTS participated_users_count INTEGER
+                """
+            )
+    except Exception:
+        # Permission denied or other non-critical error; proceed with inserts
+        pass
 
     tables = parse_tournaments_data(payload)
 
@@ -503,6 +508,9 @@ def main(argv: list[str] | None = None) -> None:
         parts = parts._replace(query=urlencode(q))
         db_url = urlunparse(parts)
 
+    # If no URL but sslmode provided, set component env var so engine builder picks it up
+    if not db_url and args.sslmode:
+        os.environ["RANKINGS_DB_SSLMODE"] = args.sslmode
     engine = rankings_create_engine(db_url)
     rankings_create_all(engine)
 

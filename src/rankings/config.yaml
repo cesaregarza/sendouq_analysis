@@ -1,0 +1,57 @@
+############################################################
+# Rankings Update Config (defaults for `rankings_update`)
+#
+# Precedence:
+#   CLI flags > this config > hardcoded fallbacks
+#
+# Notes:
+# - Database can be supplied via `RANKINGS_DATABASE_URL` or component envs
+#   (RANKINGS_DB_HOST, RANKINGS_DB_USER, RANKINGS_DB_PASSWORD, RANKINGS_DB_PORT,
+#    RANKINGS_DB_NAME, RANKINGS_DB_SSLMODE). If you prefer, you can set
+#   `db_url` here (commented example below).
+# - We do not use Parquet outputs in ranked runs; keep write_parquet=false.
+############################################################
+
+# ISO weeks to scan back from today
+weeks_back: 2
+
+# Base directory for scraped JSON payloads (optional)
+# If omitted, defaults to a temporary path under /tmp (e.g., /tmp/sendouq/tournaments)
+# data_dir: "/tmp/sendouq/tournaments"
+
+# Directory for compiled outputs (engine state, optional artifacts)
+compiled_out: "data/compiled"
+
+# Only include tournaments marked is_ranked for ranking
+only_ranked: true
+
+# Persist player rankings to DB after engine run
+save_to_db: true
+
+# Only include matches within the past N days
+since_days: 120
+
+# Upper window bound N days back from now (optional)
+# until_days: 30
+
+# Override libpq sslmode in DB URL or component envs (optional)
+# One of: disable, allow, prefer, require, verify-ca, verify-full
+# sslmode: require
+
+# Explicit build version tag to store with rankings (optional)
+# build_version: nightly-20250101
+
+# Database URL (optional; prefer env RANKINGS_DATABASE_URL)
+# db_url: postgres://user:pass@host:5432/dbname?sslmode=require
+
+# Write parquet snapshots of matches/players and rankings
+# Keep false for ranked use; no parquet desired
+write_parquet: false
+
+# Upload outputs to S3 (engine_state.json, manifest.json). Destination taken from env
+#   RANKINGS_S3_URI (e.g., s3://bucket/prefix) or RANKINGS_S3_BUCKET/PREFIX
+upload_s3: true
+
+# Optional base directory (prefix) within the bucket; run timestamp is appended.
+# For example, s3_prefix: "rankings" will write to rankings/<timestamp>/...
+s3_prefix: "rankings"

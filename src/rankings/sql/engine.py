@@ -13,6 +13,39 @@ from .constants import SCHEMA
 Base = declarative_base()
 
 
+def _build_url_from_env() -> str | None:
+    """Construct a Postgres URL from component env vars.
+
+    Recognized variables (RANKINGS_* preferred, falls back to POSTGRES_*):
+      - HOST, PORT (default 5432)
+      - NAME (database name; default 'rankings_db')
+      - USER, PASSWORD
+      - SSLMODE (optional)
+    """
+    host = os.getenv("RANKINGS_DB_HOST") or os.getenv("POSTGRES_HOST")
+    user = os.getenv("RANKINGS_DB_USER") or os.getenv("POSTGRES_USER")
+    if not host or not user:
+        return None
+    port = os.getenv("RANKINGS_DB_PORT") or os.getenv("POSTGRES_PORT") or "5432"
+    name = (
+        os.getenv("RANKINGS_DB_NAME")
+        or os.getenv("POSTGRES_DB")
+        or "rankings_db"
+    )
+    password = (
+        os.getenv("RANKINGS_DB_PASSWORD")
+        or os.getenv("POSTGRES_PASSWORD")
+        or ""
+    )
+    sslmode = os.getenv("RANKINGS_DB_SSLMODE") or os.getenv("POSTGRES_SSLMODE")
+
+    auth = f"{user}:{password}" if password != "" else f"{user}"
+    url = f"postgresql://{auth}@{host}:{port}/{name}"
+    if sslmode:
+        url = f"{url}?sslmode={sslmode}"
+    return url
+
+
 def create_engine(url: Optional[str] = None, *, echo: bool = False) -> Engine:
     """Create a SQLAlchemy engine.
 
@@ -22,11 +55,15 @@ def create_engine(url: Optional[str] = None, *, echo: bool = False) -> Engine:
     - env ``DATABASE_URL``
     """
     database_url = (
-        url or os.getenv("RANKINGS_DATABASE_URL") or os.getenv("DATABASE_URL")
+        url
+        or os.getenv("RANKINGS_DATABASE_URL")
+        or os.getenv("DATABASE_URL")
+        or _build_url_from_env()
     )
     if not database_url:
         raise RuntimeError(
-            "No database URL provided. Set RANKINGS_DATABASE_URL or DATABASE_URL."
+            "No database URL provided. Set RANKINGS_DATABASE_URL or DATABASE_URL, "
+            "or provide component env vars (RANKINGS_DB_HOST/USER/[PASSWORD]/[NAME]/[PORT]/[SSLMODE])."
         )
     return _sa_create_engine(database_url, echo=echo, future=True)
 

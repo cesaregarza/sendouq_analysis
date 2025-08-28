@@ -1,0 +1,175 @@
+name: Run Ranked Update
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: Scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get self ip
+        id: self_ip
+        run: |
+          SELF_IP=$(curl -s https://api.ipify.org)
+          echo $SELF_IP
+          echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init
+        working-directory: terraform/ranked
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/ranked
+        run: |
+          terraform plan -out=tfplan -input=false
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_source_ip: ${{ steps.self_ip.outputs.self_ip }}
+          TF_VAR_joy_ip: ${{ secrets.JOY_IP }}
+
+      - name: Terraform Apply
+        id: terraform_apply
+        working-directory: terraform/ranked
+        run: |
+          terraform apply -auto-approve tfplan
+          RANKED_IP=$(terraform output -raw ranked_ip)
+          RANKED_ID=$(terraform output -raw ranked_id)
+          echo "ranked_ip=$RANKED_IP" >> $GITHUB_OUTPUT
+          echo "ranked_id=$RANKED_ID" >> $GITHUB_OUTPUT
+
+      # Allow time for droplet boot and DB firewall readiness
+      - name: Wait for Droplet to come online
+        run: |
+          sleep 90
+
+      - name: SSH to Ranked Droplet (attempt 1)
+        id: ssh
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.ranked_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
+            export RANKINGS_DB_HOST=${{ secrets.POSTGRES_HOST }}
+            export RANKINGS_DB_USER=${{ secrets.RANKINGS_DB_USER }}
+            export RANKINGS_DB_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
+            export RANKINGS_DB_PORT=${{ secrets.POSTGRES_PORT }}
+            export RANKINGS_DB_NAME=${{ secrets.RANKINGS_DB_NAME }}
+            export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
+            export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
+            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+            # DigitalOcean Spaces / S3 credentials and destination
+            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
+            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
+            export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
+            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
+            # Provide sane defaults if not set via secrets
+            if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
+            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
+            if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
+            # Ensure no stray prefix is present; default logic will use rankings/<ts>
+            unset RANKINGS_S3_PREFIX || true
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            # Run rankings_update in attached mode (no Parquet flag)
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_HOST -e RANKINGS_DB_USER -e RANKINGS_DB_PASSWORD \
+              -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
+              -e RANKINGS_DB_SCHEMA \
+              -e RANKINGS_BUILD="$BUILD_VERSION" \
+              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
+              --entrypoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run rankings_update --upload-s3
+
+      - name: Sleep before retry
+        id: resleep
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        run: |
+          sleep 60
+
+      - name: SSH to Ranked Droplet (attempt 2)
+        id: ressh
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.ranked_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
+            export RANKINGS_DB_HOST=${{ secrets.POSTGRES_HOST }}
+            export RANKINGS_DB_USER=${{ secrets.RANKINGS_DB_USER }}
+            export RANKINGS_DB_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
+            export RANKINGS_DB_PORT=${{ secrets.POSTGRES_PORT }}
+            export RANKINGS_DB_NAME=${{ secrets.RANKINGS_DB_NAME }}
+            export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
+            export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
+            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+            # DigitalOcean Spaces / S3 credentials and destination
+            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
+            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
+            export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
+            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
+            if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
+            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
+            if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
+            unset RANKINGS_S3_PREFIX || true
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_HOST -e RANKINGS_DB_USER -e RANKINGS_DB_PASSWORD \
+              -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
+              -e RANKINGS_DB_SCHEMA \
+              -e RANKINGS_BUILD="$BUILD_VERSION" \
+              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
+              --entrypoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run rankings_update --upload-s3
+
+      - name: Kill droplet on success
+        if: ${{ success() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.ranked_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"
+
+      - name: Kill droplet if fail
+        if: ${{ failure() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.ranked_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"
