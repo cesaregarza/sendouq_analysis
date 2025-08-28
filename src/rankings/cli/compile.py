@@ -300,6 +300,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         _import_json(args)
 
     # Compile core tables
+    # Respect --sslmode for component env builds if no URL provided
+    if not args.db_url and args.sslmode:
+        os.environ["RANKINGS_DB_SSLMODE"] = args.sslmode
     engine = rankings_create_engine(args.db_url)
     rankings_create_all(engine)
 
