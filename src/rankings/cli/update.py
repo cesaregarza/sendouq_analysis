@@ -59,10 +59,7 @@ def _timestamp() -> str:
 def _db_existing_tournament_ids(
     db_url: str | None, sslmode: Optional[str]
 ) -> set[int]:
-    # Respect sslmode for component env builds if no URL provided
-    if not db_url and sslmode:
-        os.environ["RANKINGS_DB_SSLMODE"] = sslmode
-    # Ensure sslmode env is respected when using component envs
+    # Ensure sslmode env is respected when using component envs (no URL provided)
     if not db_url and sslmode:
         os.environ["RANKINGS_DB_SSLMODE"] = str(sslmode)
     engine = rankings_create_engine(db_url)
