@@ -1,0 +1,183 @@
+from __future__ import annotations
+
+from typing import Any, Optional
+
+import pandas as pd
+import polars as pl
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+from .constants import SCHEMA
+
+
+def _read_sql(
+    engine: Engine, sql: str, params: Optional[dict[str, Any]] = None
+) -> pl.DataFrame:
+    """Read SQL into a Polars DataFrame via pandas for compatibility.
+
+    This uses pandas as an intermediary to avoid adding a new dependency layer.
+    """
+    with engine.connect() as conn:
+        pdf = pd.read_sql_query(text(sql), conn, params=params)
+    return pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame([])
+
+
+def load_matches_df(
+    engine: Engine,
+    *,
+    since_ms: Optional[int] = None,
+    until_ms: Optional[int] = None,
+    only_ranked: bool = False,
+) -> pl.DataFrame:
+    """Load matches as a Polars DataFrame for rankings.core consumption.
+
+    Columns produced (if present):
+    - match_id, tournament_id, stage_id, group_id, round_id
+    - match_number, status, last_game_finished_at, match_created_at
+    - team1_id, team1_position, team1_score
+    - team2_id, team2_position, team2_score
+    - winner_team_id, loser_team_id, is_bye
+    """
+    where = []
+    params: dict[str, Any] = {}
+    if since_ms is not None:
+        where.append("m.last_game_finished_at_ms >= :since_ms")
+        params["since_ms"] = int(since_ms)
+    if until_ms is not None:
+        where.append("m.last_game_finished_at_ms <= :until_ms")
+        params["until_ms"] = int(until_ms)
+    if only_ranked:
+        where.append("COALESCE(t.is_ranked, false) = true")
+
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+    join_clause = (
+        "JOIN {SCHEMA}.tournaments t ON t.tournament_id = m.tournament_id"
+        if only_ranked
+        else ""
+    )
+
+    sql = f"""
+        SELECT
+            m.match_id,
+            m.tournament_id,
+            m.stage_id,
+            m.group_id,
+            m.round_id,
+            m.number AS match_number,
+            m.status,
+            m.last_game_finished_at_ms AS last_game_finished_at,
+            m.created_at_ms AS match_created_at,
+            m.team1_id,
+            m.team1_position,
+            m.team1_score,
+            m.team2_id,
+            m.team2_position,
+            m.team2_score,
+            m.winner_team_id,
+            m.loser_team_id,
+            COALESCE(m.is_bye, false) AS is_bye
+        FROM {SCHEMA}.matches m
+        {join_clause}
+        {where_clause}
+    """.format(
+        SCHEMA=SCHEMA, join_clause=join_clause, where_clause=where_clause
+    )
+
+    df = _read_sql(engine, sql, params)
+    if df.is_empty():
+        return df
+    # Normalize dtypes for joins and engine expectations
+    int_cols = [
+        "match_id",
+        "tournament_id",
+        "stage_id",
+        "group_id",
+        "round_id",
+        "team1_id",
+        "team1_position",
+        "team1_score",
+        "team2_id",
+        "team2_position",
+        "team2_score",
+        "winner_team_id",
+        "loser_team_id",
+    ]
+    cast_map = {
+        c: pl.col(c).cast(pl.Int64, strict=False)
+        for c in int_cols
+        if c in df.columns
+    }
+    # Booleans and timestamps remain as-is; ensure is_bye boolean
+    if "is_bye" in df.columns:
+        cast_map["is_bye"] = pl.col("is_bye").cast(pl.Boolean, strict=False)
+    if cast_map:
+        df = df.with_columns(list(cast_map.values()))
+    # Convert millisecond timestamps to seconds (engine expects seconds)
+    if "last_game_finished_at" in df.columns:
+        df = df.with_columns(
+            pl.col("last_game_finished_at")
+            .cast(pl.Float64, strict=False)
+            .truediv(1000.0)
+        )
+    if "match_created_at" in df.columns:
+        df = df.with_columns(
+            pl.col("match_created_at")
+            .cast(pl.Float64, strict=False)
+            .truediv(1000.0)
+        )
+    return df
+
+
+def load_players_df(engine: Engine) -> pl.DataFrame:
+    """Load player roster entries with usernames for rankings.core.
+
+    Columns produced:
+    - tournament_id, team_id, user_id, username, discord_id, country, roster_created_at, is_owner
+    """
+    sql = f"""
+        SELECT
+            r.tournament_id,
+            r.team_id,
+            r.player_id AS user_id,
+            p.display_name AS username,
+            p.discord_id,
+            p.country,
+            r.joined_at_ms AS roster_created_at,
+            COALESCE(r.is_owner, false) AS is_owner
+        FROM {SCHEMA}.roster_entries r
+        JOIN {SCHEMA}.players p ON p.player_id = r.player_id
+    """
+
+    df = _read_sql(engine, sql)
+    if df.is_empty():
+        return df
+    # Normalize key columns to Int64
+    cast_map = {
+        "tournament_id": pl.col("tournament_id").cast(pl.Int64, strict=False),
+        "team_id": pl.col("team_id").cast(pl.Int64, strict=False),
+        "user_id": pl.col("user_id").cast(pl.Int64, strict=False),
+    }
+    # is_owner boolean
+    if "is_owner" in df.columns:
+        cast_map["is_owner"] = pl.col("is_owner").cast(pl.Boolean, strict=False)
+    df = df.with_columns(list(cast_map.values()))
+    return df
+
+
+def load_core_tables(
+    engine: Engine,
+    *,
+    since_ms: Optional[int] = None,
+    until_ms: Optional[int] = None,
+    only_ranked: bool = False,
+) -> dict[str, pl.DataFrame]:
+    """Return the two DataFrames used by rankings.core engines.
+
+    Returns a dict with keys: "matches", "players".
+    """
+    matches = load_matches_df(
+        engine, since_ms=since_ms, until_ms=until_ms, only_ranked=only_ranked
+    )
+    players = load_players_df(engine)
+    return {"matches": matches, "players": players}

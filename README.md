@@ -102,6 +102,33 @@ DO_API_TOKEN=your_digitalocean_token
   poetry run aggregate
   # or
   poetry run python src/sendouq_analysis/endpoints/aggregate.py
+
+- **Compile core tables from Postgres (optional scrape + import):**
+
+  - Import local JSONs and write Parquet core tables under `data/compiled`:
+
+    poetry run rankings_compile --import --only-ranked
+
+  - Scrape recent tournaments, import to DB, and compile last 120 days:
+
+    poetry run rankings_compile --scrape ranked --recent-count 200 --import --since-days 120 --only-ranked
+
+  - Add `--run-engine` to compute rankings and save a compact model state for influence queries:
+
+    poetry run rankings_compile --import --only-ranked --run-engine --sslmode disable
+
+  - By default, Parquet snapshots are not written. Use `--write-parquet` to produce `matches.parquet`, `players.parquet`, and with `--run-engine`, `rankings.parquet`. Engine runs always write `engine_state.json`.
+
+Docker
+- Weekly scrape:
+  - `docker compose -f dockerfiles/docker-compose.weekly.yml up --build`
+- Ranked (recent weeks) scrape:
+  - `docker compose -f dockerfiles/docker-compose.ranked.yml up --build`
+- Update + import + compile + rank + save to DB:
+  - `docker compose -f dockerfiles/docker-compose.update.yml up --build`
+  - Configure DB via `.env` or env vars: set `RANKINGS_DATABASE_URL` (or `DATABASE_URL`) and `RANKINGS_DB_SCHEMA`.
+  - To explicitly tag persisted rankings, set `BUILD_VERSION=my_tag` or pass `--build-version my_tag` via `command`.
+  - To emit Parquet snapshots from the updater container, set `WRITE_PARQUET=true`.
   ```
 
 ### Running the Dashboard
@@ -259,8 +286,3 @@ MIT License. See the `LICENSE` file for details.
 - **Cesar E Garza** - Initial work
 - [Contributors](https://github.com/your-repo/sendouq-analysis/contributors)
 - Thanks to the open-source community and all inspiration sources.
-
-
-
-
-
