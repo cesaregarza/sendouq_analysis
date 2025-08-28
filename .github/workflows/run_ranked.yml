@@ -76,11 +76,11 @@ jobs:
             export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
-            export RANKINGS_S3_URI=${{ secrets.RANKINGS_S3_URI }}
             export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
+            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
             # Provide sane defaults if not set via secrets
-            if [ -z "$RANKINGS_S3_URI" ]; then export RANKINGS_S3_URI="https://rankings.nyc3.digitaloceanspaces.com"; fi
             if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
+            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
             if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
             # Ensure no stray prefix is present; default logic will use rankings/<ts>
             unset RANKINGS_S3_PREFIX || true
@@ -99,7 +99,7 @@ jobs:
               -e RANKINGS_DB_SCHEMA \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-              -e RANKINGS_S3_URI -e RANKINGS_S3_ENDPOINT \
+              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
               --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run rankings_update --upload-s3
@@ -121,24 +121,23 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
-            export RANKINGS_DATABASE_URL=${{ secrets.RANKINGS_DATABASE_URL }}
-            export RANKINGS_DB_HOST=${{ secrets.RANKINGS_DB_HOST }}
+            export RANKINGS_DB_HOST=${{ secrets.POSTGRES_HOST }}
             export RANKINGS_DB_USER=${{ secrets.RANKINGS_DB_USER }}
             export RANKINGS_DB_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
-            export RANKINGS_DB_PORT=${{ secrets.RANKINGS_DB_PORT }}
+            export RANKINGS_DB_PORT=${{ secrets.POSTGRES_PORT }}
             export RANKINGS_DB_NAME=${{ secrets.RANKINGS_DB_NAME }}
             export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
             export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
             # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
-            export RANKINGS_S3_URI=${{ secrets.RANKINGS_S3_URI }}
+            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
+            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
             export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
-            if [ -z "$RANKINGS_S3_URI" ]; then export RANKINGS_S3_URI="https://rankings.nyc3.digitaloceanspaces.com"; fi
+            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
             if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
+            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
             if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
             unset RANKINGS_S3_PREFIX || true
 
@@ -155,7 +154,7 @@ jobs:
               -e RANKINGS_DB_SCHEMA \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-              -e RANKINGS_S3_URI -e RANKINGS_S3_ENDPOINT \
+              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
               --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
               run rankings_update --upload-s3
