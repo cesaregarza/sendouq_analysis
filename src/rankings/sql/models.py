@@ -290,22 +290,3 @@ class PlayerRanking(Base):
     # Run metadata
     calculated_at_ms = Column(BigInteger, nullable=False)
     build_version = Column(String(64), nullable=False)
-
-
-class PlayerAlias(Base):
-    __tablename__ = "player_aliases"
-    __table_args__ = (
-        UniqueConstraint(
-            "provider", "provider_player_id", name="uq_player_alias_provider"
-        ),
-        Index("ix_player_alias_internal", "player_id"),
-        {"schema": SCHEMA},
-    )
-
-    alias_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    provider = Column(String, nullable=False)
-    provider_player_id = Column(String, nullable=False)
-    player_id = Column(
-        BigInteger, ForeignKey(f"{SCHEMA}.players.player_id"), nullable=False
-    )
-    player_uuid = Column(UUID(as_uuid=True), nullable=True)

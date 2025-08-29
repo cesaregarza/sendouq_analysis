@@ -493,22 +493,8 @@ def import_file(
         )
         _bulk_insert(redf, RM.RosterEntry, engine)
 
-        # Player alias (lookup) for provider='sendou'
-        alias_df = players.select(
-            [
-                pl.lit("sendou").alias("provider"),
-                pl.col("user_id").cast(pl.Utf8).alias("provider_player_id"),
-                pl.col("user_id").alias("player_id"),
-            ]
-        ).unique(subset=["provider", "provider_player_id"])
-        # Attach player_uuid when available
-        if not pldf_players.is_empty():
-            alias_df = alias_df.join(
-                pldf_players.select(["player_id", "player_uuid"]),
-                on="player_id",
-                how="left",
-            )
-        _bulk_insert(alias_df, RM.PlayerAlias, engine)
+        # Note: legacy PlayerAlias table is deprecated in favor of unified external_ids.
+        # Alias rows for players are now handled via ExternalID below.
 
     if matches is not None and not matches.is_empty():
 
