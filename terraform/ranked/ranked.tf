@@ -24,15 +24,15 @@ resource "digitalocean_droplet" "sendouq_ranked" {
   image    = "ubuntu-22-04-x64"
   name     = "sendouq-ranked"
   region   = "nyc3"
-  size     = "s-2vcpu-4gb"
+  size     = "s-1vcpu-1gb"
   ssh_keys = module.digitalocean_infra.ssh_key_ids
 }
 
 resource "digitalocean_database_firewall" "sendouq_ranked" {
   cluster_id = module.digitalocean_infra.database_cluster_id
   rule {
-    type  = "ip_addr"
-    value = digitalocean_droplet.sendouq_ranked.ipv4_address
+    type  = "droplet"
+    value = digitalocean_droplet.sendouq_ranked.id
   }
   rule {
     type  = "ip_addr"
