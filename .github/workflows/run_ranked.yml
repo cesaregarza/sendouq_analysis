@@ -74,6 +74,7 @@ jobs:
             export RANKINGS_DB_NAME=$POSTGRES_DB
             export RANKINGS_DB_USER=$POSTGRES_USER
             export RANKINGS_DB_PASSWORD=$POSTGRES_PASSWORD
+            export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
             export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
             export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
@@ -103,6 +104,7 @@ jobs:
               -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
               -e RANKINGS_DB_SCHEMA \
               -e POSTGRES_HOST -e POSTGRES_PORT -e POSTGRES_DB -e POSTGRES_USER -e POSTGRES_PASSWORD \
+              -e SENDOU_KEY \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
               -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
@@ -140,7 +142,7 @@ jobs:
             export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
             export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
+            export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
             # DigitalOcean Spaces / S3 credentials and destination
             export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
             export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
@@ -163,6 +165,7 @@ jobs:
               -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
               -e RANKINGS_DB_SCHEMA \
               -e POSTGRES_HOST -e POSTGRES_PORT -e POSTGRES_DB -e POSTGRES_USER -e POSTGRES_PASSWORD \
+              -e SENDOU_KEY \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
               -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
