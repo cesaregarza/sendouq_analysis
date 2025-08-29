@@ -63,6 +63,8 @@ class ExposureLogOddsEngine:
         matches: pl.DataFrame,
         players: pl.DataFrame,
         tournament_influence: dict[int, float] | None = None,
+        *,
+        appearances: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
         """Rank players using the Exposure Log-Odds algorithm.
 
@@ -103,6 +105,7 @@ class ExposureLogOddsEngine:
             self.clock.now,
             self.config.decay.decay_rate,
             self.config.engine.beta,
+            appearances=appearances,
             include_share=True,
             streaming=False,
         )

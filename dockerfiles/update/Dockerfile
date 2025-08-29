@@ -16,12 +16,16 @@ RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 COPY pyproject.toml poetry.lock* ./
 RUN poetry install --no-interaction --no-ansi --no-root
 
+# Copy source code and then install the root package so console scripts are available
 COPY src ./src
 COPY scripts ./scripts
+RUN poetry install --no-interaction --no-ansi
+
+# Ensure local source is importable for python -m invocations
+ENV PYTHONPATH=/app/src
 COPY dockerfiles/update/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 VOLUME ["/app/data", "/app/compiled"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-

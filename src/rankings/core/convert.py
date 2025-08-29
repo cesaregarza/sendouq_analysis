@@ -21,6 +21,7 @@ def convert_matches_dataframe(
     beta: float = 0.0,
     *,
     rosters: pl.DataFrame | None = None,
+    appearances: pl.DataFrame | None = None,
     include_share: bool = True,
     streaming: bool = False,
 ) -> pl.DataFrame:
@@ -112,6 +113,7 @@ def convert_matches_dataframe(
 
     match_data = match_data.with_columns(weight_expression.alias("weight"))
 
+    # Build baseline roster lists (team-level) for fallback
     if rosters is None:
         used_teams = pl.concat(
             [
@@ -128,29 +130,96 @@ def convert_matches_dataframe(
         pl.col("user_id").alias("roster")
     )
 
-    match_data = match_data.join(
-        roster_lists,
-        left_on=["tournament_id", "winner_team_id"],
-        right_on=["tournament_id", "team_id"],
-        how="left",
-    ).rename({"roster": "winners"})
+    # Optional: override winners/losers with actual per-match appearances when available
+    winners_col = "winners"
+    losers_col = "losers"
+    if appearances is not None and not appearances.is_empty():
+        # Ensure dtypes and group to per-match team lists
+        app = appearances.select(
+            [
+                pl.col("tournament_id").cast(pl.Int64),
+                pl.col("match_id").cast(pl.Int64),
+                pl.col("team_id").cast(pl.Int64),
+                pl.col("user_id").cast(pl.Int64),
+            ]
+        )
+        app_lists = app.group_by(["tournament_id", "match_id", "team_id"]).agg(
+            pl.col("user_id").alias("played")
+        )
 
-    match_data = match_data.join(
-        roster_lists,
-        left_on=["tournament_id", "loser_team_id"],
-        right_on=["tournament_id", "team_id"],
-        how="left",
-    ).rename({"roster": "losers"})
+        # Join baseline rosters to compute fallbacks if appearance missing
+        match_data = match_data.join(
+            roster_lists,
+            left_on=["tournament_id", "winner_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        ).rename({"roster": "_w_roster"})
+
+        match_data = match_data.join(
+            roster_lists,
+            left_on=["tournament_id", "loser_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        ).rename({"roster": "_l_roster"})
+
+        # Attach appearances for winners and losers
+        match_data = match_data.join(
+            app_lists,
+            left_on=["tournament_id", "match_id", "winner_team_id"],
+            right_on=["tournament_id", "match_id", "team_id"],
+            how="left",
+        ).rename({"played": "_w_played"})
+        match_data = match_data.join(
+            app_lists,
+            left_on=["tournament_id", "match_id", "loser_team_id"],
+            right_on=["tournament_id", "match_id", "team_id"],
+            how="left",
+        ).rename({"played": "_l_played"})
+
+        # Coalesce: prefer played-over-roster
+        match_data = match_data.with_columns(
+            [
+                pl.coalesce([pl.col("_w_played"), pl.col("_w_roster")]).alias(
+                    winners_col
+                ),
+                pl.coalesce([pl.col("_l_played"), pl.col("_l_roster")]).alias(
+                    losers_col
+                ),
+            ]
+        )
+        # Drop temp columns
+        match_data = match_data.drop(
+            [
+                c
+                for c in ["_w_roster", "_l_roster", "_w_played", "_l_played"]
+                if c in match_data.columns
+            ]
+        )
+    else:
+        # No appearances provided; use team rosters
+        match_data = match_data.join(
+            roster_lists,
+            left_on=["tournament_id", "winner_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        ).rename({"roster": winners_col})
+
+        match_data = match_data.join(
+            roster_lists,
+            left_on=["tournament_id", "loser_team_id"],
+            right_on=["tournament_id", "team_id"],
+            how="left",
+        ).rename({"roster": losers_col})
 
     match_data = match_data.filter(
-        pl.col("winners").is_not_null() & pl.col("losers").is_not_null()
+        pl.col(winners_col).is_not_null() & pl.col(losers_col).is_not_null()
     )
 
     if include_share:
         match_data = match_data.with_columns(
             [
-                pl.col("winners").list.len().alias("winner_count"),
-                pl.col("losers").list.len().alias("loser_count"),
+                pl.col(winners_col).list.len().alias("winner_count"),
+                pl.col(losers_col).list.len().alias("loser_count"),
             ]
         )
         match_data = match_data.with_columns(
@@ -163,8 +232,8 @@ def convert_matches_dataframe(
     final_columns = [
         "match_id",
         "tournament_id",
-        "winners",
-        "losers",
+        winners_col,
+        losers_col,
         "weight",
         "ts",
     ]

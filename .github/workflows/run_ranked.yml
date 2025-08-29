@@ -103,7 +103,7 @@ jobs:
               -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
               --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
-              run rankings_update --upload-s3
+              run rankings_update
 
       - name: Sleep before retry
         id: resleep
@@ -154,7 +154,7 @@ jobs:
               -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
               --entrypoint poetry \
               registry.digitalocean.com/sendouq/scraper:latest \
-              run rankings_update --upload-s3
+              run rankings_update
 
       - name: Kill droplet on success
         if: ${{ success() && steps.terraform_apply.outcome == 'success' }}

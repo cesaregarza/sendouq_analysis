@@ -149,3 +149,136 @@ def get_tournament_summary(data_dir: str = "data/tournaments") -> pl.DataFrame:
 
     # Return the comprehensive tournament metadata
     return tournament_df
+
+
+def _coerce_int(v):
+    try:
+        if v is None:
+            return None
+        return int(v)
+    except Exception:
+        return None
+
+
+def _extract_appearances_from_players_payload(
+    tournament_id: int, payload: dict
+) -> list[dict]:
+    """Best-effort extraction of per-match player appearances from the players route payload.
+
+    Expected common shapes (examples):
+    - { "matches": [ { "matchId": 123, "teams": [ { "teamId": 1, "players": [{"userId": 10}, ...] }, ... ] }, ... ] }
+    - [ { "matchId": 123, "teams": [ ... ] }, ... ]
+
+    Returns list of rows: {tournament_id, match_id, team_id, user_id}
+    """
+    rows: list[dict] = []
+
+    def _emit(match_id, team_id, players_node):
+        if players_node is None:
+            return
+        # Accept list[int] or list[dict]
+        if isinstance(players_node, list):
+            for p in players_node:
+                if isinstance(p, dict):
+                    uid = _coerce_int(p.get("userId") or p.get("id"))
+                else:
+                    uid = _coerce_int(p)
+                if uid is not None:
+                    rows.append(
+                        {
+                            "tournament_id": int(tournament_id),
+                            "match_id": _coerce_int(match_id),
+                            "team_id": _coerce_int(team_id),
+                            "user_id": uid,
+                        }
+                    )
+        elif isinstance(players_node, dict):
+            # Sometimes may be { "userIds": [...] }
+            user_ids = players_node.get("userIds") or players_node.get(
+                "players"
+            )
+            if isinstance(user_ids, list):
+                _emit(match_id, team_id, user_ids)
+
+    def _parse_match_obj(m: dict):
+        mid = m.get("matchId") or m.get("id")
+        teams = m.get("teams") or []
+        if isinstance(teams, list):
+            for t in teams:
+                if not isinstance(t, dict):
+                    continue
+                tid = t.get("teamId") or t.get("id")
+                # players can be under 'players' as list[dict] or 'userIds'
+                plist = (
+                    t.get("players")
+                    or t.get("userIds")
+                    or t.get("users")
+                    or t.get("roster")
+                )
+                _emit(mid, tid, plist)
+
+    # Unwrap common container keys
+    node = payload
+    for key in ("data", "payload", "result"):
+        if isinstance(node, dict) and key in node:
+            node = node[key]
+
+    candidates = None
+    if isinstance(node, dict) and isinstance(node.get("matches"), list):
+        candidates = node.get("matches")
+    elif isinstance(node, list):
+        candidates = node
+
+    if isinstance(candidates, list):
+        for m in candidates:
+            if isinstance(m, dict) and ("matchId" in m or "teams" in m):
+                _parse_match_obj(m)
+
+    return [
+        r
+        for r in rows
+        if r.get("match_id") is not None and r.get("team_id") is not None
+    ]
+
+
+def load_match_appearances(data_dir: str = "data/tournaments") -> pl.DataFrame:
+    """Load per-match player appearances from scraped JSON if present.
+
+    Returns a DataFrame with columns: tournament_id, match_id, team_id, user_id
+    or an empty DataFrame if none found.
+    """
+    tournaments = load_scraped_tournaments(data_dir)
+    if not tournaments:
+        return pl.DataFrame([])
+
+    rows: list[dict] = []
+    for entry in tournaments:
+        try:
+            t = entry.get("tournament", {})
+            ctx = t.get("ctx", {}) if isinstance(t, dict) else {}
+            tid = ctx.get("id")
+            if tid is None:
+                continue
+            pm = entry.get("player_matches")
+            if not pm:
+                continue
+            rows.extend(_extract_appearances_from_players_payload(int(tid), pm))
+        except Exception as e:
+            logger.warning("Failed to parse players payload: %s", e)
+            continue
+
+    if not rows:
+        return pl.DataFrame([])
+
+    df = pl.DataFrame(rows)
+    # Cast to proper types and deduplicate
+    cast_map = {
+        "tournament_id": pl.col("tournament_id").cast(pl.Int64, strict=False),
+        "match_id": pl.col("match_id").cast(pl.Int64, strict=False),
+        "team_id": pl.col("team_id").cast(pl.Int64, strict=False),
+        "user_id": pl.col("user_id").cast(pl.Int64, strict=False),
+    }
+    df = df.with_columns(list(cast_map.values())).unique(
+        subset=["tournament_id", "match_id", "team_id", "user_id"]
+    )
+    return df

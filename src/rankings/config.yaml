@@ -28,8 +28,10 @@ only_ranked: true
 # Persist player rankings to DB after engine run
 save_to_db: true
 
-# Only include matches within the past N days
-since_days: 120
+# Retrieval window for DB queries (days)
+# Keep reasonably large to include sufficient history; engine applies recency
+# weighting via half-life. Default 18 months (540 days).
+retrieval_days: 540
 
 # Upper window bound N days back from now (optional)
 # until_days: 30
@@ -47,6 +49,24 @@ since_days: 120
 # Write parquet snapshots of matches/players and rankings
 # Keep false for ranked use; no parquet desired
 write_parquet: false
+
+# Engine configuration (production defaults)
+decay:
+  half_life_days: 180.0
+engine:
+  beta: 1.0
+  score_decay_delay_days: 180
+  score_decay_rate: 0.01
+pagerank:
+  alpha: 0.85
+  tol: 1.0e-8
+  max_iter: 200
+tick_tock:
+  convergence_tol: 0.01
+  max_ticks: 5
+  influence_method: "log_top_20_sum"
+lambda_mode: "auto"
+use_tick_tock_active: true
 
 # Upload outputs to S3 (engine_state.json, manifest.json). Destination taken from env
 #   RANKINGS_S3_URI (e.g., s3://bucket/prefix) or RANKINGS_S3_BUCKET/PREFIX

@@ -58,18 +58,32 @@ def save_engine_state(engine, path: str) -> None:
         "result": None,
     }
     if last is not None:
+
+        def _to_list_or_empty(value):
+            if value is None:
+                return []
+            try:
+                return (
+                    value.tolist() if hasattr(value, "tolist") else list(value)
+                )
+            except Exception:
+                # Fallback for scalars or non-iterables
+                return [value] if not isinstance(value, list) else value
+
+        ids = getattr(last, "ids", None)
+        scores = getattr(last, "scores", None)
+        win_pr = getattr(last, "win_pagerank", None)
+        loss_pr = getattr(last, "loss_pagerank", None)
+        exposure = getattr(last, "exposure", None)
+
         state["result"] = {
-            "ids": getattr(last, "ids", []) or [],
-            "scores": (getattr(last, "scores", []) or []),
-            "win_pagerank": (getattr(last, "win_pagerank", []) or []),
-            "loss_pagerank": (getattr(last, "loss_pagerank", []) or []),
-            "exposure": (getattr(last, "exposure", []) or []),
+            "ids": _to_list_or_empty(ids),
+            "scores": _to_list_or_empty(scores),
+            "win_pagerank": _to_list_or_empty(win_pr),
+            "loss_pagerank": _to_list_or_empty(loss_pr),
+            "exposure": _to_list_or_empty(exposure),
             "lambda_used": getattr(last, "lambda_used", None),
         }
-        # Ensure lists for JSON
-        for k in ["scores", "win_pagerank", "loss_pagerank", "exposure"]:
-            if hasattr(state["result"][k], "tolist"):
-                state["result"][k] = state["result"][k].tolist()
 
     with open(path, "w") as f:
         json.dump(state, f)

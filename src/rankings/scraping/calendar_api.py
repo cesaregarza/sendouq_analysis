@@ -100,6 +100,21 @@ def fetch_tournament_metadata(
     return res.json()
 
 
+def fetch_tournament_players(
+    tournament_id: int, *, timeout: float = DEFAULT_TIMEOUT
+) -> dict:
+    """Fetch public tournament players route by ID.
+
+    Returns the raw JSON from GET /api/tournament/{id}/players, which contains
+    data about which matches players actually played in. Authentication uses
+    the same SENDOU_KEY bearer token as other public API calls.
+    """
+    url = f"{SENDOU_PUBLIC_API_BASE_URL}/tournament/{tournament_id}/players"
+    res = requests.get(url, headers=_auth_headers(), timeout=timeout)
+    res.raise_for_status()
+    return res.json()
+
+
 def is_tournament_finalized(meta: dict) -> bool:
     """Return True if the public metadata marks the tournament as finalized."""
     return bool(meta.get("isFinalized", False))

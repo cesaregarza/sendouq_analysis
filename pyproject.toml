@@ -57,6 +57,7 @@ rankings_import = "rankings.cli.db_import:main"
 rankings_compile = "rankings.cli.compile:main"
 rankings_update = "rankings.cli.update:main"
 rankings_db_init = "rankings.cli.db_init:main"
+rankings_pull = "rankings.cli.pull:main"
 
 [tool.black]
 line-length = 80

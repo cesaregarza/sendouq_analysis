@@ -19,8 +19,10 @@ from rankings.core.constants import (
     CALENDAR_URL,
     DEFAULT_BATCH_SIZE,
     DEFAULT_MAX_FAILURES,
+    SENDOU_PUBLIC_API_BASE_URL,
 )
 from rankings.scraping.api import scrape_tournament
+from rankings.scraping.calendar_api import fetch_tournament_players
 from rankings.scraping.discovery import discover_tournaments_from_calendar
 from rankings.scraping.storage import save_tournament_batch
 
@@ -79,6 +81,22 @@ def scrape_tournament_batch(
                 tournament_data = scrape_tournament(
                     tournament_id, session=session
                 )
+                # Attempt to enrich with player match appearances from public API
+                try:
+                    players_payload = fetch_tournament_players(tournament_id)
+                    # Store under a non-conflicting top-level key
+                    tournament_data["player_matches"] = players_payload
+                except Exception as e:
+                    try:
+                        url = f"{SENDOU_PUBLIC_API_BASE_URL}/tournament/{tournament_id}/players"
+                    except Exception:
+                        url = "(url unavailable)"
+                    logger.warning(
+                        "Players route fetch failed for %s at %s: %s",
+                        tournament_id,
+                        url,
+                        e,
+                    )
                 batch_data.append(tournament_data)
                 scraped += 1
                 consecutive_failures = 0

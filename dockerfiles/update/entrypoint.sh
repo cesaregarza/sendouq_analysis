@@ -46,4 +46,5 @@ if [[ "${WRITE_PARQUET}" == "true" ]]; then
   ARGS+=(--write-parquet)
 fi
 
-exec poetry run rankings_update "${ARGS[@]}" "$@"
+# Prefer module execution to avoid reliance on console_scripts install
+exec poetry run python -m rankings.cli.update "${ARGS[@]}" "$@"

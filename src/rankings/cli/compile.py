@@ -30,6 +30,7 @@ from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import ExposureLogOddsConfig
 from rankings.scraping.batch import scrape_latest_tournaments
+from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
@@ -350,8 +351,23 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("No data to run engine (empty matches/players)")
             return 0
 
+        # Try to use per-match appearances from scraped JSON if available
+        appearances = load_match_appearances(args.data_dir)
+        if not appearances.is_empty():
+            # Filter to IDs present in current matches to avoid bloat
+            try:
+                key_df = matches.select(["tournament_id", "match_id"]).unique()
+                appearances = appearances.join(
+                    key_df, on=["tournament_id", "match_id"], how="inner"
+                )
+            except Exception:
+                pass
+
         eng = ExposureLogOddsEngine(ExposureLogOddsConfig())
-        ranks = eng.rank_players(matches, players)
+        if appearances.is_empty():
+            ranks = eng.rank_players(matches, players)
+        else:
+            ranks = eng.rank_players(matches, players, appearances=appearances)
         if run_dir is None:
             run_dir = out_dir / _ts_now()
             _ensure_dir(run_dir)

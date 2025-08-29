@@ -38,14 +38,29 @@ def load_matches_df(
     - team2_id, team2_position, team2_score
     - winner_team_id, loser_team_id, is_bye
     """
+
+    def _to_db_seconds(v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            iv = int(v)
+        except Exception:
+            return None
+        # Heuristic: treat values > 10^12 as milliseconds
+        return iv // 1000 if iv > 1_000_000_000_000 else iv
+
     where = []
     params: dict[str, Any] = {}
-    if since_ms is not None:
-        where.append("m.last_game_finished_at_ms >= :since_ms")
-        params["since_ms"] = int(since_ms)
-    if until_ms is not None:
-        where.append("m.last_game_finished_at_ms <= :until_ms")
-        params["until_ms"] = int(until_ms)
+    # Prefer last_game_finished_at_ms, but fall back to created_at_ms when missing
+    time_expr = "COALESCE(m.last_game_finished_at_ms, m.created_at_ms)"
+    since_ts = _to_db_seconds(since_ms)
+    until_ts = _to_db_seconds(until_ms)
+    if since_ts is not None:
+        where.append(f"{time_expr} >= :since_ts")
+        params["since_ts"] = since_ts
+    if until_ts is not None:
+        where.append(f"{time_expr} <= :until_ts")
+        params["until_ts"] = until_ts
     if only_ranked:
         where.append("COALESCE(t.is_ranked, false) = true")
 
@@ -113,18 +128,14 @@ def load_matches_df(
         cast_map["is_bye"] = pl.col("is_bye").cast(pl.Boolean, strict=False)
     if cast_map:
         df = df.with_columns(list(cast_map.values()))
-    # Convert millisecond timestamps to seconds (engine expects seconds)
+    # Ensure timestamps are floats (assume DB stores seconds since epoch)
     if "last_game_finished_at" in df.columns:
         df = df.with_columns(
-            pl.col("last_game_finished_at")
-            .cast(pl.Float64, strict=False)
-            .truediv(1000.0)
+            pl.col("last_game_finished_at").cast(pl.Float64, strict=False)
         )
     if "match_created_at" in df.columns:
         df = df.with_columns(
-            pl.col("match_created_at")
-            .cast(pl.Float64, strict=False)
-            .truediv(1000.0)
+            pl.col("match_created_at").cast(pl.Float64, strict=False)
         )
     return df
 

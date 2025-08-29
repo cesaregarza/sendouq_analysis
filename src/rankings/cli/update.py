@@ -31,7 +31,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from rankings.algorithms import ExposureLogOddsEngine
 from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
-from rankings.core import ExposureLogOddsConfig
+from rankings.core import DecayConfig, ExposureLogOddsConfig
 from rankings.scraping.batch import scrape_tournament_batch
 from rankings.scraping.calendar_api import (
     fetch_calendar_week,
@@ -226,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         "--since-days",
         type=int,
         default=None,
-        help="Only include matches within past N days for ranking",
+        help=(
+            "Time window in days for DB retrieval (prefer config: retrieval_days)"
+        ),
     )
     parser.add_argument(
         "--until-days",
@@ -235,14 +237,29 @@ def main(argv: list[str] | None = None) -> int:
         help="Upper window bound N days back from now",
     )
     parser.add_argument(
+        "--no-time-filter",
+        action="store_true",
+        help="Disable since/until time filters when compiling from DB",
+    )
+    parser.add_argument(
         "--only-ranked",
         action="store_true",
         help="Filter to tournaments marked is_ranked for ranking",
     )
     parser.add_argument(
+        "--include-unranked",
+        action="store_true",
+        help="Do not filter by is_ranked; include all tournaments",
+    )
+    parser.add_argument(
         "--save-to-db",
         action="store_true",
         help="Persist rankings to DB (player_rankings)",
+    )
+    parser.add_argument(
+        "--no-save-to-db",
+        action="store_true",
+        help="Do not persist rankings to DB (overrides config/--save-to-db)",
     )
     parser.add_argument(
         "--build-version",
@@ -257,9 +274,23 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     parser.add_argument(
+        "--skip-discovery",
+        action="store_true",
+        help=(
+            "Skip calendar discovery and scraping; compile+rank from DB only."
+        ),
+    )
+
+    parser.add_argument(
         "--upload-s3",
         action="store_true",
         help="Upload outputs (engine_state, manifest) to S3 using env RANKINGS_S3_URI or RANKINGS_S3_BUCKET/PREFIX",
+    )
+
+    parser.add_argument(
+        "--no-ddl",
+        action="store_true",
+        help="Do not attempt to create schema/tables (skip DDL)",
     )
 
     args = parser.parse_args(argv)
@@ -300,9 +331,22 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = _get("data_dir", args.data_dir, None)
     compiled_out = _get("compiled_out", args.compiled_out, "data/compiled")
     only_ranked = bool(_get("only_ranked", args.only_ranked, True))
+    if args.include_unranked:
+        only_ranked = False
     save_to_db = bool(_get("save_to_db", args.save_to_db, True))
-    since_days = _get("since_days", args.since_days, 120)
+    if args.no_save_to_db:
+        save_to_db = False
+    # Retrieval window (days) for DB pulls; prefer new 'retrieval_days' in config,
+    # fall back to legacy 'since_days' or CLI flag
+    since_days = (
+        cfg.get("retrieval_days")
+        if cfg.get("retrieval_days") is not None
+        else _get("since_days", args.since_days, 540)
+    )
     until_days = _get("until_days", args.until_days, None)
+    if args.no_time_filter:
+        since_days = None
+        until_days = None
     sslmode = _get("sslmode", args.sslmode, None)
     write_parquet = bool(_get("write_parquet", args.write_parquet, False))
     upload_s3 = bool(_get("upload_s3", args.upload_s3, False))
@@ -322,13 +366,16 @@ def main(argv: list[str] | None = None) -> int:
         parts = parts._replace(query=urlencode(q))
         db_url = urlunparse(parts)
 
-    existing = _db_existing_tournament_ids(db_url, sslmode)
-    finalized = _discover_recent_finalized(int(weeks_back))
-    to_fetch = [tid for tid in finalized if tid not in existing]
-
-    print(
-        f"Discovered finalized tournaments: {len(finalized)}; missing in DB: {len(to_fetch)}"
-    )
+    to_fetch: list[int] = []
+    if args.skip_discovery:
+        print("Skip-discovery enabled: bypassing calendar lookup and scraping.")
+    else:
+        existing = _db_existing_tournament_ids(db_url, sslmode)
+        finalized = _discover_recent_finalized(int(weeks_back))
+        to_fetch = [tid for tid in finalized if tid not in existing]
+        print(
+            f"Discovered finalized tournaments: {len(finalized)}; missing in DB: {len(to_fetch)}"
+        )
     run_ts = _timestamp()
 
     # Default scratch path under /tmp if not specified
@@ -349,7 +396,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         scraped_count = int(res.get("scraped") or 0)
     else:
-        print("No new finalized tournaments to scrape.")
+        if args.skip_discovery:
+            print("Skip-discovery: no scraping attempted.")
+        else:
+            print("No new finalized tournaments to scrape.")
 
     # Import newly scraped JSONs
     imported = 0
@@ -359,7 +409,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # Compile and rank
     engine = rankings_create_engine(db_url)
-    rankings_create_all(engine)
+    if not args.no_ddl:
+        try:
+            rankings_create_all(engine)
+        except Exception as e:
+            print(f"Skipping DDL due to error: {e}")
 
     since_ms = (
         int(
@@ -378,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         else None
     )
 
+    # Load with a wide retrieval window to keep dataset manageable
     tables = load_core_tables(
         engine,
         since_ms=since_ms,
@@ -391,6 +446,8 @@ def main(argv: list[str] | None = None) -> int:
     if players is None:
         players = pl.DataFrame([])
 
+    # Do not filter matches by time here.
+
     out_base = Path(str(compiled_out))
     out_run = out_base / run_ts
     # Defer creating run dir until we actually write something
@@ -403,7 +460,81 @@ def main(argv: list[str] | None = None) -> int:
 
     ranks_rows = 0
     if not matches.is_empty() and not players.is_empty():
-        eng = ExposureLogOddsEngine(ExposureLogOddsConfig())
+        # Build engine config; allow overrides via YAML keys
+        eng_cfg = ExposureLogOddsConfig()
+
+        # Optional convenience: top-level 'engine_half_life_days'
+        ehd = cfg.get("engine_half_life_days")
+        if ehd is not None:
+            try:
+                eng_cfg.decay = DecayConfig(half_life_days=float(ehd))
+            except Exception:
+                pass
+
+        # Structured overrides if provided
+        dec = cfg.get("decay")
+        if isinstance(dec, dict):
+            hl = dec.get("half_life_days")
+            if hl is not None:
+                try:
+                    eng_cfg.decay.half_life_days = float(hl)
+                except Exception:
+                    pass
+
+        eng_d = cfg.get("engine")
+        if isinstance(eng_d, dict):
+            for k, v in eng_d.items():
+                if hasattr(eng_cfg.engine, k):
+                    try:
+                        setattr(eng_cfg.engine, k, v)
+                    except Exception:
+                        pass
+
+        pr_d = cfg.get("pagerank")
+        if isinstance(pr_d, dict):
+            for k, v in pr_d.items():
+                if hasattr(eng_cfg.pagerank, k):
+                    try:
+                        setattr(eng_cfg.pagerank, k, v)
+                    except Exception:
+                        pass
+
+        tt_d = cfg.get("tick_tock")
+        if isinstance(tt_d, dict):
+            for k, v in tt_d.items():
+                if hasattr(eng_cfg.tick_tock, k):
+                    try:
+                        setattr(eng_cfg.tick_tock, k, v)
+                    except Exception:
+                        pass
+
+        # Top-level flags
+        if "lambda_mode" in cfg:
+            try:
+                eng_cfg.lambda_mode = str(cfg.get("lambda_mode"))
+            except Exception:
+                pass
+        if "use_tick_tock_active" in cfg:
+            try:
+                eng_cfg.use_tick_tock_active = bool(
+                    cfg.get("use_tick_tock_active")
+                )
+            except Exception:
+                pass
+
+        # Enforce the requested production settings
+        eng_cfg.decay.half_life_days = 180.0
+        eng_cfg.pagerank.alpha = 0.85
+        eng_cfg.engine.beta = 1.0
+        eng_cfg.lambda_mode = "auto"
+        eng_cfg.tick_tock.convergence_tol = 0.01
+        eng_cfg.tick_tock.max_ticks = 5
+        eng_cfg.tick_tock.influence_method = "log_top_20_sum"
+        eng_cfg.engine.score_decay_delay_days = 180
+        eng_cfg.engine.score_decay_rate = 0.01
+        eng_cfg.use_tick_tock_active = True
+
+        eng = ExposureLogOddsEngine(eng_cfg)
         ranks = eng.rank_players(matches, players)
         ranks_rows = int(ranks.height)
         if write_parquet:
@@ -436,7 +567,12 @@ def main(argv: list[str] | None = None) -> int:
             "compiled_players": int(players.height),
             "rankings_rows": ranks_rows,
             "only_ranked": bool(only_ranked),
-            "since_days": since_days,
+            "retrieval_days": since_days,
+            "engine_half_life_days": (
+                eng_cfg.decay.half_life_days
+                if not matches.is_empty() and not players.is_empty()
+                else None
+            ),
             "until_days": until_days,
         },
     )
