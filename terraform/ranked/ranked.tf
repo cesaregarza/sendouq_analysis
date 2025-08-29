@@ -20,19 +20,24 @@ module "digitalocean_infra" {
   do_token = var.do_token
 }
 
+resource "digitalocean_tag" "ranked_worker" {
+  name = "ranked_worker"
+}
+
 resource "digitalocean_droplet" "sendouq_ranked" {
   image    = "ubuntu-22-04-x64"
   name     = "sendouq-ranked"
   region   = "nyc3"
   size     = "s-1vcpu-1gb"
   ssh_keys = module.digitalocean_infra.ssh_key_ids
+  tags     = [digitalocean_tag.ranked_worker.name]
 }
 
 resource "digitalocean_database_firewall" "sendouq_ranked" {
   cluster_id = module.digitalocean_infra.database_cluster_id
   rule {
-    type  = "droplet"
-    value = digitalocean_droplet.sendouq_ranked.id
+    type  = "tag"
+    value = digitalocean_tag.ranked_worker.name
   }
   rule {
     type  = "ip_addr"
