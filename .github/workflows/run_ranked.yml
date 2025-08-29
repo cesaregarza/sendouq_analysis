@@ -61,30 +61,31 @@ jobs:
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
           script: |
             export PATH=$PATH:/usr/bin
+            set +o histexpand || true
             # Database envs: set both POSTGRES_* and RANKINGS_DB_* for compatibility
             # Resolve DB components with fallbacks: POSTGRES_* -> RANKINGS_DB_* -> RANKING_DB_*
-            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            export POSTGRES_DB=${{ secrets.RANKINGS_DB_NAME }}
-            export POSTGRES_USER=${{ secrets.RANKINGS_DB_USER }}
-            export POSTGRES_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
-            export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
+            export POSTGRES_HOST='${{ secrets.POSTGRES_HOST }}'
+            export POSTGRES_PORT='${{ secrets.POSTGRES_PORT }}'
+            export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
+            export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
+            export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
             export RANKINGS_DB_HOST=$POSTGRES_HOST
             export RANKINGS_DB_PORT=$POSTGRES_PORT
             export RANKINGS_DB_NAME=$POSTGRES_DB
             export RANKINGS_DB_USER=$POSTGRES_USER
             export RANKINGS_DB_PASSWORD=$POSTGRES_PASSWORD
             export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
-            export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
-            export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
-            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+            export RANKINGS_DB_SSLMODE='${{ secrets.RANKINGS_DB_SSLMODE }}'
+            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
 
             # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
-            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
-            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
-            export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
-            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
+            export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
+            export AWS_SECRET_ACCESS_KEY='${{ secrets.DIGITALOCEAN_SPACES_SECRET }}'
+            export AWS_DEFAULT_REGION='${{ secrets.DIGITALOCEAN_SPACES_REGION }}'
+            export RANKINGS_S3_ENDPOINT='${{ secrets.RANKINGS_S3_ENDPOINT }}'
+            export RANKINGS_S3_BUCKET='${{ secrets.RANKINGS_S3_BUCKET }}'
             # Provide sane defaults if not set via secrets
             if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
             if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
@@ -128,27 +129,28 @@ jobs:
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
           script: |
             export PATH=$PATH:/usr/bin
-            export POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-            export POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            export POSTGRES_DB=${{ secrets.RANKINGS_DB_NAME }}
-            export POSTGRES_USER=${{ secrets.RANKINGS_DB_USER }}
-            export POSTGRES_PASSWORD=${{ secrets.RANKINGS_DB_PASSWORD }}
-            export RANKINGS_DB_SCHEMA=${{ secrets.RANKINGS_DB_SCHEMA }}
+            set +o histexpand || true
+            export POSTGRES_HOST='${{ secrets.POSTGRES_HOST }}'
+            export POSTGRES_PORT='${{ secrets.POSTGRES_PORT }}'
+            export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
+            export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
+            export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
             export RANKINGS_DB_HOST=$POSTGRES_HOST
             export RANKINGS_DB_PORT=$POSTGRES_PORT
             export RANKINGS_DB_NAME=$POSTGRES_DB
             export RANKINGS_DB_USER=$POSTGRES_USER
             export RANKINGS_DB_PASSWORD=$POSTGRES_PASSWORD
-            export RANKINGS_DB_SSLMODE=${{ secrets.RANKINGS_DB_SSLMODE }}
-            export BUILD_VERSION=${{ github.run_id }}-${{ github.run_attempt }}
-            export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-            export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
+            export RANKINGS_DB_SSLMODE='${{ secrets.RANKINGS_DB_SSLMODE }}'
+            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
             # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID=${{ secrets.DIGITALOCEAN_SPACES_KEY }}
-            export AWS_SECRET_ACCESS_KEY=${{ secrets.DIGITALOCEAN_SPACES_SECRET }}
-            export AWS_DEFAULT_REGION=${{ secrets.DIGITALOCEAN_SPACES_REGION }}
-            export RANKINGS_S3_ENDPOINT=${{ secrets.RANKINGS_S3_ENDPOINT }}
-            export RANKINGS_S3_BUCKET=${{ secrets.RANKINGS_S3_BUCKET }}
+            export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
+            export AWS_SECRET_ACCESS_KEY='${{ secrets.DIGITALOCEAN_SPACES_SECRET }}'
+            export AWS_DEFAULT_REGION='${{ secrets.DIGITALOCEAN_SPACES_REGION }}'
+            export RANKINGS_S3_ENDPOINT='${{ secrets.RANKINGS_S3_ENDPOINT }}'
+            export RANKINGS_S3_BUCKET='${{ secrets.RANKINGS_S3_BUCKET }}'
             if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
             if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
             if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
