@@ -64,8 +64,8 @@ jobs:
             set +o histexpand || true
             # Database envs: set both POSTGRES_* and RANKINGS_DB_* for compatibility
             # Resolve DB components with fallbacks: POSTGRES_* -> RANKINGS_DB_* -> RANKING_DB_*
-            export POSTGRES_HOST='${{ secrets.POSTGRES_HOST }}'
-            export POSTGRES_PORT='${{ secrets.POSTGRES_PORT }}'
+            export POSTGRES_HOST='${{ secrets.RANKINGS_DB_HOST }}'
+            export POSTGRES_PORT='${{ secrets.RANKINGS_DB_PORT }}'
             export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
             export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
             export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
@@ -130,8 +130,8 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
-            export POSTGRES_HOST='${{ secrets.POSTGRES_HOST }}'
-            export POSTGRES_PORT='${{ secrets.POSTGRES_PORT }}'
+            export POSTGRES_HOST='${{ secrets.RANKINGS_DB_HOST }}'
+            export POSTGRES_PORT='${{ secrets.RANKINGS_DB_PORT }}'
             export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
             export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
             export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
