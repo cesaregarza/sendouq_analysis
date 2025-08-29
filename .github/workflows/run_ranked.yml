@@ -62,21 +62,13 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
-            # Database envs: set both POSTGRES_* and RANKINGS_DB_* for compatibility
-            # Resolve DB components with fallbacks: POSTGRES_* -> RANKINGS_DB_* -> RANKING_DB_*
-            export POSTGRES_HOST='${{ secrets.RANKINGS_DB_HOST }}'
-            export POSTGRES_PORT='${{ secrets.RANKINGS_DB_PORT }}'
-            export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
-            export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
-            export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
+            # Database URL (preferred for rankings update)
+            # Define a single secret containing the full SQLAlchemy URL
+            # e.g., postgresql+psycopg2://user:pass@host:5432/dbname?sslmode=require
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
+            # Optional schema override (defaults to comp_rankings if unset)
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export RANKINGS_DB_HOST=$POSTGRES_HOST
-            export RANKINGS_DB_PORT=$POSTGRES_PORT
-            export RANKINGS_DB_NAME=$POSTGRES_DB
-            export RANKINGS_DB_USER=$POSTGRES_USER
-            export RANKINGS_DB_PASSWORD=$POSTGRES_PASSWORD
             export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
-            export RANKINGS_DB_SSLMODE='${{ secrets.RANKINGS_DB_SSLMODE }}'
             export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
             export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
 
@@ -101,10 +93,8 @@ jobs:
 
             # Run rankings_update in attached mode (no Parquet flag)
             docker run --rm \
-              -e RANKINGS_DB_HOST -e RANKINGS_DB_USER -e RANKINGS_DB_PASSWORD \
-              -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
+              -e RANKINGS_DATABASE_URL \
               -e RANKINGS_DB_SCHEMA \
-              -e POSTGRES_HOST -e POSTGRES_PORT -e POSTGRES_DB -e POSTGRES_USER -e POSTGRES_PASSWORD \
               -e SENDOU_KEY \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
@@ -130,18 +120,9 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
-            export POSTGRES_HOST='${{ secrets.RANKINGS_DB_HOST }}'
-            export POSTGRES_PORT='${{ secrets.RANKINGS_DB_PORT }}'
-            export POSTGRES_DB='${{ secrets.RANKINGS_DB_NAME }}'
-            export POSTGRES_USER='${{ secrets.RANKINGS_DB_USER }}'
-            export POSTGRES_PASSWORD='${{ secrets.RANKINGS_DB_PASSWORD }}'
+            # Database URL (preferred for rankings update)
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export RANKINGS_DB_HOST=$POSTGRES_HOST
-            export RANKINGS_DB_PORT=$POSTGRES_PORT
-            export RANKINGS_DB_NAME=$POSTGRES_DB
-            export RANKINGS_DB_USER=$POSTGRES_USER
-            export RANKINGS_DB_PASSWORD=$POSTGRES_PASSWORD
-            export RANKINGS_DB_SSLMODE='${{ secrets.RANKINGS_DB_SSLMODE }}'
             export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
             export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
             export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
@@ -163,10 +144,8 @@ jobs:
             docker pull registry.digitalocean.com/sendouq/scraper:latest
 
             docker run --rm \
-              -e RANKINGS_DB_HOST -e RANKINGS_DB_USER -e RANKINGS_DB_PASSWORD \
-              -e RANKINGS_DB_PORT -e RANKINGS_DB_NAME -e RANKINGS_DB_SSLMODE \
+              -e RANKINGS_DATABASE_URL \
               -e RANKINGS_DB_SCHEMA \
-              -e POSTGRES_HOST -e POSTGRES_PORT -e POSTGRES_DB -e POSTGRES_USER -e POSTGRES_PASSWORD \
               -e SENDOU_KEY \
               -e RANKINGS_BUILD="$BUILD_VERSION" \
               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
