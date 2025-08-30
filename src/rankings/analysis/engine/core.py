@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Dict, List, Literal, Optional
-from zoneinfo import ZoneInfo
 
 import numpy as np
 import polars as pl
@@ -568,8 +567,11 @@ class RatingEngine:
             return pl.DataFrame([])
 
         # Tournament strength lookup
-        s_df = pl.DataFrame(
-            {"tournament_id": list(S.keys()), "S": list(S.values())}
+        strength_df = pl.DataFrame(
+            {
+                "tournament_id": list(tournament_strengths.keys()),
+                "S": list(tournament_strengths.values()),
+            }
         )
 
         # Prepare matches with strengths and weights (exclude byes/forfeits)

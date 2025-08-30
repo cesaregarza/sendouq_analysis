@@ -1,8 +1,6 @@
 import logging
 import os
-import sys
 
-import requests
 from sqlalchemy.exc import ProgrammingError
 
 from sendouq_analysis.ingest import (
@@ -54,7 +52,8 @@ def update_database() -> None:
         count += chunk_size
     logger.info("Finished scraping and parsing process")
     logger.info("Shutting down droplet")
-    do_api_token = os.environ["DO_API_TOKEN"]
+    # Use .get to avoid KeyError if not present
+    do_api_token = os.environ.get("DO_API_TOKEN")
     if do_api_token is None:
         logger.warning(
             "No DigitalOcean API token found, assuming not running on "

@@ -23,7 +23,7 @@ warnings.warn(
 )
 
 # Re-export everything from the new module structure for compatibility
-from rankings.analysis.engine.core import RatingEngine
+from rankings.algorithms.compat import RatingEngine
 from rankings.analysis.engine.teleport import (
     make_participation_inverse_teleport,
 )

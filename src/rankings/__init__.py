@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 # Core functionality - Main API
-from rankings.analysis import RatingEngine
+from rankings.algorithms.compat import RatingEngine
+from rankings.algorithms.exposure_log_odds import ExposureLogOddsEngine
+from rankings.algorithms.tick_tock import TickTockEngine
 from rankings.calibration import CalibrationResult, MatchCalibrator
 from rankings.continuous import ContinuousScraper
 from rankings.core import parse_tournaments_data
@@ -29,6 +31,8 @@ __all__ = [
     # Core API - Essential functions
     "parse_tournaments_data",
     "RatingEngine",
+    "TickTockEngine",
+    "ExposureLogOddsEngine",
     # Scraping - Main functions
     "scrape_tournament",
     "scrape_latest_tournaments",
