@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .constants import SCHEMA
 from .engine import Base
@@ -26,7 +26,6 @@ class Player(Base):
     __table_args__ = ({"schema": SCHEMA},)
 
     player_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    player_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     display_name = Column(String, nullable=False)
     discord_id = Column(String, nullable=True)
     country = Column(String(2), nullable=True)
@@ -42,8 +41,6 @@ class Tournament(Base):
     )
 
     tournament_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    # Internal UUID to decouple from provider IDs; populated by importer
-    tournament_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     start_time_ms = Column(BigInteger, nullable=True)
@@ -72,7 +69,6 @@ class Stage(Base):
     )
 
     stage_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    stage_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     tournament_id = Column(
         BigInteger,
         ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
@@ -92,7 +88,6 @@ class Group(Base):
     )
 
     group_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    group_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     stage_id = Column(
         BigInteger, ForeignKey(f"{SCHEMA}.stages.stage_id"), nullable=False
     )
@@ -108,7 +103,6 @@ class Round(Base):
     )
 
     round_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    round_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     stage_id = Column(
         BigInteger, ForeignKey(f"{SCHEMA}.stages.stage_id"), nullable=False
     )
@@ -128,7 +122,6 @@ class TournamentTeam(Base):
     )
 
     team_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    team_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     tournament_id = Column(
         BigInteger,
         ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
@@ -182,7 +175,6 @@ class Match(Base):
     )
 
     match_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    match_uuid = Column(UUID(as_uuid=True), unique=True, nullable=True)
     tournament_id = Column(
         BigInteger,
         ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
@@ -240,7 +232,6 @@ class ExternalID(Base):
             "provider", "entity_type", "external_id", name="uq_external_id"
         ),
         Index("ix_external_entity", "entity_type", "internal_id"),
-        Index("ix_external_entity_uuid", "entity_type", "internal_uuid"),
         CheckConstraint(
             "entity_type in ('player','tournament','team','match','stage','group','round')",
             name="ck_entity_type",
@@ -251,8 +242,6 @@ class ExternalID(Base):
     alias_id = Column(BigInteger, primary_key=True, autoincrement=True)
     entity_type = Column(String, nullable=False)
     internal_id = Column(BigInteger, nullable=False)
-    # Optional universal UUID linking to internal entity when available
-    internal_uuid = Column(UUID(as_uuid=True), nullable=True)
     provider = Column(
         String, nullable=False
     )  # 'sendou','startgg','battlefy','challonge','manual','sheet'

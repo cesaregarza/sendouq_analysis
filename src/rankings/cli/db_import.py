@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import uuid
 from pathlib import Path
 from typing import Iterable, List
 
@@ -122,7 +121,6 @@ def _upsert_tournaments(df: pl.DataFrame | None, engine) -> None:
         "is_finalized",
         "tags",
         "meta",
-        "tournament_uuid",
     }
     present_cols = set(rows[0].keys()) if rows else set()
     update_cols = list((backfill_cols & present_cols) - {"tournament_id"})
@@ -196,15 +194,7 @@ def import_file(
                   ADD COLUMN IF NOT EXISTS stage_count INTEGER,
                   ADD COLUMN IF NOT EXISTS group_count INTEGER,
                   ADD COLUMN IF NOT EXISTS round_count INTEGER,
-                  ADD COLUMN IF NOT EXISTS participated_users_count INTEGER,
-                  ADD COLUMN IF NOT EXISTS tournament_uuid UUID
-                """
-            )
-            # External IDs table may also need internal_uuid for universal mapping
-            conn.exec_driver_sql(
-                f"""
-                ALTER TABLE {RANKINGS_SCHEMA}.external_ids
-                  ADD COLUMN IF NOT EXISTS internal_uuid UUID
+                  ADD COLUMN IF NOT EXISTS participated_users_count INTEGER
                 """
             )
     except Exception:
@@ -227,17 +217,6 @@ def import_file(
     # Transform tournaments to rankings.sql.models.Tournament
     if tournaments is not None and not tournaments.is_empty():
         # tags: list stays as Python list for JSONB; meta reserved
-        # Deterministic UUID per provider+external id for stability
-        def _uuid_from_sendou_tournament_id(x: int | None) -> uuid.UUID | None:
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(
-                    uuid.NAMESPACE_URL, f"sendou:tournament:{int(x)}"
-                )
-            except Exception:
-                return None
-
         tdf = tournaments.with_columns(
             [
                 pl.col("settings_is_ranked")
@@ -246,11 +225,6 @@ def import_file(
                 pl.lit(None).alias("format_hint"),
                 pl.col("start_time").alias("start_time_ms"),
                 pl.col("tournament_id").alias("tournament_id"),
-                pl.col("tournament_id")
-                .map_elements(
-                    _uuid_from_sendou_tournament_id, return_dtype=pl.Object
-                )
-                .alias("tournament_uuid"),
                 pl.col("map_picking_style"),
                 pl.col("rules"),
                 pl.lit(None).alias("meta"),
@@ -275,7 +249,6 @@ def import_file(
         ).select(
             [
                 "tournament_id",
-                "tournament_uuid",
                 "name",
                 "description",
                 "start_time_ms",
@@ -297,15 +270,6 @@ def import_file(
         _upsert_tournaments(tdf, engine)
 
     if stages is not None and not stages.is_empty():
-
-        def _uuid_from_sendou_stage_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:stage:{int(x)}")
-            except Exception:
-                return None
-
         sdf = stages.with_columns(
             [
                 pl.col("tournament_id").alias("tournament_id"),
@@ -313,11 +277,6 @@ def import_file(
                 pl.col("stage_name").alias("name"),
                 pl.col("stage_number").alias("number"),
                 pl.col("stage_type").alias("type"),
-                pl.col("stage_id")
-                .map_elements(
-                    _uuid_from_sendou_stage_id, return_dtype=pl.Object
-                )
-                .alias("stage_uuid"),
             ]
         )
         # Flatten settings already done in parser; build JSON dict from columns starting with setting_
@@ -353,7 +312,6 @@ def import_file(
             ).select(
                 [
                     "stage_id",
-                    "stage_uuid",
                     "tournament_id",
                     "name",
                     "number",
@@ -365,7 +323,6 @@ def import_file(
             sdf = sdf.select(
                 [
                     "stage_id",
-                    "stage_uuid",
                     "tournament_id",
                     "name",
                     "number",
@@ -375,38 +332,12 @@ def import_file(
         _bulk_insert(sdf, RM.Stage, engine)
 
     if groups is not None and not groups.is_empty():
-
-        def _uuid_from_sendou_group_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:group:{int(x)}")
-            except Exception:
-                return None
-
-        gdf = (
-            groups.rename({"group_id": "group_id", "group_number": "number"})
-            .with_columns(
-                pl.col("group_id")
-                .map_elements(
-                    _uuid_from_sendou_group_id, return_dtype=pl.Object
-                )
-                .alias("group_uuid")
-            )
-            .select(["group_id", "group_uuid", "stage_id", "number"])
-        )
+        gdf = groups.rename(
+            {"group_id": "group_id", "group_number": "number"}
+        ).select(["group_id", "stage_id", "number"])
         _bulk_insert(gdf, RM.Group, engine)
 
     if rounds is not None and not rounds.is_empty():
-
-        def _uuid_from_sendou_round_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:round:{int(x)}")
-            except Exception:
-                return None
-
         rdf = rounds.select(
             [
                 pl.col("round_id"),
@@ -415,25 +346,11 @@ def import_file(
                 pl.col("round_number").alias("number"),
                 pl.col("maps_count"),
                 pl.col("maps_type"),
-                pl.col("round_id")
-                .map_elements(
-                    _uuid_from_sendou_round_id, return_dtype=pl.Object
-                )
-                .alias("round_uuid"),
             ]
         )
         _bulk_insert(rdf, RM.Round, engine)
 
     if teams is not None and not teams.is_empty():
-
-        def _uuid_from_sendou_team_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:team:{int(x)}")
-            except Exception:
-                return None
-
         tmdf = teams.select(
             [
                 pl.col("team_id"),
@@ -444,41 +361,20 @@ def import_file(
                 pl.col("no_screen"),
                 pl.col("dropped_out"),
                 pl.col("created_at").alias("created_at_ms"),
-                pl.col("team_id")
-                .map_elements(_uuid_from_sendou_team_id, return_dtype=pl.Object)
-                .alias("team_uuid"),
             ]
         )
         _bulk_insert(tmdf, RM.TournamentTeam, engine)
 
     if players is not None and not players.is_empty():
         # Insert players (distinct)
-        def _uuid_from_sendou_player_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:player:{int(x)}")
-            except Exception:
-                return None
-
-        pldf_players = (
-            players.select(
-                [
-                    pl.col("user_id").alias("player_id"),
-                    pl.col("username").alias("display_name"),
-                    pl.col("discord_id"),
-                    pl.col("country"),
-                ]
-            )
-            .with_columns(
-                pl.col("player_id")
-                .map_elements(
-                    _uuid_from_sendou_player_id, return_dtype=pl.Object
-                )
-                .alias("player_uuid")
-            )
-            .unique(subset=["player_id"])
-        )
+        pldf_players = players.select(
+            [
+                pl.col("user_id").alias("player_id"),
+                pl.col("username").alias("display_name"),
+                pl.col("discord_id"),
+                pl.col("country"),
+            ]
+        ).unique(subset=["player_id"])
         _bulk_insert(pldf_players, RM.Player, engine)
 
         # Roster entries
@@ -497,15 +393,6 @@ def import_file(
         # Alias rows for players are now handled via ExternalID below.
 
     if matches is not None and not matches.is_empty():
-
-        def _uuid_from_sendou_match_id(x: int | None):
-            if x is None:
-                return None
-            try:
-                return uuid.uuid5(uuid.NAMESPACE_URL, f"sendou:match:{int(x)}")
-            except Exception:
-                return None
-
         mdf = matches.select(
             [
                 pl.col("match_id"),
@@ -529,18 +416,13 @@ def import_file(
                 pl.col("winner_team_id"),
                 pl.col("loser_team_id"),
                 pl.col("is_bye"),
-                pl.col("match_id")
-                .map_elements(
-                    _uuid_from_sendou_match_id, return_dtype=pl.Object
-                )
-                .alias("match_uuid"),
             ]
         )
         _bulk_insert(mdf, RM.Match, engine)
 
-    # External ID mapping for all entity types with internal_uuid when available
-    def _insert_alias_with_uuid(
-        df: pl.DataFrame | None, entity_type: str, id_col: str, uuid_col: str
+    # External ID mapping for all entity types (no UUIDs)
+    def _insert_alias(
+        df: pl.DataFrame | None, entity_type: str, id_col: str
     ) -> None:
         if df is None or df.is_empty():
             return
@@ -550,23 +432,19 @@ def import_file(
             pl.col(id_col).alias("internal_id"),
             pl.col(id_col).cast(pl.Utf8).alias("external_id"),
         ]
-        if uuid_col in df.columns:
-            cols.append(pl.col(uuid_col).alias("internal_uuid"))
         adf = df.select(cols).unique(
             subset=["provider", "entity_type", "external_id"]
         )
         _bulk_insert(adf, RM.ExternalID, engine)
 
-    # Use transformed DataFrames that include uuid columns (tdf, tmdf, etc.)
-    _insert_alias_with_uuid(
-        tdf, "tournament", "tournament_id", "tournament_uuid"
-    )
-    _insert_alias_with_uuid(tmdf, "team", "team_id", "team_uuid")
-    _insert_alias_with_uuid(pldf_players, "player", "player_id", "player_uuid")
-    _insert_alias_with_uuid(mdf, "match", "match_id", "match_uuid")
-    _insert_alias_with_uuid(sdf, "stage", "stage_id", "stage_uuid")
-    _insert_alias_with_uuid(gdf, "group", "group_id", "group_uuid")
-    _insert_alias_with_uuid(rdf, "round", "round_id", "round_uuid")
+    # Use transformed DataFrames (IDs only)
+    _insert_alias(tdf, "tournament", "tournament_id")
+    _insert_alias(tmdf, "team", "team_id")
+    _insert_alias(pldf_players, "player", "player_id")
+    _insert_alias(mdf, "match", "match_id")
+    _insert_alias(sdf, "stage", "stage_id")
+    _insert_alias(gdf, "group", "group_id")
+    _insert_alias(rdf, "round", "round_id")
 
     return count
 
