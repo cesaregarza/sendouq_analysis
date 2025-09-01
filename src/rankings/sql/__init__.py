@@ -14,15 +14,21 @@ Environment variables:
 
 from __future__ import annotations
 
-from . import models
-from .constants import SCHEMA
-from .engine import (
+from rankings.sql import models
+from rankings.sql.constants import SCHEMA
+from rankings.sql.engine import (
     create_all,
     create_engine,
     create_session_factory,
     ensure_schema,
 )
-from .load import load_core_tables, load_matches_df, load_players_df
+from rankings.sql.load import (
+    load_core_tables,
+    load_matches_df,
+    load_player_appearances_df,
+    load_player_ranking_stats_df,
+    load_players_df,
+)
 
 __all__ = [
     # Config
@@ -36,6 +42,8 @@ __all__ = [
     "load_core_tables",
     "load_matches_df",
     "load_players_df",
+    "load_player_appearances_df",
+    "load_player_ranking_stats_df",
     # Models submodule
     "models",
 ]
