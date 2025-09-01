@@ -7,8 +7,10 @@ strength weighting and teleport-proportional smoothing.
 
 from __future__ import annotations
 
-from .core import RatingEngine
-from .teleport import make_participation_inverse_teleport
+from rankings.analysis.engine.core import RatingEngine
+from rankings.analysis.engine.teleport import (
+    make_participation_inverse_teleport,
+)
 
 __all__ = [
     "RatingEngine",

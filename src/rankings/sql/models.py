@@ -17,8 +17,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
-from .constants import SCHEMA
-from .engine import Base
+from rankings.sql.constants import SCHEMA
+from rankings.sql.engine import Base
 
 
 class Player(Base):
@@ -248,6 +248,38 @@ class ExternalID(Base):
     external_id = Column(String, nullable=False)
 
 
+class PlayerAppearance(Base):
+    __tablename__ = "player_appearances"
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id",
+            "match_id",
+            "player_id",
+            name="uq_player_appearance_unique",
+        ),
+        Index("ix_pa_tournament_match", "tournament_id", "match_id"),
+        Index("ix_pa_tournament_player", "tournament_id", "player_id"),
+        {"schema": SCHEMA},
+    )
+
+    appearance_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tournament_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
+        nullable=False,
+    )
+    match_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.matches.match_id"),
+        nullable=False,
+    )
+    player_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.players.player_id"),
+        nullable=False,
+    )
+
+
 class PlayerRanking(Base):
     __tablename__ = "player_rankings"
     __table_args__ = (
@@ -279,3 +311,27 @@ class PlayerRanking(Base):
     # Run metadata
     calculated_at_ms = Column(BigInteger, nullable=False)
     build_version = Column(String(64), nullable=False)
+
+
+class PlayerRankingStats(Base):
+    __tablename__ = "player_ranking_stats"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id",
+            "calculated_at_ms",
+            "build_version",
+            name="uq_player_ranking_stats_run",
+        ),
+        Index("ix_prstats_player", "player_id"),
+        Index("ix_prstats_calculated", "calculated_at_ms"),
+        {"schema": SCHEMA},
+    )
+
+    stat_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    player_id = Column(
+        BigInteger, ForeignKey(f"{SCHEMA}.players.player_id"), nullable=False
+    )
+    calculated_at_ms = Column(BigInteger, nullable=False)
+    build_version = Column(String(64), nullable=False)
+    tournament_count = Column(Integer, nullable=True)
+    last_active_ms = Column(BigInteger, nullable=True)

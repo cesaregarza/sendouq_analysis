@@ -11,6 +11,9 @@ import polars as pl
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.core import parse_tournaments_data
+from rankings.scraping.storage import (
+    extract_appearances_from_players_payload as extract_appearances,
+)
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
@@ -445,6 +448,72 @@ def import_file(
     _insert_alias(sdf, "stage", "stage_id")
     _insert_alias(gdf, "group", "group_id")
     _insert_alias(rdf, "round", "round_id")
+
+    # Player appearances from players route payload (source of truth for who played)
+    try:
+        appearance_rows: list[dict] = []
+        for entry in payload:
+            tournament_node = (
+                entry.get("tournament", {}) if isinstance(entry, dict) else {}
+            )
+            ctx = (
+                tournament_node.get("ctx", {})
+                if isinstance(tournament_node, dict)
+                else {}
+            )
+            tournament_id = ctx.get("id")
+            if tournament_id is None:
+                continue
+            players_payload = entry.get("player_matches")
+            if not players_payload:
+                continue
+            appearance_rows.extend(
+                extract_appearances(int(tournament_id), players_payload)
+            )
+        if appearance_rows:
+            appearances_df = pl.DataFrame(appearance_rows)
+            # Normalize schema and rename user_id -> player_id for DB
+            appearances_df = appearances_df.select(
+                [
+                    pl.col("tournament_id").cast(pl.Int64, strict=False),
+                    pl.col("match_id").cast(pl.Int64, strict=False),
+                    pl.col("user_id")
+                    .cast(pl.Int64, strict=False)
+                    .alias("player_id"),
+                ]
+            ).unique(subset=["tournament_id", "match_id", "player_id"])
+            # Filter to known players to avoid FK violations; unknowns are rare
+            try:
+                unique_pids = (
+                    appearances_df.select("player_id")
+                    .unique()
+                    .to_series()
+                    .to_list()
+                )
+                if unique_pids:
+                    from sqlalchemy import text as sqltext
+
+                    with engine.connect() as conn:
+                        rows = conn.execute(
+                            sqltext(
+                                f"SELECT player_id FROM {RANKINGS_SCHEMA}.players WHERE player_id = ANY(:ids)"
+                            ),
+                            {"ids": unique_pids},
+                        ).fetchall()
+                    known = {int(r[0]) for r in rows}
+                    if known:
+                        appearances_df = appearances_df.filter(
+                            pl.col("player_id").is_in(list(known))
+                        )
+                    else:
+                        appearances_df = pl.DataFrame([])
+            except Exception:
+                # Best effort; if the filter fails, fall back to raw insert (may error)
+                pass
+            _bulk_insert(appearances_df, RM.PlayerAppearance, engine)
+    except Exception:
+        # Non-fatal: continue if appearances missing or malformed
+        pass
 
     return count
 
