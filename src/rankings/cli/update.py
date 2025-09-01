@@ -655,7 +655,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # Initialize logging and Sentry as early as possible
     try:
-        setup_logging(level=logging.INFO)
+        lvl = os.getenv("RANKINGS_LOG_LEVEL", "INFO")
+        fmt = os.getenv("RANKINGS_LOG_FORMAT", "detailed")
+        setup_logging(level=lvl, format_style=fmt)
     except Exception:
         logging.basicConfig(level=logging.INFO)
     try:
