@@ -103,10 +103,14 @@ def init_sentry(
     )
     dsn = _first_env(dsn_envs)
     if not dsn:
-        _LOG.debug("Sentry skipped: no DSN in %s", dsn_envs)
+        _LOG.info(
+            "Sentry disabled: no DSN configured (checked envs=%s)", list(dsn_envs)
+        )
         return False
+    # Be resilient to accidental quotes/whitespace in env secret values
+    dsn = dsn.strip().strip("\"").strip("'")
     if not _is_valid_dsn(dsn):
-        _LOG.debug("Sentry skipped: DSN appears invalid: %r", dsn)
+        _LOG.info("Sentry disabled: DSN appears invalid; check secrets/env")
         return False
     try:
         import sentry_sdk  # type: ignore
@@ -116,10 +120,16 @@ def init_sentry(
     except (
         Exception
     ) as e:  # pragma: no cover - import failures are environment-specific
-        _LOG.debug("Sentry skipped: import failed: %s", e)
+        _LOG.info("Sentry disabled: sentry_sdk import failed: %s", e)
         return False
 
-    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
+    # Support multiple common env var names for environment selection
+    env = (
+        os.getenv("SENTRY_ENV")
+        or os.getenv("SENTRY_ENVIRONMENT")
+        or os.getenv("ENV")
+        or "development"
+    )
     traces = _parse_float_env("SENTRY_TRACES_SAMPLE_RATE", 0.0)
     profiles = _parse_float_env("SENTRY_PROFILES_SAMPLE_RATE", 0.0)
     debug = _truthy_env("SENTRY_DEBUG")
@@ -152,7 +162,7 @@ def init_sentry(
         )
         return True
     except Exception as e:  # pragma: no cover - defensive
-        _LOG.debug("Sentry init failed: %s", e)
+        _LOG.info("Sentry init failed: %s", e)
         return False
 
 
