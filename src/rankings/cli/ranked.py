@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from datetime import date
 from typing import Iterable, List, Set, Tuple
 
@@ -13,6 +14,44 @@ from rankings.scraping.calendar_api import (
     iter_weeks_back,
 )
 from rankings.scraping.missing import get_existing_tournament_ids
+
+
+def _init_sentry() -> None:
+    """Best-effort Sentry init for this CLI."""
+    dsn = os.getenv("SENTRY_DSN") or os.getenv("RANKINGS_SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk  # type: ignore
+        from sentry_sdk.integrations.logging import (
+            LoggingIntegration,  # type: ignore
+        )
+    except Exception:
+        return
+    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
+
+    def _fenv(name: str, default: float) -> float:
+        try:
+            return float(os.getenv(name, str(default)))
+        except Exception:
+            return default
+
+    traces = _fenv("SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    profiles = _fenv("SENTRY_PROFILES_SAMPLE_RATE", 0.0)
+    logging_integration = LoggingIntegration(
+        level=logging.INFO, event_level=logging.ERROR
+    )
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=env,
+            integrations=[logging_integration],
+            traces_sample_rate=traces,
+            profiles_sample_rate=profiles,
+        )
+        sentry_sdk.set_tag("service", "ranked_cli")
+    except Exception:
+        pass
 
 
 def _configure_logging() -> None:
@@ -117,6 +156,7 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    _init_sentry()
     _configure_logging()
     logger = logging.getLogger("rankings.cli.ranked")
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from datetime import date
 from typing import List, Set, Tuple
 
@@ -12,6 +13,42 @@ from rankings.scraping.calendar_api import (
     is_tournament_finalized,
 )
 from rankings.scraping.missing import get_existing_tournament_ids
+
+
+def _init_sentry() -> None:
+    dsn = os.getenv("SENTRY_DSN") or os.getenv("RANKINGS_SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk  # type: ignore
+        from sentry_sdk.integrations.logging import (
+            LoggingIntegration,  # type: ignore
+        )
+    except Exception:
+        return
+    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
+    try:
+        traces = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0"))
+    except Exception:
+        traces = 0.0
+    try:
+        profiles = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.0"))
+    except Exception:
+        profiles = 0.0
+    logging_integration = LoggingIntegration(
+        level=logging.INFO, event_level=logging.ERROR
+    )
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=env,
+            integrations=[logging_integration],
+            traces_sample_rate=traces,
+            profiles_sample_rate=profiles,
+        )
+        sentry_sdk.set_tag("service", "weekly_cli")
+    except Exception:
+        pass
 
 
 def _configure_logging() -> None:
@@ -109,6 +146,7 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    _init_sentry()
     _configure_logging()
     logger = logging.getLogger("rankings.cli.weekly")
 

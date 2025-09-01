@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import logging
 import os
 import subprocess
 import time
@@ -163,6 +164,64 @@ def _get_build_version() -> str:
         or _git_commit_short()
         or "unknown"
     )
+
+
+def _init_sentry(
+    context: str = "rankings_update", release: str | None = None
+) -> None:
+    """Best-effort Sentry initialization.
+
+    Reads DSN and options from env and safely no-ops if unavailable.
+    Env vars:
+      - SENTRY_DSN or RANKINGS_SENTRY_DSN
+      - SENTRY_ENV or ENV
+      - SENTRY_TRACES_SAMPLE_RATE (float, optional)
+      - SENTRY_PROFILES_SAMPLE_RATE (float, optional)
+      - SENTRY_DEBUG (1/true)
+    """
+    dsn = os.getenv("SENTRY_DSN") or os.getenv("RANKINGS_SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk  # type: ignore
+        from sentry_sdk.integrations.logging import (
+            LoggingIntegration,  # type: ignore
+        )
+    except Exception:
+        return
+
+    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
+
+    def _fenv(name: str, default: float) -> float:
+        try:
+            return float(os.getenv(name, str(default)))
+        except Exception:
+            return default
+
+    traces = _fenv("SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    profiles = _fenv("SENTRY_PROFILES_SAMPLE_RATE", 0.0)
+    debug = os.getenv("SENTRY_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+
+    logging_integration = LoggingIntegration(
+        level=logging.INFO,  # capture breadcrumbs from INFO+
+        event_level=logging.ERROR,  # send events for ERROR+
+    )
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=env,
+            release=release or _get_build_version(),
+            integrations=[logging_integration],
+            traces_sample_rate=traces,
+            profiles_sample_rate=profiles,
+            debug=debug,
+        )
+        # Tag service for filtering
+        sentry_sdk.set_tag("service", context)
+    except Exception:
+        # Do not block execution on Sentry init issues
+        pass
 
 
 def _persist_rankings(
@@ -593,6 +652,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    # Initialize Sentry as early as possible
+    try:
+        _init_sentry(context="rankings_update", release=_get_build_version())
+    except Exception:
+        pass
+
     # Load config (YAML) and merge defaults
     def _load_config(path: Optional[str]) -> Dict[str, Any]:
         if path:
@@ -651,6 +716,14 @@ def main(argv: list[str] | None = None) -> int:
     s3_prefix_cfg = cfg.get("s3_prefix")
     # Build/version can be sourced from config as a fallback before env/git
     build_version_cfg = cfg.get("build_version")
+    # If Sentry is active, tag build version for correlation (best-effort)
+    try:
+        import sentry_sdk  # type: ignore
+
+        bv = args.build_version or build_version_cfg or _get_build_version()
+        sentry_sdk.set_tag("build_version", bv)
+    except Exception:
+        pass
 
     # Build DB URL with sslmode override if provided
     env_db_url = os.getenv("RANKINGS_DATABASE_URL") or os.getenv("DATABASE_URL")

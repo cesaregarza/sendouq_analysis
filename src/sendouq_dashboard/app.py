@@ -1,9 +1,59 @@
+import logging
+import os
+
 import pandas as pd
 import plotly.express as px
 from dash import Dash, Input, Output, callback, dash_table, dcc, html
 
 from sendouq_dashboard.load.load_data import load_latest_player_stats
 
+
+def _init_sentry() -> None:
+    """Initialize Sentry for the Dash/Flask app (best-effort)."""
+    dsn = os.getenv("SENTRY_DSN") or os.getenv("DASH_SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk  # type: ignore
+        from sentry_sdk.integrations.flask import (
+            FlaskIntegration,  # type: ignore
+        )
+        from sentry_sdk.integrations.logging import (
+            LoggingIntegration,  # type: ignore
+        )
+    except Exception:
+        return
+
+    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
+
+    def _fenv(name: str, default: float) -> float:
+        try:
+            return float(os.getenv(name, str(default)))
+        except Exception:
+            return default
+
+    traces = _fenv("SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    profiles = _fenv("SENTRY_PROFILES_SAMPLE_RATE", 0.0)
+    debug = os.getenv("SENTRY_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+
+    logging_integration = LoggingIntegration(
+        level=logging.INFO, event_level=logging.ERROR
+    )
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=env,
+            integrations=[FlaskIntegration(), logging_integration],
+            traces_sample_rate=traces,
+            profiles_sample_rate=profiles,
+            debug=debug,
+        )
+        sentry_sdk.set_tag("service", "dash_app")
+    except Exception:
+        pass
+
+
+_init_sentry()
 df = load_latest_player_stats()
 
 app = Dash(__name__)
