@@ -100,20 +100,20 @@ jobs:
             docker pull registry.digitalocean.com/sendouq/scraper:latest
 
             # Run rankings_update in attached mode (no Parquet flag)
-          docker run --rm \
-            -e RANKINGS_DATABASE_URL \
-            -e RANKINGS_DB_SCHEMA \
-            -e SENDOU_KEY \
-            -e SENTRY_DSN \
-            -e RANKINGS_SENTRY_DSN \
-            -e SENTRY_ENV=production \
-            -e SENTRY_ENVIRONMENT=production \
-            -e RANKINGS_BUILD="$BUILD_VERSION" \
-            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-            -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
-            --entrypoint poetry \
-            registry.digitalocean.com/sendouq/scraper:latest \
-            run rankings_update
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_SCHEMA \
+              -e SENDOU_KEY \
+              -e SENTRY_DSN \
+              -e RANKINGS_SENTRY_DSN \
+              -e SENTRY_ENV=production \
+              -e SENTRY_ENVIRONMENT=production \
+              -e RANKINGS_BUILD="$BUILD_VERSION" \
+              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
+              --entrypoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run rankings_update
 
       - name: Sleep before retry
         id: resleep
