@@ -30,10 +30,10 @@ import polars as pl
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.algorithms import ExposureLogOddsEngine
-from rankings.core.logging import setup_logging
 from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import DecayConfig, ExposureLogOddsConfig
+from rankings.core.logging import setup_logging
 from rankings.scraping.batch import scrape_tournament_batch
 from rankings.scraping.calendar_api import (
     fetch_calendar_week,
@@ -747,7 +747,9 @@ def main(argv: list[str] | None = None) -> int:
     log = logging.getLogger("rankings.cli.update")
     to_fetch: list[int] = []
     if args.skip_discovery:
-        log.info("Skip-discovery enabled: bypassing calendar lookup and scraping.")
+        log.info(
+            "Skip-discovery enabled: bypassing calendar lookup and scraping."
+        )
     else:
         existing = _db_existing_tournament_ids(db_url, sslmode)
         finalized = _discover_recent_finalized(int(weeks_back))
@@ -789,7 +791,9 @@ def main(argv: list[str] | None = None) -> int:
     imported = 0
     if scraped_count > 0:
         imported = _import_new_payloads(db_url, scraped_dir)
-        log.info("Imported %d tournaments into DB from %s", imported, scraped_dir)
+        log.info(
+            "Imported %d tournaments into DB from %s", imported, scraped_dir
+        )
 
     # Compile and rank
     engine = rankings_create_engine(db_url)
@@ -914,7 +918,9 @@ def main(argv: list[str] | None = None) -> int:
 
                         players = load_players_df(engine)
                     else:
-                        log.info("No appearance-based roster promotions needed.")
+                        log.info(
+                            "No appearance-based roster promotions needed."
+                        )
                 except Exception as e:
                     log.warning("Roster promotion skipped due to error: %s", e)
 
@@ -926,7 +932,8 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     if up_cnt:
                         log.info(
-                            "Upserted %d appearance team assignments to DB", up_cnt
+                            "Upserted %d appearance team assignments to DB",
+                            up_cnt,
                         )
             except Exception as e:
                 log.warning("Appearance team assignment persist failed: %s", e)

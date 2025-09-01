@@ -6,6 +6,7 @@ import os
 from datetime import date
 from typing import List, Set, Tuple
 
+from rankings.core.logging import setup_logging
 from rankings.scraping.batch import scrape_tournament_batch
 from rankings.scraping.calendar_api import (
     fetch_calendar_week,
@@ -13,7 +14,6 @@ from rankings.scraping.calendar_api import (
     is_tournament_finalized,
 )
 from rankings.scraping.missing import get_existing_tournament_ids
-from rankings.core.logging import setup_logging
 
 
 def _init_sentry() -> None:
