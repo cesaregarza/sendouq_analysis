@@ -37,6 +37,9 @@ def convert_matches_dataframe(
         decay_rate: Time decay rate.
         beta: Tournament influence exponent.
         rosters: Optional pre-filtered roster data. Defaults to None.
+        appearances: Optional per-match player appearances. Supports two schemas:
+            - With team context: columns [tournament_id, match_id, team_id, user_id]
+            - Player-only: columns [tournament_id, match_id, user_id] (team inferred from rosters)
         include_share: Whether to include share calculations. Defaults to True.
         streaming: Whether to use streaming mode. Defaults to False.
 
@@ -135,16 +138,44 @@ def convert_matches_dataframe(
     losers_col = "losers"
     if appearances is not None and not appearances.is_empty():
         # Ensure dtypes and group to per-match team lists
-        app = appearances.select(
-            [
-                pl.col("tournament_id").cast(pl.Int64),
-                pl.col("match_id").cast(pl.Int64),
-                pl.col("team_id").cast(pl.Int64),
-                pl.col("user_id").cast(pl.Int64),
-            ]
-        )
-        app_lists = app.group_by(["tournament_id", "match_id", "team_id"]).agg(
-            pl.col("user_id").alias("played")
+        # Accept appearances missing team_id (derive from rosters)
+        base_cols = [
+            pl.col("tournament_id").cast(pl.Int64).alias("tournament_id"),
+            pl.col("match_id").cast(pl.Int64).alias("match_id"),
+            pl.col("user_id").cast(pl.Int64).alias("user_id"),
+        ]
+        has_team_id = "team_id" in appearances.columns
+        if has_team_id:
+            base_cols.append(pl.col("team_id").cast(pl.Int64).alias("team_id"))
+        appearances_norm = appearances.select(base_cols)
+
+        # Derive team_id from rosters if missing (or null)
+        if (not has_team_id) or appearances_norm.select(
+            pl.col("team_id").is_null().any()
+        ).item():
+            # Join on (tournament_id, user_id) to fetch team_id from rosters
+            appearances_norm = appearances_norm.join(
+                rosters, on=["tournament_id", "user_id"], how="left"
+            )
+            # After join, ensure column name is 'team_id' (normalize suffixes)
+            if "team_id_right" in appearances_norm.columns:
+                appearances_norm = appearances_norm.with_columns(
+                    pl.coalesce(
+                        [pl.col("team_id"), pl.col("team_id_right")]
+                    ).alias("team_id")
+                ).drop(
+                    [
+                        c
+                        for c in ["team_id_right"]
+                        if c in appearances_norm.columns
+                    ]
+                )
+
+        # Now group by (tournament_id, match_id, team_id)
+        appearance_lists_df = (
+            appearances_norm.drop_nulls(["team_id"])
+            .group_by(["tournament_id", "match_id", "team_id"])
+            .agg(pl.col("user_id").alias("played"))
         )
 
         # Join baseline rosters to compute fallbacks if appearance missing
@@ -164,13 +195,13 @@ def convert_matches_dataframe(
 
         # Attach appearances for winners and losers
         match_data = match_data.join(
-            app_lists,
+            appearance_lists_df,
             left_on=["tournament_id", "match_id", "winner_team_id"],
             right_on=["tournament_id", "match_id", "team_id"],
             how="left",
         ).rename({"played": "_w_played"})
         match_data = match_data.join(
-            app_lists,
+            appearance_lists_df,
             left_on=["tournament_id", "match_id", "loser_team_id"],
             right_on=["tournament_id", "match_id", "team_id"],
             how="left",
