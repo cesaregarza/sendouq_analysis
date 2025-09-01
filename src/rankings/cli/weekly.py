@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from datetime import date
 from typing import List, Set, Tuple
 
+from rankings.core.logging import setup_logging
+from rankings.core.sentry import init_sentry
 from rankings.scraping.batch import scrape_tournament_batch
 from rankings.scraping.calendar_api import (
     fetch_calendar_week,
@@ -14,11 +17,21 @@ from rankings.scraping.calendar_api import (
 from rankings.scraping.missing import get_existing_tournament_ids
 
 
+def _init_sentry() -> None:
+    # Prefer shared initializer; uses SENTRY_DSN or RANKINGS_SENTRY_DSN
+    init_sentry(context="weekly_cli")
+
+
 def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    try:
+        lvl = os.getenv("RANKINGS_LOG_LEVEL", "INFO")
+        fmt = os.getenv("RANKINGS_LOG_FORMAT", "detailed")
+        setup_logging(level=lvl, format_style=fmt)
+    except Exception:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
 
@@ -109,6 +122,7 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    _init_sentry()
     _configure_logging()
     logger = logging.getLogger("rankings.cli.weekly")
 
