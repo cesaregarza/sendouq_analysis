@@ -14,6 +14,7 @@ from rankings.scraping.calendar_api import (
     iter_weeks_back,
 )
 from rankings.scraping.missing import get_existing_tournament_ids
+from rankings.core.logging import setup_logging
 
 
 def _init_sentry() -> None:
@@ -55,10 +56,13 @@ def _init_sentry() -> None:
 
 
 def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    try:
+        setup_logging(level=logging.INFO)
+    except Exception:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
 

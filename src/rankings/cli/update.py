@@ -30,6 +30,7 @@ import polars as pl
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.algorithms import ExposureLogOddsEngine
+from rankings.core.logging import setup_logging
 from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import DecayConfig, ExposureLogOddsConfig
@@ -652,7 +653,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    # Initialize Sentry as early as possible
+    # Initialize logging and Sentry as early as possible
+    try:
+        setup_logging(level=logging.INFO)
+    except Exception:
+        logging.basicConfig(level=logging.INFO)
     try:
         _init_sentry(context="rankings_update", release=_get_build_version())
     except Exception:
@@ -737,15 +742,18 @@ def main(argv: list[str] | None = None) -> int:
         parts = parts._replace(query=urlencode(q))
         db_url = urlunparse(parts)
 
+    log = logging.getLogger("rankings.cli.update")
     to_fetch: list[int] = []
     if args.skip_discovery:
-        print("Skip-discovery enabled: bypassing calendar lookup and scraping.")
+        log.info("Skip-discovery enabled: bypassing calendar lookup and scraping.")
     else:
         existing = _db_existing_tournament_ids(db_url, sslmode)
         finalized = _discover_recent_finalized(int(weeks_back))
         to_fetch = [tid for tid in finalized if tid not in existing]
-        print(
-            f"Discovered finalized tournaments: {len(finalized)}; missing in DB: {len(to_fetch)}"
+        log.info(
+            "Discovered finalized tournaments: %d; missing in DB: %d",
+            len(finalized),
+            len(to_fetch),
         )
     run_ts = _timestamp()
 
@@ -762,21 +770,24 @@ def main(argv: list[str] | None = None) -> int:
         res = scrape_tournament_batch(
             tournament_ids=to_fetch, output_dir=str(scraped_dir), batch_size=50
         )
-        print(
-            f"Scrape result: scraped={res.get('scraped')} failed={res.get('failed')} head_failed={res.get('failed_ids')[:10] if res.get('failed_ids') else []}"
+        log.info(
+            "Scrape result: scraped=%s failed=%s head_failed=%s",
+            res.get("scraped"),
+            res.get("failed"),
+            res.get("failed_ids")[:10] if res.get("failed_ids") else [],
         )
         scraped_count = int(res.get("scraped") or 0)
     else:
         if args.skip_discovery:
-            print("Skip-discovery: no scraping attempted.")
+            log.info("Skip-discovery: no scraping attempted.")
         else:
-            print("No new finalized tournaments to scrape.")
+            log.info("No new finalized tournaments to scrape.")
 
     # Import newly scraped JSONs
     imported = 0
     if scraped_count > 0:
         imported = _import_new_payloads(db_url, scraped_dir)
-        print(f"Imported {imported} tournaments into DB from {scraped_dir}")
+        log.info("Imported %d tournaments into DB from %s", imported, scraped_dir)
 
     # Compile and rank
     engine = rankings_create_engine(db_url)
@@ -784,7 +795,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             rankings_create_all(engine)
         except Exception as e:
-            print(f"Skipping DDL due to error: {e}")
+            log.warning("Skipping DDL due to error: %s", e)
 
     since_ms = (
         int(
@@ -883,7 +894,7 @@ def main(argv: list[str] | None = None) -> int:
                         appearances, matches, players, max_calls=max_calls
                     )
             except Exception as e:
-                print(f"Appearance enrichment skipped due to error: {e}")
+                log.warning("Appearance enrichment skipped due to error: %s", e)
 
             # Optionally promote appearance-only players into roster_entries, then refresh players
             if args.promote_appearances:
@@ -892,17 +903,18 @@ def main(argv: list[str] | None = None) -> int:
                         engine, matches, players, appearances
                     )
                     if inserted:
-                        print(
-                            f"Promoted {inserted} appearance-based players into roster_entries"
+                        log.info(
+                            "Promoted %d appearance-based players into roster_entries",
+                            inserted,
                         )
                         # Reload rosters to reflect changes
                         from rankings.sql.load import load_players_df
 
                         players = load_players_df(engine)
                     else:
-                        print("No appearance-based roster promotions needed.")
+                        log.info("No appearance-based roster promotions needed.")
                 except Exception as e:
-                    print(f"Roster promotion skipped due to error: {e}")
+                    log.warning("Roster promotion skipped due to error: %s", e)
 
             # Persist enriched team assignments to DB to warm the cache for future runs
             try:
@@ -911,11 +923,11 @@ def main(argv: list[str] | None = None) -> int:
                         engine, appearances
                     )
                     if up_cnt:
-                        print(
-                            f"Upserted {up_cnt} appearance team assignments to DB"
+                        log.info(
+                            "Upserted %d appearance team assignments to DB", up_cnt
                         )
             except Exception as e:
-                print(f"Appearance team assignment persist failed: {e}")
+                log.warning("Appearance team assignment persist failed: %s", e)
         # Build engine config; allow overrides via YAML keys
         eng_cfg = ExposureLogOddsConfig()
 
@@ -1022,20 +1034,28 @@ def main(argv: list[str] | None = None) -> int:
                     s_ins = _persist_ranking_stats(
                         engine, stats, build_version, calculated_at_ms
                     )
-                    print(
-                        f"Saved {inserted} rankings and {s_ins} stats to DB (build={build_version})"
+                    log.info(
+                        "Saved %d rankings and %d stats to DB (build=%s)",
+                        inserted,
+                        s_ins,
+                        build_version,
                     )
                 else:
-                    print(
-                        f"Saved {inserted} rankings to DB (no stats derived) (build={build_version})"
+                    log.info(
+                        "Saved %d rankings to DB (no stats derived) (build=%s)",
+                        inserted,
+                        build_version,
                     )
             except Exception as e:
-                print(
-                    f"Saved {inserted} rankings to DB (stats persist failed: {e}) (build={build_version})"
+                log.warning(
+                    "Saved %d rankings to DB (stats persist failed: %s) (build=%s)",
+                    inserted,
+                    e,
+                    build_version,
                 )
-        print(f"Engine run complete: {ranks_rows} rankings written")
+        log.info("Engine run complete: %d rankings written", ranks_rows)
     else:
-        print("Skipping engine run (empty matches or players).")
+        log.info("Skipping engine run (empty matches or players).")
 
     _write_manifest(
         out_run,
@@ -1061,7 +1081,7 @@ def main(argv: list[str] | None = None) -> int:
     if upload_s3:
         upload_outputs(out_run, s3_prefix=s3_prefix_cfg)
 
-    print(f"Run complete. Outputs: {out_run}")
+    log.info("Run complete. Outputs: %s", out_run)
     return 0
 
 
@@ -1070,7 +1090,7 @@ def _upload_outputs_to_s3(out_run: Path) -> None:
     try:
         upload_outputs(out_run)
     except Exception as e:
-        print(f"Upload failed: {e}")
+        logging.getLogger("rankings.cli.update").error("Upload failed: %s", e)
 
 
 if __name__ == "__main__":
