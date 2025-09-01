@@ -79,6 +79,8 @@ class ExposureLogOddsEngine:
         start_time = time.time()
 
         # 1) Get active players and tournament influences via tick‑tock
+        #    Note: we will UNION these with players who actually appear in matches
+        #    (from appearances/rosters) to ensure subs are included.
         if self.config.use_tick_tock_active:
             self.logger.info(
                 "Running tick-tock to obtain active players & tournament influences..."
@@ -86,11 +88,6 @@ class ExposureLogOddsEngine:
             tick = self._run_tick_tock_for_active_players(matches, players)
             active_players = tick["active_players"]
             tournament_influence = tick["tournament_influence"]
-            if not active_players:
-                self.logger.warning(
-                    "No active players from tick-tock; returning empty result."
-                )
-                return pl.DataFrame()
         else:
             self.logger.info("Skipping tick-tock (use_tick_tock_active=False)")
             active_players = players["player_id"].to_list()
@@ -116,8 +113,32 @@ class ExposureLogOddsEngine:
             )
             return pl.DataFrame()
 
-        # 3) Restrict nodes to active players
-        node_ids = active_players
+        # 3) Restrict nodes to active players, but always include those who actually
+        #    appeared in matches (subs, late adds). This unions the tick‑tock set
+        #    with the IDs present in winners/losers after conversion.
+        #    This ensures valid appearance-only players are not dropped.
+        try:
+            w_ids = (
+                mdf.select(["winners"])
+                .explode("winners")["winners"]
+                .unique()
+                .to_list()
+            )
+            l_ids = (
+                mdf.select(["losers"])
+                .explode("losers")["losers"]
+                .unique()
+                .to_list()
+            )
+            appeared_ids = set(w_ids) | set(l_ids)
+        except Exception:
+            appeared_ids = set()
+        node_ids = list(set(active_players) | appeared_ids)
+        if not node_ids:
+            self.logger.warning(
+                "No active or appeared players after union; returning empty result."
+            )
+            return pl.DataFrame()
         node_to_idx = {pid: idx for idx, pid in enumerate(node_ids)}
         num_nodes = len(node_ids)
 

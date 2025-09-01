@@ -931,3 +931,97 @@ def get_player_match_history(
         result = result.head(limit)
 
     return result
+
+
+def filter_strict_4v4(
+    matches: pl.DataFrame, players: pl.DataFrame, appearances: pl.DataFrame
+) -> pl.DataFrame:
+    """Return only matches where each side has exactly 4 participating players.
+
+    Uses per-match player appearances from the public players route to count how
+    many players actually participated on each team in each match. If
+    `appearances` lacks team_id, this function derives team membership by
+    joining tournament rosters from `players`.
+    """
+    if appearances is None or appearances.is_empty():
+        return matches
+
+    roster_df = players.select(["tournament_id", "team_id", "user_id"]).unique()
+
+    base_cols = [
+        pl.col("tournament_id").cast(pl.Int64).alias("tournament_id"),
+        pl.col("match_id").cast(pl.Int64).alias("match_id"),
+        pl.col("user_id").cast(pl.Int64).alias("user_id"),
+    ]
+    if "team_id" in appearances.columns:
+        base_cols.append(pl.col("team_id").cast(pl.Int64).alias("team_id"))
+    appearances_df = appearances.select(base_cols).unique(
+        subset=["tournament_id", "match_id", "user_id"]
+    )
+
+    needs_team = (
+        "team_id" not in appearances_df.columns
+    ) or appearances_df.select(pl.col("team_id").is_null().any()).item()
+    if needs_team:
+        appearances_df = appearances_df.join(
+            roster_df, on=["tournament_id", "user_id"], how="left"
+        )
+        if "team_id_right" in appearances_df.columns:
+            appearances_df = appearances_df.with_columns(
+                pl.coalesce([pl.col("team_id"), pl.col("team_id_right")]).alias(
+                    "team_id"
+                )
+            ).drop(
+                [c for c in ["team_id_right"] if c in appearances_df.columns]
+            )
+
+    team_counts_df = (
+        appearances_df.drop_nulls(["team_id"])
+        .group_by(["tournament_id", "match_id", "team_id"])
+        .agg(pl.len().alias("n"))
+    )
+
+    match_keys_df = matches.select(
+        [
+            "tournament_id",
+            "match_id",
+            "winner_team_id",
+            "loser_team_id",
+        ]
+    )
+    winner_counts_df = team_counts_df.rename(
+        {"team_id": "winner_team_id", "n": "winner_count"}
+    )
+    loser_counts_df = team_counts_df.rename(
+        {"team_id": "loser_team_id", "n": "loser_count"}
+    )
+    match_counts_df = (
+        match_keys_df.join(
+            winner_counts_df,
+            on=["tournament_id", "match_id", "winner_team_id"],
+            how="left",
+        )
+        .join(
+            loser_counts_df,
+            on=["tournament_id", "match_id", "loser_team_id"],
+            how="left",
+        )
+        .with_columns(
+            [
+                pl.col("winner_count").fill_null(0),
+                pl.col("loser_count").fill_null(0),
+            ]
+        )
+    )
+
+    valid_keys = (
+        match_counts_df.filter(
+            (pl.col("winner_count") == 4) & (pl.col("loser_count") == 4)
+        )
+        .select(["tournament_id", "match_id"])
+        .unique()
+    )
+
+    return matches.join(
+        valid_keys, on=["tournament_id", "match_id"], how="inner"
+    )

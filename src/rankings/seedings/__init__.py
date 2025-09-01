@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .entropy_seeding import (
+from rankings.seedings.entropy_seeding import (
     EntropyDivisionAssigner,
     assign_divisions,
     compute_entropy_controlled_rating,

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""CLI to import scraped tournament JSON payloads into the rankings database.
+
+Parses tournament JSON files (per-ID, batch, or snapshot formats) and upserts
+normalized rows into the Postgres schema. Also extracts per-match player
+appearances from the players route payload when present.
+"""
+
 import argparse
 import json
 import os
@@ -11,6 +18,9 @@ import polars as pl
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.core import parse_tournaments_data
+from rankings.scraping.storage import (
+    extract_appearances_from_players_payload as extract_appearances,
+)
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
@@ -18,6 +28,10 @@ from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
 
 
 def _find_json_files(root: Path) -> list[Path]:
+    """Return sorted list of tournament JSON files under `root` (recursive).
+
+    Matches per-ID, batch, and snapshot file patterns.
+    """
     patterns = [
         "tournament_*.json",
         "tournaments_*.json",
@@ -33,6 +47,10 @@ def _find_json_files(root: Path) -> list[Path]:
 
 
 def _load_json_payload(path: Path):
+    """Load a JSON file and return a list of tournament objects.
+
+    Accepts payloads as a single dict or a list of dicts.
+    """
     with path.open("r") as f:
         data = json.load(f)
     # Ensure list of tournament objects
@@ -176,7 +194,13 @@ def import_file(
 ) -> int:
     """Parse a single JSON payload and write to Postgres.
 
-    Returns number of tournaments ingested.
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        payload: List of tournament JSON objects (already loaded).
+        max_remaining: Optional cap on how many tournaments to ingest from this payload.
+
+    Returns:
+        Number of tournaments ingested from this payload.
     """
     # If caller wants to cap tournaments, slice payload first
     if max_remaining is not None and max_remaining >= 0:
@@ -446,10 +470,77 @@ def import_file(
     _insert_alias(gdf, "group", "group_id")
     _insert_alias(rdf, "round", "round_id")
 
+    # Player appearances from players route payload (source of truth for who played)
+    try:
+        appearance_rows: list[dict] = []
+        for entry in payload:
+            tournament_node = (
+                entry.get("tournament", {}) if isinstance(entry, dict) else {}
+            )
+            ctx = (
+                tournament_node.get("ctx", {})
+                if isinstance(tournament_node, dict)
+                else {}
+            )
+            tournament_id = ctx.get("id")
+            if tournament_id is None:
+                continue
+            players_payload = entry.get("player_matches")
+            if not players_payload:
+                continue
+            appearance_rows.extend(
+                extract_appearances(int(tournament_id), players_payload)
+            )
+        if appearance_rows:
+            appearances_df = pl.DataFrame(appearance_rows)
+            # Normalize schema and rename user_id -> player_id for DB
+            appearances_df = appearances_df.select(
+                [
+                    pl.col("tournament_id").cast(pl.Int64, strict=False),
+                    pl.col("match_id").cast(pl.Int64, strict=False),
+                    pl.col("user_id")
+                    .cast(pl.Int64, strict=False)
+                    .alias("player_id"),
+                ]
+            ).unique(subset=["tournament_id", "match_id", "player_id"])
+            # Filter to known players to avoid FK violations; unknowns are rare
+            try:
+                unique_pids = (
+                    appearances_df.select("player_id")
+                    .unique()
+                    .to_series()
+                    .to_list()
+                )
+                if unique_pids:
+                    from sqlalchemy import text as sqltext
+
+                    with engine.connect() as conn:
+                        rows = conn.execute(
+                            sqltext(
+                                f"SELECT player_id FROM {RANKINGS_SCHEMA}.players WHERE player_id = ANY(:ids)"
+                            ),
+                            {"ids": unique_pids},
+                        ).fetchall()
+                    known = {int(r[0]) for r in rows}
+                    if known:
+                        appearances_df = appearances_df.filter(
+                            pl.col("player_id").is_in(list(known))
+                        )
+                    else:
+                        appearances_df = pl.DataFrame([])
+            except Exception:
+                # Best effort; if the filter fails, fall back to raw insert (may error)
+                pass
+            _bulk_insert(appearances_df, RM.PlayerAppearance, engine)
+    except Exception:
+        # Non-fatal: continue if appearances missing or malformed
+        pass
+
     return count
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Entry point: import JSON files to the database based on CLI args."""
     parser = argparse.ArgumentParser(
         description="Import local tournament JSON data into the rankings database"
     )

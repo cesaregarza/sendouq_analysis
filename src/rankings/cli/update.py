@@ -39,11 +39,17 @@ from rankings.scraping.calendar_api import (
     is_tournament_finalized,
     iter_weeks_back,
 )
+from rankings.scraping.enrich import (
+    apply_enrichment_cache,
+    apply_enrichment_db_cache,
+    enrich_appearances_team_by_match_api,
+)
+from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
 from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
-from rankings.sql.load import load_core_tables
+from rankings.sql.load import load_core_tables, load_player_appearances_df
 from rankings.utils.spaces_upload import upload_outputs
 
 try:
@@ -53,12 +59,14 @@ except Exception:  # pragma: no cover
 
 
 def _timestamp() -> str:
+    """Return a compact UTC timestamp string for output folders."""
     return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
 
 def _db_existing_tournament_ids(
     db_url: str | None, sslmode: Optional[str]
 ) -> set[int]:
+    """Return set of tournament IDs currently present in the database."""
     # Ensure sslmode env is respected when using component envs (no URL provided)
     if not db_url and sslmode:
         os.environ["RANKINGS_DB_SSLMODE"] = str(sslmode)
@@ -80,6 +88,11 @@ def _db_existing_tournament_ids(
 
 
 def _discover_recent_finalized(weeks_back: int) -> list[int]:
+    """Discover finalized tournament IDs from the calendar API.
+
+    Scans ISO weeks back from today, then filters IDs whose metadata indicates
+    a finalized tournament.
+    """
     weeks: Iterable[Tuple[int, int]] = iter_weeks_back(
         date.today(), max_weeks=max(weeks_back, 1)
     )
@@ -110,6 +123,7 @@ def _discover_recent_finalized(weeks_back: int) -> list[int]:
 
 
 def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
+    """Import newly scraped JSON files under `json_dir` into the database."""
     engine = rankings_create_engine(db_url)
     rankings_create_all(engine)
     files = import_cli._find_json_files(json_dir)
@@ -123,6 +137,7 @@ def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
 
 
 def _write_manifest(run_dir: Path, data: dict) -> None:
+    """Write a JSON manifest describing this update run to `run_dir`."""
     import json
 
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -130,6 +145,7 @@ def _write_manifest(run_dir: Path, data: dict) -> None:
 
 
 def _git_commit_short() -> str | None:
+    """Return short git commit hash if available, else None."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
@@ -140,6 +156,7 @@ def _git_commit_short() -> str | None:
 
 
 def _get_build_version() -> str:
+    """Return build version from env or git, defaulting to 'unknown'."""
     return (
         os.getenv("RANKINGS_BUILD")
         or os.getenv("GIT_COMMIT")
@@ -151,6 +168,7 @@ def _get_build_version() -> str:
 def _persist_rankings(
     engine, ranks: pl.DataFrame, build_version: str, calculated_at_ms: int
 ) -> int:
+    """Persist ranking outputs into `player_rankings` (idempotent insert)."""
     if ranks is None or ranks.is_empty():
         return 0
     df = ranks.rename({"id": "player_id"}).with_columns(
@@ -168,6 +186,281 @@ def _persist_rankings(
             table.c.calculated_at_ms,
             table.c.build_version,
         ]
+    )
+    with engine.begin() as conn:
+        conn.execute(stmt)
+    return len(rows)
+
+
+def _persist_appearance_team_assignments(
+    engine, appearances: pl.DataFrame
+) -> int:
+    """Upsert enriched appearance team assignments into DB.
+
+    Expects `appearances` to contain columns [tournament_id, match_id, user_id, team_id]
+    after enrichment. Performs an upsert into player_appearance_teams on the
+    (tournament_id, match_id, player_id) key, setting team_id on conflict.
+
+    Best-effort: filters to rows with non-null team_id and keys present in the
+    current dataset. Attempts to filter to known player IDs to avoid FK errors.
+    Returns number of rows attempted (after filtering).
+    """
+    try:
+        if appearances is None or appearances.is_empty():
+            return 0
+        needed = {"tournament_id", "match_id", "user_id", "team_id"}
+        if not needed.issubset(set(appearances.columns)):
+            return 0
+        df = (
+            appearances.select(
+                [
+                    pl.col("tournament_id").cast(pl.Int64, strict=False),
+                    pl.col("match_id").cast(pl.Int64, strict=False),
+                    pl.col("user_id").cast(pl.Int64, strict=False),
+                    pl.col("team_id").cast(pl.Int64, strict=False),
+                ]
+            )
+            .drop_nulls(["tournament_id", "match_id", "user_id", "team_id"])  # type: ignore[arg-type]
+            .unique(subset=["tournament_id", "match_id", "user_id"])
+        )
+        if df.is_empty():
+            return 0
+
+        # Filter to known players to avoid foreign key violations (best-effort)
+        try:
+            unique_pids = df.select("user_id").unique()["user_id"].to_list()
+            if unique_pids:
+                from sqlalchemy import text as sqltext
+
+                with engine.connect() as conn:
+                    rows = conn.execute(
+                        sqltext(
+                            f"SELECT player_id FROM {RANKINGS_SCHEMA}.players WHERE player_id = ANY(:ids)"
+                        ),
+                        {"ids": unique_pids},
+                    ).fetchall()
+                known = {int(r[0]) for r in rows}
+                if known:
+                    df = df.filter(pl.col("user_id").is_in(list(known)))
+        except Exception:
+            # If the filter fails for any reason, proceed without it; DB may enforce FKs
+            pass
+
+        if df.is_empty():
+            return 0
+
+        rows = [
+            {
+                "tournament_id": int(r["tournament_id"]),
+                "match_id": int(r["match_id"]),
+                "player_id": int(r["user_id"]),
+                "team_id": int(r["team_id"]),
+            }
+            for r in df.iter_rows(named=True)
+        ]
+        if not rows:
+            return 0
+
+        table = RM.PlayerAppearanceTeam.__table__
+        stmt = pg_insert(table).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                table.c.tournament_id,
+                table.c.match_id,
+                table.c.player_id,
+            ],
+            set_={"team_id": stmt.excluded.team_id},
+        )
+        with engine.begin() as conn:
+            conn.execute(stmt)
+        return len(rows)
+    except Exception as e:
+        print(f"Appearance team assignment upsert skipped due to error: {e}")
+        return 0
+
+
+def _compute_player_stats(
+    matches: pl.DataFrame,
+    players: pl.DataFrame,
+    appearances: pl.DataFrame | None,
+) -> pl.DataFrame:
+    """Compute tournament_count and last_active_ms per player for the current dataset.
+
+    - Uses appearances if provided (who actually played); else falls back to rosters.
+    - last_active_ms is derived from matches: max(last_game_finished_at, match_created_at) per tournament.
+    """
+    if matches is None or matches.is_empty():
+        return pl.DataFrame([])
+
+    # Derive per-tournament last activity (seconds) from matches
+    ts_sec = (
+        pl.coalesce(
+            [
+                pl.col("last_game_finished_at"),
+                pl.col("match_created_at"),
+            ]
+        )
+        .cast(pl.Float64, strict=False)
+        .alias("last_ts_sec")
+    )
+    t_last = (
+        matches.select(["tournament_id", ts_sec])
+        .drop_nulls("last_ts_sec")
+        .group_by("tournament_id")
+        .agg(pl.col("last_ts_sec").max().alias("t_last_sec"))
+    )
+
+    # Participants frame: appearances preferred; else roster entries
+    if appearances is not None and not appearances.is_empty():
+        part = appearances.select(["tournament_id", "user_id"]).unique()
+    else:
+        part = (
+            players.select(["tournament_id", "user_id"]).unique()
+            if players is not None and not players.is_empty()
+            else pl.DataFrame([])
+        )
+    if part.is_empty():
+        return pl.DataFrame([])
+
+    # Align to tournaments present in matches
+    valid_tids = matches.select("tournament_id").unique()
+    part = part.join(valid_tids, on="tournament_id", how="inner")
+
+    # Join tournament last activity and compute per-player stats
+    part_with_ts = part.join(t_last, on="tournament_id", how="left")
+    stats = (
+        part_with_ts.group_by("user_id")
+        .agg(
+            [
+                pl.col("tournament_id").n_unique().alias("tournament_count"),
+                pl.col("t_last_sec").max().alias("last_active_sec"),
+            ]
+        )
+        .with_columns(
+            (
+                (pl.col("last_active_sec") * 1000.0)
+                .cast(pl.Int64, strict=False)
+                .alias("last_active_ms")
+            )
+        )
+        .rename({"user_id": "player_id"})
+        .select(["player_id", "tournament_count", "last_active_ms"])
+    )
+    return stats
+
+
+def _persist_ranking_stats(
+    engine, stats: pl.DataFrame, build_version: str, calculated_at_ms: int
+) -> int:
+    if stats is None or stats.is_empty():
+        return 0
+    df = stats.with_columns(
+        [
+            pl.lit(int(calculated_at_ms)).alias("calculated_at_ms"),
+            pl.lit(build_version).alias("build_version"),
+        ]
+    )
+    rows = [r for r in df.iter_rows(named=True)]
+    table = RM.PlayerRankingStats.__table__
+    stmt = pg_insert(table).values(rows)
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=[
+            table.c.player_id,
+            table.c.calculated_at_ms,
+            table.c.build_version,
+        ]
+    )
+    with engine.begin() as conn:
+        conn.execute(stmt)
+    return len(rows)
+
+
+def _promote_appearances_to_roster(
+    engine,
+    matches: pl.DataFrame,
+    players: pl.DataFrame,
+    appearances: pl.DataFrame,
+) -> int:
+    """Promote appearance-only players into roster_entries.
+
+    Picks a majority team per (tournament_id, user_id) from enriched appearances
+    (requires team_id), excludes those already rostered, and upserts.
+    Returns number of attempted inserts.
+    """
+    if (
+        appearances is None
+        or appearances.is_empty()
+        or "team_id" not in appearances.columns
+    ):
+        return 0
+    # Restrict to current matches
+    try:
+        key_df = matches.select(["tournament_id", "match_id"]).unique()
+        apps = appearances.join(
+            key_df, on=["tournament_id", "match_id"], how="inner"
+        )
+    except Exception:
+        apps = appearances
+    if apps.is_empty():
+        return 0
+
+    apps = apps.drop_nulls(["team_id"]).select(
+        [
+            pl.col("tournament_id").cast(pl.Int64, strict=False),
+            pl.col("user_id").cast(pl.Int64, strict=False),
+            pl.col("team_id").cast(pl.Int64, strict=False),
+        ]
+    )
+    if apps.is_empty():
+        return 0
+
+    # Exclude existing roster pairs
+    roster_pairs = (
+        players.select(["tournament_id", "user_id"]).unique()
+        if players is not None and not players.is_empty()
+        else pl.DataFrame([])
+    )
+    if not roster_pairs.is_empty():
+        apps = apps.join(
+            roster_pairs, on=["tournament_id", "user_id"], how="anti"
+        )
+    if apps.is_empty():
+        return 0
+
+    # Majority team per (tid, uid)
+    counts = (
+        apps.group_by(["tournament_id", "user_id", "team_id"])
+        .len()
+        .rename({"len": "cnt"})
+    )
+    top = (
+        counts.sort(
+            ["tournament_id", "user_id", "cnt"], descending=[False, False, True]
+        )
+        .group_by(["tournament_id", "user_id"], maintain_order=True)
+        .agg([pl.col("team_id").first().alias("team_id")])
+        .rename({"user_id": "player_id"})
+        .select(["tournament_id", "team_id", "player_id"])
+        .drop_nulls(["tournament_id", "team_id", "player_id"])
+        .unique()
+    )
+    if top.is_empty():
+        return 0
+
+    rows = [r for r in top.iter_rows(named=True)]
+    if not rows:
+        return 0
+    table = RM.RosterEntry.__table__
+    stmt = (
+        pg_insert(table)
+        .values(rows)
+        .on_conflict_do_nothing(
+            index_elements=[
+                table.c.tournament_id,
+                table.c.team_id,
+                table.c.player_id,
+            ]
+        )
     )
     with engine.begin() as conn:
         conn.execute(stmt)
@@ -291,6 +584,11 @@ def main(argv: list[str] | None = None) -> int:
         "--no-ddl",
         action="store_true",
         help="Do not attempt to create schema/tables (skip DDL)",
+    )
+    parser.add_argument(
+        "--promote-appearances",
+        action="store_true",
+        help="Upsert appearance-only players into roster_entries using enriched team assignments",
     )
 
     args = parser.parse_args(argv)
@@ -460,6 +758,91 @@ def main(argv: list[str] | None = None) -> int:
 
     ranks_rows = 0
     if not matches.is_empty() and not players.is_empty():
+        # Load appearances from DB (preferred), fallback to scraped JSONs when missing
+        try:
+            appearances = load_player_appearances_df(engine)
+        except Exception:
+            appearances = pl.DataFrame([])
+        if appearances.is_empty():
+            try:
+                appearances = load_match_appearances(str(scraped_dir))
+                if appearances.is_empty() and data_dir:
+                    appearances = load_match_appearances(str(data_dir))
+            except Exception:
+                appearances = pl.DataFrame([])
+        if not appearances.is_empty():
+            try:
+                key_df = matches.select(["tournament_id", "match_id"]).unique()
+                appearances = appearances.join(
+                    key_df, on=["tournament_id", "match_id"], how="inner"
+                )
+            except Exception:
+                pass
+            # Apply DB enrichment cache first (if present)
+            try:
+                appearances = apply_enrichment_db_cache(appearances, engine)
+            except Exception:
+                pass
+            # Apply local enrichment cache next (if present), then resolve remaining via API
+            try:
+                cache_dir = os.getenv(
+                    "RANKINGS_ENRICH_CACHE_DIR",
+                    "data/enrichment/appearances_enriched",
+                )
+                appearances = apply_enrichment_cache(appearances, cache_dir)
+            except Exception:
+                pass
+            # Enrich team_id for unmatched appearance rows via match API (limited calls)
+            try:
+                # Only trigger when necessary to minimize API calls
+                needs_enrichment = False
+                if "team_id" not in appearances.columns:
+                    needs_enrichment = True
+                else:
+                    needs_enrichment = appearances.select(
+                        pl.col("team_id").is_null().any()
+                    ).item()  # type: ignore[arg-type]
+                if needs_enrichment:
+                    # Limit calls to at most 500 matches per run by default (env override)
+                    max_calls_env = os.getenv("RANKINGS_ENRICH_APPS_MAX_CALLS")
+                    max_calls = int(max_calls_env) if max_calls_env else 500
+                    appearances = enrich_appearances_team_by_match_api(
+                        appearances, matches, players, max_calls=max_calls
+                    )
+            except Exception as e:
+                print(f"Appearance enrichment skipped due to error: {e}")
+
+            # Optionally promote appearance-only players into roster_entries, then refresh players
+            if args.promote_appearances:
+                try:
+                    inserted = _promote_appearances_to_roster(
+                        engine, matches, players, appearances
+                    )
+                    if inserted:
+                        print(
+                            f"Promoted {inserted} appearance-based players into roster_entries"
+                        )
+                        # Reload rosters to reflect changes
+                        from rankings.sql.load import load_players_df
+
+                        players = load_players_df(engine)
+                    else:
+                        print("No appearance-based roster promotions needed.")
+                except Exception as e:
+                    print(f"Roster promotion skipped due to error: {e}")
+
+            # Persist enriched team assignments to DB to warm the cache for future runs
+            try:
+                if save_to_db:
+                    up_cnt = _persist_appearance_team_assignments(
+                        engine, appearances
+                    )
+                    if up_cnt:
+                        print(
+                            f"Upserted {up_cnt} appearance team assignments to DB"
+                        )
+            except Exception as e:
+                print(f"Appearance team assignment persist failed: {e}")
         # Build engine config; allow overrides via YAML keys
         eng_cfg = ExposureLogOddsConfig()
 
@@ -535,7 +918,10 @@ def main(argv: list[str] | None = None) -> int:
         eng_cfg.use_tick_tock_active = True
 
         eng = ExposureLogOddsEngine(eng_cfg)
-        ranks = eng.rank_players(matches, players)
+        if appearances.is_empty():
+            ranks = eng.rank_players(matches, players)
+        else:
+            ranks = eng.rank_players(matches, players, appearances=appearances)
         ranks_rows = int(ranks.height)
         if write_parquet:
             out_run.mkdir(parents=True, exist_ok=True)
@@ -551,7 +937,29 @@ def main(argv: list[str] | None = None) -> int:
             inserted = _persist_rankings(
                 engine, ranks, build_version, calculated_at_ms
             )
-            print(f"Saved {inserted} rankings to DB (build={build_version})")
+            # Compute and persist per-player stats for eligibility display
+            try:
+                stats = _compute_player_stats(matches, players, appearances)
+                if stats is not None and not stats.is_empty():
+                    # Restrict stats to ranked IDs for this run
+                    id_df = ranks.select(
+                        pl.col("id").alias("player_id")
+                    ).unique()
+                    stats = stats.join(id_df, on="player_id", how="inner")
+                    s_ins = _persist_ranking_stats(
+                        engine, stats, build_version, calculated_at_ms
+                    )
+                    print(
+                        f"Saved {inserted} rankings and {s_ins} stats to DB (build={build_version})"
+                    )
+                else:
+                    print(
+                        f"Saved {inserted} rankings to DB (no stats derived) (build={build_version})"
+                    )
+            except Exception as e:
+                print(
+                    f"Saved {inserted} rankings to DB (stats persist failed: {e}) (build={build_version})"
+                )
         print(f"Engine run complete: {ranks_rows} rankings written")
     else:
         print("Skipping engine run (empty matches or players).")

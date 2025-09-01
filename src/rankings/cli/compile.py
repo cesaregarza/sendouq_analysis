@@ -30,14 +30,19 @@ from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import ExposureLogOddsConfig
 from rankings.scraping.batch import scrape_latest_tournaments
+from rankings.scraping.enrich import (
+    apply_enrichment_cache,
+    enrich_appearances_team_by_match_api,
+)
 from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
-from rankings.sql.load import load_core_tables
+from rankings.sql.load import load_core_tables, load_player_appearances_df
 
 
 def _get_build_version() -> str:
+    """Return build version tag from env or git, or 'unknown'."""
     return (
         os.getenv("RANKINGS_BUILD")
         or os.getenv("GIT_COMMIT")
@@ -47,6 +52,7 @@ def _get_build_version() -> str:
 
 
 def _git_commit_short() -> str | None:
+    """Return short git commit hash if available, else None."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
@@ -59,6 +65,17 @@ def _git_commit_short() -> str | None:
 def _persist_rankings(
     engine, ranks: pl.DataFrame, build_version: str, calculated_at_ms: int
 ) -> int:
+    """Persist ranking outputs into `player_rankings` (idempotent insert).
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        ranks: Rankings DataFrame including at least `id` and `score` columns.
+        build_version: Tag to identify the run/version of the engine.
+        calculated_at_ms: Millisecond timestamp for the run time.
+
+    Returns:
+        Number of attempted inserts.
+    """
     if ranks is None or ranks.is_empty():
         return 0
     # Ensure columns
@@ -91,14 +108,20 @@ def _persist_rankings(
 
 
 def _ts_now() -> str:
+    """Return a UTC timestamp string for output directory naming."""
     return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
 
 def _ensure_dir(p: Path) -> None:
+    """Create directory `p` and parents if they do not exist."""
     p.mkdir(parents=True, exist_ok=True)
 
 
 def _scrape(args: argparse.Namespace) -> None:
+    """Optionally scrape recent tournaments into `--output-dir`.
+
+    Controlled by `--scrape` mode and `--recent-count`.
+    """
     if args.scrape == "none":
         return
 
@@ -121,6 +144,10 @@ def _scrape(args: argparse.Namespace) -> None:
 
 
 def _import_json(args: argparse.Namespace) -> None:
+    """Import scraped JSON files under `--data-dir` into the database.
+
+    Mirrors the behavior of `rankings_import` to keep DB in sync.
+    """
     # Mirror rankings_import CLI behavior programmatically so the compile
     # step keeps the DB in sync with local JSON files.
     db_url = args.db_url
@@ -154,6 +181,15 @@ def _import_json(args: argparse.Namespace) -> None:
 
 
 def _write_outputs(tables: dict[str, pl.DataFrame], out_dir: Path) -> Path:
+    """Write compiled DataFrames to Parquet and return the run directory path.
+
+    Args:
+        tables: Mapping containing `matches` and `players` DataFrames.
+        out_dir: Base directory to create a timestamped run folder in.
+
+    Returns:
+        Path to the created run directory.
+    """
     run_dir = out_dir / _ts_now()
     _ensure_dir(run_dir)
 
@@ -351,8 +387,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("No data to run engine (empty matches/players)")
             return 0
 
-        # Try to use per-match appearances from scraped JSON if available
-        appearances = load_match_appearances(args.data_dir)
+        # Try to use per-match appearances from DB; fall back to scraped JSON if none
+        appearances = load_player_appearances_df(engine)
+        if appearances.is_empty():
+            appearances = load_match_appearances(args.data_dir)
         if not appearances.is_empty():
             # Filter to IDs present in current matches to avoid bloat
             try:
@@ -362,6 +400,36 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
             except Exception:
                 pass
+            # Apply DB enrichment cache first (if available), then local cache
+            try:
+                appearances = apply_enrichment_db_cache(appearances, engine)
+            except Exception:
+                pass
+            try:
+                cache_dir = os.getenv(
+                    "RANKINGS_ENRICH_CACHE_DIR",
+                    "data/enrichment/appearances_enriched",
+                )
+                appearances = apply_enrichment_cache(appearances, cache_dir)
+            except Exception:
+                pass
+            # Best-effort enrichment for unmatched team assignment (limited calls)
+            try:
+                needs_enrichment = False
+                if "team_id" not in appearances.columns:
+                    needs_enrichment = True
+                else:
+                    needs_enrichment = appearances.select(
+                        pl.col("team_id").is_null().any()
+                    ).item()  # type: ignore[arg-type]
+                if needs_enrichment:
+                    max_calls_env = os.getenv("RANKINGS_ENRICH_APPS_MAX_CALLS")
+                    max_calls = int(max_calls_env) if max_calls_env else 500
+                    appearances = enrich_appearances_team_by_match_api(
+                        appearances, matches, players, max_calls=max_calls
+                    )
+            except Exception as e:
+                print(f"Appearance enrichment skipped due to error: {e}")
 
         eng = ExposureLogOddsEngine(ExposureLogOddsConfig())
         if appearances.is_empty():

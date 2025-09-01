@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from .constants import SCHEMA
+from rankings.sql.constants import SCHEMA
 
 Base = declarative_base()
 
@@ -108,7 +108,7 @@ def ensure_schema(engine: Engine) -> None:
 
 def create_all(engine: Engine) -> None:
     """Create all tables in the rankings schema (idempotent)."""
-    from . import models  # noqa: F401 - ensure models are imported
+    from rankings.sql import models  # noqa: F401 - ensure models are imported
 
     ensure_schema(engine)
     Base.metadata.create_all(engine)

@@ -102,6 +102,29 @@ DO_API_TOKEN=your_digitalocean_token
   poetry run aggregate
   # or
   poetry run python src/sendouq_analysis/endpoints/aggregate.py
+  ```
+
+- **Updater (discover + scrape + import + rank):**
+  The updater orchestrates discovery of finalized tournaments, optional scraping/import, then compiles from the database and runs the ranking engine. It now prefers per‑match player appearances from the database when available and falls back to scraped JSON payloads.
+
+  Common runs:
+
+  ```bash
+  # Compile and rank from DB (no discovery/scrape), write Parquet locally
+  poetry run rankings_update \
+    --skip-discovery --write-parquet --no-save-to-db \
+    --since-days 180 --only-ranked
+
+  # Full pipeline: discover finalized, scrape/import missing, compile + rank, persist to DB
+  poetry run rankings_update \
+    --weeks-back 2 --since-days 180 --only-ranked \
+    --write-parquet --save-to-db
+  ```
+
+  Notes:
+  - Configure DB via `RANKINGS_DATABASE_URL` (or `DATABASE_URL`) and `RANKINGS_DB_SCHEMA`.
+  - Add `--skip-discovery` for a dry run that avoids network scraping and uses existing DB data.
+  - Add `--no-save-to-db` to skip persisting rankings (useful for local testing).
 
 - **Compile core tables from Postgres (optional scrape + import):**
 
@@ -165,8 +188,7 @@ The rankings module provides comprehensive tournament ranking capabilities. Reco
 #### Quick Start
 ```python
 import json
-from rankings import parse_tournaments_data
-from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
+from rankings import parse_tournaments_data, ExposureLogOddsEngine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -177,7 +199,7 @@ matches_df = tables["matches"]
 players_df = tables["players"]
 
 # Recommended: Exposure Log-Odds player rankings
-engine = ExposureLogOddsEngine(beta=1.0)
+engine = ExposureLogOddsEngine()
 player_rankings = engine.rank_players(matches_df, players_df)
 
 # Access tournament influence/strength
@@ -187,7 +209,11 @@ tournament_strength = engine.tournament_strength
 
 #### Scraping Tournament Data
 ```python
-from rankings import scrape_tournament, scrape_latest_tournaments, scrape_tournaments_from_calendar
+from rankings import (
+    scrape_tournament,
+    scrape_latest_tournaments,
+    scrape_tournaments_from_calendar,
+)
 
 # Scrape a specific tournament
 tournament_data = scrape_tournament(1955)
@@ -207,6 +233,19 @@ calendar_results = scrape_tournaments_from_calendar()
 - **Engines**: Exposure Log-Odds (recommended) and core tick-tock engine
 - **Scraping Support**: Built-in tournament discovery and batch scraping from Sendou.ink
 
+#### DB-backed Player Appearances
+- New table: `rankings.player_appearances` stores per‑match participation: `(tournament_id, match_id, player_id)` with uniqueness/indexes.
+- Loader: `rankings.sql.load.load_player_appearances_df(engine)` returns a Polars DataFrame with columns `(tournament_id, match_id, user_id)`.
+- Conversion: `convert_matches_dataframe(..., appearances=...)` accepts appearances without `team_id` and infers team memberships from rosters as needed.
+- Fallback: When DB appearances are missing, CLIs fall back to parsing scraped players payloads.
+
+#### Ranking Outputs in DB
+- Table `rankings.player_rankings`: Raw engine outputs for each run (`player_id`, `score`, `exposure`, `win_pr`, `loss_pr`, plus `calculated_at_ms`, `build_version`).
+- Table `rankings.player_ranking_stats`: Per‑player eligibility stats for the same run (`player_id`, `tournament_count`, `last_active_ms`, plus `calculated_at_ms`, `build_version`).
+  - `tournament_count` is computed from appearances when available (preferred), otherwise from rosters, aligned to the same match set used for the run.
+  - `last_active_ms` is derived from matches as the latest of `last_game_finished_at_ms` or `created_at_ms` per tournament.
+  - Front‑ends can join these tables on `(player_id, calculated_at_ms, build_version)` to explain why a player is excluded by UI filters (e.g., min tournaments, inactivity).
+
 ---
 
 ## Project Structure
@@ -225,18 +264,12 @@ calendar_results = scrape_tournaments_from_calendar()
 │   │   ├── load/
 │   │   ├── constants/
 │   │   └── __main__.py
-│   └── rankings/              # Tournament ranking algorithms
-│       ├── core/              # Core parsing and configuration
-│       │   ├── parser.py      # Tournament JSON parsing
-│       │   └── constants.py   # Configuration constants
-│       ├── scraping/          # Tournament data acquisition
-│       │   ├── api.py         # Sendou.ink API interface
-│       │   ├── batch.py       # Batch scraping operations
-│       │   ├── discovery.py   # Tournament discovery via calendar
-│       │   └── storage.py     # Data persistence utilities
-│       └── analysis/          # Ranking algorithms
-│           ├── engine.py      # Advanced RatingEngine implementation
-│           └── utils.py       # Analysis utilities
+│   └── rankings/              # Tournament rankings package
+│       ├── algorithms/        # Ranking engines (Exposure Log-Odds, Tick-Tock)
+│       ├── core/              # Core parsing, config, PageRank, convert utils
+│       ├── scraping/          # API clients, batch scraping, storage helpers
+│       ├── sql/               # DB models, engine helpers, and loaders
+│       └── analysis/          # Influence analysis and utilities
 ├── requirements.txt / pyproject.toml / poetry.lock
 ├── run_dashapp.sh / build_scraper.sh
 ├── dockerfile
