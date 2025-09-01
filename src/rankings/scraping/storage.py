@@ -160,16 +160,21 @@ def _coerce_int(v):
         return None
 
 
-def _extract_appearances_from_players_payload(
-    tournament_id: int, payload: dict
+def extract_appearances_from_players_payload(
+    tournament_id: int, payload: dict | list
 ) -> list[dict]:
     """Best-effort extraction of per-match player appearances from the players route payload.
 
-    Expected common shapes (examples):
-    - { "matches": [ { "matchId": 123, "teams": [ { "teamId": 1, "players": [{"userId": 10}, ...] }, ... ] }, ... ] }
-    - [ { "matchId": 123, "teams": [ ... ] }, ... ]
+    Supported shapes:
+    - Team-based per-match listing (legacy):
+      { "matches": [ { "matchId": 123, "teams": [ { "teamId": 1, "players": [{"userId": 10}, ...] }, ... ] }, ... ] }
+      or [ { "matchId": 123, "teams": [ ... ] }, ... ]
 
-    Returns list of rows: {tournament_id, match_id, team_id, user_id}
+    - Player-based listing (new):
+      [ { "userId": 10, "matchIds": [1,2,3] }, ... ]
+
+    Returns list of rows: {tournament_id, match_id, user_id, team_id?}
+    team_id will be None for the new player-based format and can be derived later.
     """
     rows: list[dict] = []
 
@@ -183,7 +188,7 @@ def _extract_appearances_from_players_payload(
                     uid = _coerce_int(p.get("userId") or p.get("id"))
                 else:
                     uid = _coerce_int(p)
-                if uid is not None:
+                if uid is not None and match_id is not None:
                     rows.append(
                         {
                             "tournament_id": int(tournament_id),
@@ -223,22 +228,60 @@ def _extract_appearances_from_players_payload(
         if isinstance(node, dict) and key in node:
             node = node[key]
 
-    candidates = None
+    # Case 1: legacy team-based format under {matches: [...]}
     if isinstance(node, dict) and isinstance(node.get("matches"), list):
-        candidates = node.get("matches")
-    elif isinstance(node, list):
-        candidates = node
-
-    if isinstance(candidates, list):
-        for m in candidates:
-            if isinstance(m, dict) and ("matchId" in m or "teams" in m):
+        for m in node.get("matches"):
+            if isinstance(m, dict):
                 _parse_match_obj(m)
 
+    # Case 2: direct list
+    elif isinstance(node, list):
+        # Subcase 2a: legacy list of matches (each with teams)
+        if all(isinstance(x, dict) for x in node) and any(
+            ("matchId" in x or "teams" in x) for x in node
+        ):
+            for m in node:
+                _parse_match_obj(m)
+        # Subcase 2b: new player-based format
+        else:
+            for item in node:
+                if not isinstance(item, dict):
+                    continue
+                uid = _coerce_int(
+                    item.get("userId") or item.get("user_id") or item.get("id")
+                )
+                match_ids = (
+                    item.get("matchIds")
+                    or item.get("match_ids")
+                    or item.get("matches")
+                )
+                if uid is None or not isinstance(match_ids, list):
+                    continue
+                for mid in match_ids:
+                    mid_i = _coerce_int(mid)
+                    if mid_i is None:
+                        continue
+                    rows.append(
+                        {
+                            "tournament_id": int(tournament_id),
+                            "match_id": mid_i,
+                            "team_id": None,  # Derived later
+                            "user_id": uid,
+                        }
+                    )
+
+    # Keep only rows that have the minimal keys
     return [
         r
         for r in rows
-        if r.get("match_id") is not None and r.get("team_id") is not None
+        if r.get("match_id") is not None and r.get("user_id") is not None
     ]
+
+
+# Backwards-compat alias (was private helper)
+_extract_appearances_from_players_payload = (
+    extract_appearances_from_players_payload
+)
 
 
 def load_match_appearances(data_dir: str = "data/tournaments") -> pl.DataFrame:
@@ -262,7 +305,7 @@ def load_match_appearances(data_dir: str = "data/tournaments") -> pl.DataFrame:
             pm = entry.get("player_matches")
             if not pm:
                 continue
-            rows.extend(_extract_appearances_from_players_payload(int(tid), pm))
+            rows.extend(extract_appearances_from_players_payload(int(tid), pm))
         except Exception as e:
             logger.warning("Failed to parse players payload: %s", e)
             continue
@@ -279,6 +322,6 @@ def load_match_appearances(data_dir: str = "data/tournaments") -> pl.DataFrame:
         "user_id": pl.col("user_id").cast(pl.Int64, strict=False),
     }
     df = df.with_columns(list(cast_map.values())).unique(
-        subset=["tournament_id", "match_id", "team_id", "user_id"]
+        subset=["tournament_id", "match_id", "user_id"]
     )
     return df
