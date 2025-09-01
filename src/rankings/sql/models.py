@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""SQLAlchemy models for the rankings schema.
+
+Tables include core tournament entities, player appearances and cached
+appearance team assignments, and persisted ranking outputs and stats.
+"""
+
 from typing import Optional
 
 from sqlalchemy import (

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""CLI to import scraped tournament JSON payloads into the rankings database.
+
+Parses tournament JSON files (per-ID, batch, or snapshot formats) and upserts
+normalized rows into the Postgres schema. Also extracts per-match player
+appearances from the players route payload when present.
+"""
+
 import argparse
 import json
 import os
@@ -21,6 +28,10 @@ from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
 
 
 def _find_json_files(root: Path) -> list[Path]:
+    """Return sorted list of tournament JSON files under `root` (recursive).
+
+    Matches per-ID, batch, and snapshot file patterns.
+    """
     patterns = [
         "tournament_*.json",
         "tournaments_*.json",
@@ -36,6 +47,10 @@ def _find_json_files(root: Path) -> list[Path]:
 
 
 def _load_json_payload(path: Path):
+    """Load a JSON file and return a list of tournament objects.
+
+    Accepts payloads as a single dict or a list of dicts.
+    """
     with path.open("r") as f:
         data = json.load(f)
     # Ensure list of tournament objects
@@ -179,7 +194,13 @@ def import_file(
 ) -> int:
     """Parse a single JSON payload and write to Postgres.
 
-    Returns number of tournaments ingested.
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        payload: List of tournament JSON objects (already loaded).
+        max_remaining: Optional cap on how many tournaments to ingest from this payload.
+
+    Returns:
+        Number of tournaments ingested from this payload.
     """
     # If caller wants to cap tournaments, slice payload first
     if max_remaining is not None and max_remaining >= 0:
@@ -519,6 +540,7 @@ def import_file(
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Entry point: import JSON files to the database based on CLI args."""
     parser = argparse.ArgumentParser(
         description="Import local tournament JSON data into the rankings database"
     )

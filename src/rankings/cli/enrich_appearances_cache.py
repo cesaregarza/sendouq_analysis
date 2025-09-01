@@ -33,6 +33,17 @@ from rankings.sql.load import load_core_tables, load_player_appearances_df
 
 
 def _load_processed_match_ids(out_dir: Path) -> set[int]:
+    """Return set of match IDs already present in cache files.
+
+    Scans `out_dir` (non-recursive, then recursive fallback) for `.parquet`,
+    `.feather`, or `.ipc` files and extracts unique `match_id` values.
+
+    Args:
+        out_dir: Directory containing cached enrichment files.
+
+    Returns:
+        Set of integer match IDs found in cache files.
+    """
     done: set[int] = set()
     files = (
         list(out_dir.glob("*.parquet"))

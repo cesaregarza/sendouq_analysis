@@ -40,6 +40,17 @@ def _iter_tournament_ids(
     since_days: Optional[int] = None,
     only_ranked: bool = False,
 ) -> list[int]:
+    """Return tournament IDs to process based on filters.
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        all_time: When True, ignore the time window filter.
+        since_days: If provided, include tournaments with matches within the last N days.
+        only_ranked: When True, restrict to tournaments marked as ranked.
+
+    Returns:
+        List of distinct tournament IDs matching the selection criteria.
+    """
     where = []
     params = {}
     if since_days is not None and not all_time:
@@ -66,6 +77,15 @@ def _iter_tournament_ids(
 
 
 def _existing_players_lookup(engine, player_ids: list[int]) -> set[int]:
+    """Return the subset of provided player IDs that exist in the DB.
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        player_ids: Candidate player IDs to check.
+
+    Returns:
+        Set of player IDs present in the `players` table.
+    """
     if not player_ids:
         return set()
     # Chunk IN list for safety
@@ -82,6 +102,15 @@ def _existing_players_lookup(engine, player_ids: list[int]) -> set[int]:
 
 
 def _insert_appearances(engine, df: pl.DataFrame) -> int:
+    """Insert appearance rows into `player_appearances` (idempotent).
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        df: DataFrame with columns `(tournament_id, match_id, user_id)`.
+
+    Returns:
+        Number of rows attempted after de-duplication.
+    """
     if df is None or df.is_empty():
         return 0
     # Normalize schema to DB layout
@@ -106,7 +135,17 @@ def _insert_appearances(engine, df: pl.DataFrame) -> int:
 def _process_one(
     engine, tournament_id: int, *, filter_unknown_players: bool = True
 ) -> tuple[int, int, int]:
-    """Return (tid, attempted_rows, kept_rows)."""
+    """Fetch, extract, and insert appearances for a tournament.
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        tournament_id: Tournament ID to process.
+        filter_unknown_players: When True, drop players not present in `players`.
+
+    Returns:
+        Tuple `(tournament_id, attempted_rows, kept_rows)` where `attempted_rows`
+        is the number of extracted rows, and `kept_rows` are inserted after filtering.
+    """
     payload = fetch_tournament_players(int(tournament_id))
     rows = extract(int(tournament_id), payload)
     if not rows:

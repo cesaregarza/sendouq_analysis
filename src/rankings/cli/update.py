@@ -59,12 +59,14 @@ except Exception:  # pragma: no cover
 
 
 def _timestamp() -> str:
+    """Return a compact UTC timestamp string for output folders."""
     return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
 
 def _db_existing_tournament_ids(
     db_url: str | None, sslmode: Optional[str]
 ) -> set[int]:
+    """Return set of tournament IDs currently present in the database."""
     # Ensure sslmode env is respected when using component envs (no URL provided)
     if not db_url and sslmode:
         os.environ["RANKINGS_DB_SSLMODE"] = str(sslmode)
@@ -86,6 +88,11 @@ def _db_existing_tournament_ids(
 
 
 def _discover_recent_finalized(weeks_back: int) -> list[int]:
+    """Discover finalized tournament IDs from the calendar API.
+
+    Scans ISO weeks back from today, then filters IDs whose metadata indicates
+    a finalized tournament.
+    """
     weeks: Iterable[Tuple[int, int]] = iter_weeks_back(
         date.today(), max_weeks=max(weeks_back, 1)
     )
@@ -116,6 +123,7 @@ def _discover_recent_finalized(weeks_back: int) -> list[int]:
 
 
 def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
+    """Import newly scraped JSON files under `json_dir` into the database."""
     engine = rankings_create_engine(db_url)
     rankings_create_all(engine)
     files = import_cli._find_json_files(json_dir)
@@ -129,6 +137,7 @@ def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
 
 
 def _write_manifest(run_dir: Path, data: dict) -> None:
+    """Write a JSON manifest describing this update run to `run_dir`."""
     import json
 
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +145,7 @@ def _write_manifest(run_dir: Path, data: dict) -> None:
 
 
 def _git_commit_short() -> str | None:
+    """Return short git commit hash if available, else None."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
@@ -146,6 +156,7 @@ def _git_commit_short() -> str | None:
 
 
 def _get_build_version() -> str:
+    """Return build version from env or git, defaulting to 'unknown'."""
     return (
         os.getenv("RANKINGS_BUILD")
         or os.getenv("GIT_COMMIT")
@@ -157,6 +168,7 @@ def _get_build_version() -> str:
 def _persist_rankings(
     engine, ranks: pl.DataFrame, build_version: str, calculated_at_ms: int
 ) -> int:
+    """Persist ranking outputs into `player_rankings` (idempotent insert)."""
     if ranks is None or ranks.is_empty():
         return 0
     df = ranks.rename({"id": "player_id"}).with_columns(

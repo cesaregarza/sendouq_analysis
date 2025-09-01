@@ -42,6 +42,7 @@ from rankings.sql.load import load_core_tables, load_player_appearances_df
 
 
 def _get_build_version() -> str:
+    """Return build version tag from env or git, or 'unknown'."""
     return (
         os.getenv("RANKINGS_BUILD")
         or os.getenv("GIT_COMMIT")
@@ -51,6 +52,7 @@ def _get_build_version() -> str:
 
 
 def _git_commit_short() -> str | None:
+    """Return short git commit hash if available, else None."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
@@ -63,6 +65,17 @@ def _git_commit_short() -> str | None:
 def _persist_rankings(
     engine, ranks: pl.DataFrame, build_version: str, calculated_at_ms: int
 ) -> int:
+    """Persist ranking outputs into `player_rankings` (idempotent insert).
+
+    Args:
+        engine: SQLAlchemy engine connected to the rankings database.
+        ranks: Rankings DataFrame including at least `id` and `score` columns.
+        build_version: Tag to identify the run/version of the engine.
+        calculated_at_ms: Millisecond timestamp for the run time.
+
+    Returns:
+        Number of attempted inserts.
+    """
     if ranks is None or ranks.is_empty():
         return 0
     # Ensure columns
@@ -95,14 +108,20 @@ def _persist_rankings(
 
 
 def _ts_now() -> str:
+    """Return a UTC timestamp string for output directory naming."""
     return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
 
 def _ensure_dir(p: Path) -> None:
+    """Create directory `p` and parents if they do not exist."""
     p.mkdir(parents=True, exist_ok=True)
 
 
 def _scrape(args: argparse.Namespace) -> None:
+    """Optionally scrape recent tournaments into `--output-dir`.
+
+    Controlled by `--scrape` mode and `--recent-count`.
+    """
     if args.scrape == "none":
         return
 
@@ -125,6 +144,10 @@ def _scrape(args: argparse.Namespace) -> None:
 
 
 def _import_json(args: argparse.Namespace) -> None:
+    """Import scraped JSON files under `--data-dir` into the database.
+
+    Mirrors the behavior of `rankings_import` to keep DB in sync.
+    """
     # Mirror rankings_import CLI behavior programmatically so the compile
     # step keeps the DB in sync with local JSON files.
     db_url = args.db_url
@@ -158,6 +181,15 @@ def _import_json(args: argparse.Namespace) -> None:
 
 
 def _write_outputs(tables: dict[str, pl.DataFrame], out_dir: Path) -> Path:
+    """Write compiled DataFrames to Parquet and return the run directory path.
+
+    Args:
+        tables: Mapping containing `matches` and `players` DataFrames.
+        out_dir: Base directory to create a timestamped run folder in.
+
+    Returns:
+        Path to the created run directory.
+    """
     run_dir = out_dir / _ts_now()
     _ensure_dir(run_dir)
 

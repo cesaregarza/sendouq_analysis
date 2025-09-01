@@ -188,8 +188,7 @@ The rankings module provides comprehensive tournament ranking capabilities. Reco
 #### Quick Start
 ```python
 import json
-from rankings import parse_tournaments_data
-from rankings.analysis.engine.exposure_logodds import ExposureLogOddsEngine
+from rankings import parse_tournaments_data, ExposureLogOddsEngine
 
 # Load and parse tournament data
 with open("tournament_data.json") as f:
@@ -200,7 +199,7 @@ matches_df = tables["matches"]
 players_df = tables["players"]
 
 # Recommended: Exposure Log-Odds player rankings
-engine = ExposureLogOddsEngine(beta=1.0)
+engine = ExposureLogOddsEngine()
 player_rankings = engine.rank_players(matches_df, players_df)
 
 # Access tournament influence/strength
@@ -210,7 +209,11 @@ tournament_strength = engine.tournament_strength
 
 #### Scraping Tournament Data
 ```python
-from rankings import scrape_tournament, scrape_latest_tournaments, scrape_tournaments_from_calendar
+from rankings import (
+    scrape_tournament,
+    scrape_latest_tournaments,
+    scrape_tournaments_from_calendar,
+)
 
 # Scrape a specific tournament
 tournament_data = scrape_tournament(1955)
@@ -261,18 +264,12 @@ calendar_results = scrape_tournaments_from_calendar()
 │   │   ├── load/
 │   │   ├── constants/
 │   │   └── __main__.py
-│   └── rankings/              # Tournament ranking algorithms
-│       ├── core/              # Core parsing and configuration
-│       │   ├── parser.py      # Tournament JSON parsing
-│       │   └── constants.py   # Configuration constants
-│       ├── scraping/          # Tournament data acquisition
-│       │   ├── api.py         # Sendou.ink API interface
-│       │   ├── batch.py       # Batch scraping operations
-│       │   ├── discovery.py   # Tournament discovery via calendar
-│       │   └── storage.py     # Data persistence utilities
-│       └── analysis/          # Ranking algorithms
-│           ├── engine.py      # Advanced RatingEngine implementation
-│           └── utils.py       # Analysis utilities
+│   └── rankings/              # Tournament rankings package
+│       ├── algorithms/        # Ranking engines (Exposure Log-Odds, Tick-Tock)
+│       ├── core/              # Core parsing, config, PageRank, convert utils
+│       ├── scraping/          # API clients, batch scraping, storage helpers
+│       ├── sql/               # DB models, engine helpers, and loaders
+│       └── analysis/          # Influence analysis and utilities
 ├── requirements.txt / pyproject.toml / poetry.lock
 ├── run_dashapp.sh / build_scraper.sh
 ├── dockerfile
