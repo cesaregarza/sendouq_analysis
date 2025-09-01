@@ -34,6 +34,7 @@ from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import DecayConfig, ExposureLogOddsConfig
 from rankings.core.logging import setup_logging
+from rankings.core.sentry import init_sentry
 from rankings.scraping.batch import scrape_tournament_batch
 from rankings.scraping.calendar_api import (
     fetch_calendar_week,
@@ -167,62 +168,7 @@ def _get_build_version() -> str:
     )
 
 
-def _init_sentry(
-    context: str = "rankings_update", release: str | None = None
-) -> None:
-    """Best-effort Sentry initialization.
-
-    Reads DSN and options from env and safely no-ops if unavailable.
-    Env vars:
-      - SENTRY_DSN or RANKINGS_SENTRY_DSN
-      - SENTRY_ENV or ENV
-      - SENTRY_TRACES_SAMPLE_RATE (float, optional)
-      - SENTRY_PROFILES_SAMPLE_RATE (float, optional)
-      - SENTRY_DEBUG (1/true)
-    """
-    dsn = os.getenv("SENTRY_DSN") or os.getenv("RANKINGS_SENTRY_DSN")
-    if not dsn:
-        return
-    try:
-        import sentry_sdk  # type: ignore
-        from sentry_sdk.integrations.logging import (
-            LoggingIntegration,  # type: ignore
-        )
-    except Exception:
-        return
-
-    env = os.getenv("SENTRY_ENV") or os.getenv("ENV") or "development"
-
-    def _fenv(name: str, default: float) -> float:
-        try:
-            return float(os.getenv(name, str(default)))
-        except Exception:
-            return default
-
-    traces = _fenv("SENTRY_TRACES_SAMPLE_RATE", 0.0)
-    profiles = _fenv("SENTRY_PROFILES_SAMPLE_RATE", 0.0)
-    debug = os.getenv("SENTRY_DEBUG", "").lower() in {"1", "true", "yes", "on"}
-
-    logging_integration = LoggingIntegration(
-        level=logging.INFO,  # capture breadcrumbs from INFO+
-        event_level=logging.ERROR,  # send events for ERROR+
-    )
-
-    try:
-        sentry_sdk.init(
-            dsn=dsn,
-            environment=env,
-            release=release or _get_build_version(),
-            integrations=[logging_integration],
-            traces_sample_rate=traces,
-            profiles_sample_rate=profiles,
-            debug=debug,
-        )
-        # Tag service for filtering
-        sentry_sdk.set_tag("service", context)
-    except Exception:
-        # Do not block execution on Sentry init issues
-        pass
+# Local Sentry init moved to rankings.core.sentry.init_sentry
 
 
 def _persist_rankings(
@@ -335,7 +281,9 @@ def _persist_appearance_team_assignments(
             conn.execute(stmt)
         return len(rows)
     except Exception as e:
-        print(f"Appearance team assignment upsert skipped due to error: {e}")
+        logging.getLogger(__name__).warning(
+            "Appearance team assignment upsert skipped due to error: %s", e
+        )
         return 0
 
 
@@ -661,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         logging.basicConfig(level=logging.INFO)
     try:
-        _init_sentry(context="rankings_update", release=_get_build_version())
+        init_sentry(context="rankings_update", release=_get_build_version())
     except Exception:
         pass
 
