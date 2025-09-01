@@ -69,10 +69,12 @@ jobs:
             # e.g., postgresql+psycopg2://user:pass@host:5432/dbname?sslmode=require
             export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
             # Optional schema override (defaults to comp_rankings if unset)
-            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
-            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
-            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+          export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+          export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
+          # Sentry DSN for error reporting (optional, safe if unset)
+          export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+          export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
+          export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
 
             # DigitalOcean Spaces / S3 credentials and destination
             export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
@@ -124,10 +126,12 @@ jobs:
             set +o histexpand || true
             # Database URL (preferred for rankings update)
             export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
-            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
-            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
-            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+          export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+          export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
+          export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+          export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+          # Sentry DSN for error reporting (optional, safe if unset)
+          export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
             # DigitalOcean Spaces / S3 credentials and destination
             export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
             export AWS_SECRET_ACCESS_KEY='${{ secrets.DIGITALOCEAN_SPACES_SECRET }}'
