@@ -42,6 +42,7 @@ from rankings.scraping.calendar_api import (
 from rankings.scraping.enrich import (
     apply_enrichment_cache,
     enrich_appearances_team_by_match_api,
+    apply_enrichment_db_cache,
 )
 from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
@@ -678,7 +679,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except Exception:
                 pass
-            # Apply local enrichment cache first (if present), then resolve remaining via API
+            # Apply DB enrichment cache first (if present)
+            try:
+                appearances = apply_enrichment_db_cache(appearances, engine)
+            except Exception:
+                pass
+            # Apply local enrichment cache next (if present), then resolve remaining via API
             try:
                 cache_dir = os.getenv(
                     "RANKINGS_ENRICH_CACHE_DIR",

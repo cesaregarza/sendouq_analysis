@@ -20,7 +20,9 @@ import requests
 from rankings.core.constants import SENDOU_PUBLIC_API_BASE_URL
 from rankings.scraping.calendar_api import _auth_headers
 from rankings.sql import create_engine as rankings_create_engine
+from rankings.sql import models as RM
 from rankings.sql.load import load_core_tables, load_player_appearances_df
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
 def _load_processed_match_ids(out_dir: Path) -> set[int]:
@@ -81,6 +83,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     ap.add_argument("--max-matches", type=int, default=None)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--to-db", action="store_true", help="Write assignments to DB instead of files")
     args = ap.parse_args(argv)
 
     engine = rankings_create_engine(args.db_url)
@@ -131,9 +134,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         match_ids = match_ids[: int(args.max_matches)]
 
     out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not args.to_db:
+        out_dir.mkdir(parents=True, exist_ok=True)
     processed: set[int] = set()
-    if args.resume:
+    if args.resume and not args.to_db:
         processed = _load_processed_match_ids(out_dir)
     todo = [m for m in match_ids if m not in processed]
     print(
@@ -286,14 +290,43 @@ def main(argv: Optional[list[str]] = None) -> int:
             enriched = enriched.unique(
                 subset=["tournament_id", "match_id", "user_id"]
             )
-        # Choose extension/format
-        ext = ".feather" if args.format == "feather" else ".parquet"
-        out_path = out_dir / f"batch_{i//int(args.batch_size):05d}{ext}"
-        if args.format == "feather":
-            enriched.write_ipc(str(out_path))
+        if args.to_db:
+            rows = (
+                [
+                    {
+                        "tournament_id": int(r["tournament_id"]),
+                        "match_id": int(r["match_id"]),
+                        "player_id": int(r["user_id"]),
+                        "team_id": int(r["team_id"]),
+                    }
+                    for r in enriched.iter_rows(named=True)
+                ]
+                if not enriched.is_empty()
+                else []
+            )
+            table = RM.PlayerAppearanceTeam.__table__
+            stmt = pg_insert(table).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[
+                    table.c.tournament_id,
+                    table.c.match_id,
+                    table.c.player_id,
+                ],
+                set_={"team_id": stmt.excluded.team_id},
+            )
+            with rankings_create_engine(args.db_url).begin() as conn:
+                if rows:
+                    conn.execute(stmt)
+            print(f"Upserted {len(rows)} assignments into DB")
         else:
-            enriched.write_parquet(str(out_path))
-        print(f"Wrote {enriched.height} assignments -> {out_path}")
+            # Choose extension/format
+            ext = ".feather" if args.format == "feather" else ".parquet"
+            out_path = out_dir / f"batch_{i//int(args.batch_size):05d}{ext}"
+            if args.format == "feather":
+                enriched.write_ipc(str(out_path))
+            else:
+                enriched.write_parquet(str(out_path))
+            print(f"Wrote {enriched.height} assignments -> {out_path}")
 
     print("Done.")
     return 0

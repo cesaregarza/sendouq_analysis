@@ -280,6 +280,43 @@ class PlayerAppearance(Base):
     )
 
 
+class PlayerAppearanceTeam(Base):
+    __tablename__ = "player_appearance_teams"
+    __table_args__ = (
+        UniqueConstraint(
+            "tournament_id",
+            "match_id",
+            "player_id",
+            name="uq_player_appearance_team_unique",
+        ),
+        Index("ix_pat_tournament_match", "tournament_id", "match_id"),
+        Index("ix_pat_tournament_player", "tournament_id", "player_id"),
+        {"schema": SCHEMA},
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    tournament_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
+        nullable=False,
+    )
+    match_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.matches.match_id"),
+        nullable=False,
+    )
+    player_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.players.player_id"),
+        nullable=False,
+    )
+    team_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.tournament_teams.team_id"),
+        nullable=False,
+    )
+
+
 class PlayerRanking(Base):
     __tablename__ = "player_rankings"
     __table_args__ = (

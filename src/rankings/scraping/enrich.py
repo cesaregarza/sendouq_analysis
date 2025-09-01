@@ -322,3 +322,36 @@ def apply_enrichment_cache(
             )
         ).drop(["team_id_right"])
     return out
+
+
+def apply_enrichment_db_cache(appearances: pl.DataFrame, engine) -> pl.DataFrame:
+    """Apply cached team_id assignments stored in the database.
+
+    Reads mapping rows [tournament_id, match_id, user_id, team_id] from the
+    player appearance team mapping table and coalesces onto the provided
+    appearances frame.
+    """
+    if appearances is None or appearances.is_empty():
+        return appearances
+    try:
+        # Lazy import to avoid heavier dependency at module import time
+        from rankings.sql.load import load_player_appearance_teams_df
+
+        mapping = load_player_appearance_teams_df(engine)
+        if mapping is None or mapping.is_empty():
+            return appearances
+        out = appearances.join(
+            mapping,
+            on=["tournament_id", "match_id", "user_id"],
+            how="left",
+        )
+        # prefer DB team id when present
+        if "team_id_right" in out.columns:
+            out = out.with_columns(
+                pl.coalesce([pl.col("team_id"), pl.col("team_id_right")]).alias(
+                    "team_id"
+                )
+            ).drop(["team_id_right"])
+        return out
+    except Exception:
+        return appearances

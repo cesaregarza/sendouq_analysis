@@ -219,6 +219,32 @@ def load_player_appearances_df(engine: Engine) -> pl.DataFrame:
     return df
 
 
+def load_player_appearance_teams_df(engine: Engine) -> pl.DataFrame:
+    """Load cached team assignments for appearances from the database.
+
+    Returns a DataFrame with columns: tournament_id, match_id, user_id, team_id.
+    """
+    sql = f"""
+        SELECT
+            tournament_id,
+            match_id,
+            player_id AS user_id,
+            team_id
+        FROM {SCHEMA}.player_appearance_teams
+    """
+    df = _read_sql(engine, sql)
+    if df.is_empty():
+        return df
+    return df.with_columns(
+        [
+            pl.col("tournament_id").cast(pl.Int64, strict=False),
+            pl.col("match_id").cast(pl.Int64, strict=False),
+            pl.col("user_id").cast(pl.Int64, strict=False),
+            pl.col("team_id").cast(pl.Int64, strict=False),
+        ]
+    ).unique(subset=["tournament_id", "match_id", "user_id"])
+
+
 def load_player_ranking_stats_df(
     engine: Engine,
     *,

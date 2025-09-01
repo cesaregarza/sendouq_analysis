@@ -368,7 +368,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
             except Exception:
                 pass
-            # Apply local enrichment cache first (if available)
+            # Apply DB enrichment cache first (if available), then local cache
+            try:
+                appearances = apply_enrichment_db_cache(appearances, engine)
+            except Exception:
+                pass
             try:
                 cache_dir = os.getenv(
                     "RANKINGS_ENRICH_CACHE_DIR",
