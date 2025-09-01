@@ -8,6 +8,18 @@ from dash import Dash, Input, Output, callback, dash_table, dcc, html
 from sendouq_dashboard.load.load_data import load_latest_player_stats
 
 
+def _configure_logging() -> None:
+    level = os.getenv("DASH_LOG_LEVEL", "INFO").upper()
+    try:
+        lvl = getattr(logging, level)
+    except Exception:
+        lvl = logging.INFO
+    logging.basicConfig(
+        level=lvl,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+
 def _init_sentry() -> None:
     """Initialize Sentry for the Dash/Flask app (best-effort)."""
     dsn = os.getenv("SENTRY_DSN") or os.getenv("DASH_SENTRY_DSN")
@@ -53,6 +65,7 @@ def _init_sentry() -> None:
         pass
 
 
+_configure_logging()
 _init_sentry()
 df = load_latest_player_stats()
 
