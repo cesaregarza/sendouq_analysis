@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 """
-Best-effort enrichment for appearance team assignment via match API.
+Best-effort enrichment for match-level participant team assignment.
 
-This module provides a helper that, for appearance rows that failed roster-based
-team inference, calls the public match endpoint `/api/tournament-match/{id}` to
-recover the two team IDs and the set of participating users, then assigns
-team_id to the unmatched users using roster-majority heuristics. The goal is to
-minimize API usage by fetching only for matches that actually need enrichment.
+Goal: build the player-versus-player graph correctly by identifying which
+players actually participated in a match and assigning them to the winning or
+losing team. For appearance rows that did not get a team from roster inference,
+we consult the public match endpoint `/api/tournament-match/{id}` to recover the
+two team IDs and the union of participants at the match level (map-level data
+is unioned). We then assign:
+
+1) If the player is in a roster for team1 or team2, use that team.
+2) Otherwise, prefer the team with FEWER rostered participants among the
+   participants set (common 3 vs 4 scenario implies the unmatched sub belongs
+   on the smaller side).
+3) Otherwise, leave as null (ambiguous).
+
+This keeps API usage to only those matches that actually need enrichment.
 """
 
 from typing import Iterable, Optional
@@ -77,8 +86,9 @@ def enrich_appearances_team_by_match_api(
 
     - Only touches rows where team_id is null after roster inference.
     - Minimizes API calls by fetching only for affected match_ids (optionally limited by max_calls).
-    - Heuristic: assign unmatched users to the team that has more rostered players
-      among the match participants. If ambiguous (tie or insufficient info), leave null.
+    - Heuristic: assign unmatched users to the team that has FEWER rostered
+      participants among the match participants (typical 3 vs 4 case). If still
+      ambiguous (tie or insufficient info), leave null.
 
     Returns a new DataFrame with the same schema as appearances, with team_id possibly filled.
     """
@@ -159,18 +169,11 @@ def enrich_appearances_team_by_match_api(
         r2 = roster_sets.get((tid, t2), set())
         c1 = len(participants & r1)
         c2 = len(participants & r2)
-        # Heuristics:
-        # 1) Prefer assigning to the team with FEWER rostered participants on this match
-        #    (common 4v4 case: 3 vs 4 → the unmatched is almost always on the 3 side).
+        # Heuristic: prefer the side with FEWER rostered participants among the
+        # participants set; ties remain ambiguous.
         prefer_smaller: Optional[int] = None
         if c1 != c2:
             prefer_smaller = t1 if c1 < c2 else t2
-        # 2) Fallback majority if still ambiguous elsewhere
-        majority_team: Optional[int] = None
-        if c1 > c2:
-            majority_team = t1
-        elif c2 > c1:
-            majority_team = t2
 
         # For each unmatched user in this match, assign if clear
         um = unmatched.filter(
@@ -204,15 +207,6 @@ def enrich_appearances_team_by_match_api(
                         "match_id": mid,
                         "user_id": uid,
                         "team_id": prefer_smaller,
-                    }
-                )
-            elif majority_team is not None and uid in participants:
-                assign_rows.append(
-                    {
-                        "tournament_id": tid,
-                        "match_id": mid,
-                        "user_id": uid,
-                        "team_id": majority_team,
                     }
                 )
             # else leave unassigned
@@ -324,7 +318,9 @@ def apply_enrichment_cache(
     return out
 
 
-def apply_enrichment_db_cache(appearances: pl.DataFrame, engine) -> pl.DataFrame:
+def apply_enrichment_db_cache(
+    appearances: pl.DataFrame, engine
+) -> pl.DataFrame:
     """Apply cached team_id assignments stored in the database.
 
     Reads mapping rows [tournament_id, match_id, user_id, team_id] from the

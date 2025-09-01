@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 """
-Batch-enrich appearance team assignments and save locally in chunks.
+Batch-enrich match-level participant team assignments and save locally in chunks.
 
 This CLI scans unmatched appearance rows (team_id missing after roster join)
-for a configured window, fetches match details for those matches, assigns
-team_id using heuristics, and writes the assignments to local parquet files
-every N matches to allow resume-on-failure.
+for a configured window, fetches match details only for those matches, assigns
+team_id using a simple heuristic that prioritizes correctness for the graph:
+
+1) If the player is rostered on team1/2, use that team.
+2) Otherwise, prefer the team with FEWER rostered participants among the
+   match’s participants (3 vs 4 indicates the unmatched sub likely belongs
+   on the smaller side).
+3) Otherwise leave null (ambiguous).
+
+Assignments are written to local cache files or directly upserted into DB.
 """
 
 import argparse
@@ -16,13 +23,13 @@ from typing import Optional
 
 import polars as pl
 import requests
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.core.constants import SENDOU_PUBLIC_API_BASE_URL
 from rankings.scraping.calendar_api import _auth_headers
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
 from rankings.sql.load import load_core_tables, load_player_appearances_df
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
 def _load_processed_match_ids(out_dir: Path) -> set[int]:
@@ -83,7 +90,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     ap.add_argument("--max-matches", type=int, default=None)
     ap.add_argument("--resume", action="store_true")
-    ap.add_argument("--to-db", action="store_true", help="Write assignments to DB instead of files")
+    ap.add_argument(
+        "--to-db",
+        action="store_true",
+        help="Write assignments to DB instead of files",
+    )
     args = ap.parse_args(argv)
 
     engine = rankings_create_engine(args.db_url)
@@ -222,7 +233,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             c1 = len(parts & r1)
             c2 = len(parts & r2)
             prefer_smaller = t1 if c1 < c2 else (t2 if c2 < c1 else None)
-            majority = t1 if c1 > c2 else (t2 if c2 > c1 else None)
             out: list[dict] = []
             for uid in uids:
                 if uid in r1:
@@ -252,15 +262,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                             "team_id": prefer_smaller,
                         }
                     )
-                elif majority is not None and uid in parts:
-                    out.append(
-                        {
-                            "tournament_id": tid,
-                            "match_id": mid,
-                            "user_id": uid,
-                            "team_id": majority,
-                        }
-                    )
+                # else leave unassigned when ambiguous
             return out
 
         results: list[dict] = []

@@ -1,0 +1,3 @@
+Prepared 5764 unique assignments from 154 files in data/enrichment/appearances_enriched
+Filtered out 18 rows due to missing FK references
+Upserted 5746 rows into player_appearance_teams

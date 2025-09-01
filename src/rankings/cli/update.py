@@ -41,8 +41,8 @@ from rankings.scraping.calendar_api import (
 )
 from rankings.scraping.enrich import (
     apply_enrichment_cache,
-    enrich_appearances_team_by_match_api,
     apply_enrichment_db_cache,
+    enrich_appearances_team_by_match_api,
 )
 from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
@@ -178,6 +178,93 @@ def _persist_rankings(
     with engine.begin() as conn:
         conn.execute(stmt)
     return len(rows)
+
+
+def _persist_appearance_team_assignments(
+    engine, appearances: pl.DataFrame
+) -> int:
+    """Upsert enriched appearance team assignments into DB.
+
+    Expects `appearances` to contain columns [tournament_id, match_id, user_id, team_id]
+    after enrichment. Performs an upsert into player_appearance_teams on the
+    (tournament_id, match_id, player_id) key, setting team_id on conflict.
+
+    Best-effort: filters to rows with non-null team_id and keys present in the
+    current dataset. Attempts to filter to known player IDs to avoid FK errors.
+    Returns number of rows attempted (after filtering).
+    """
+    try:
+        if appearances is None or appearances.is_empty():
+            return 0
+        needed = {"tournament_id", "match_id", "user_id", "team_id"}
+        if not needed.issubset(set(appearances.columns)):
+            return 0
+        df = (
+            appearances.select(
+                [
+                    pl.col("tournament_id").cast(pl.Int64, strict=False),
+                    pl.col("match_id").cast(pl.Int64, strict=False),
+                    pl.col("user_id").cast(pl.Int64, strict=False),
+                    pl.col("team_id").cast(pl.Int64, strict=False),
+                ]
+            )
+            .drop_nulls(["tournament_id", "match_id", "user_id", "team_id"])  # type: ignore[arg-type]
+            .unique(subset=["tournament_id", "match_id", "user_id"])
+        )
+        if df.is_empty():
+            return 0
+
+        # Filter to known players to avoid foreign key violations (best-effort)
+        try:
+            unique_pids = df.select("user_id").unique()["user_id"].to_list()
+            if unique_pids:
+                from sqlalchemy import text as sqltext
+
+                with engine.connect() as conn:
+                    rows = conn.execute(
+                        sqltext(
+                            f"SELECT player_id FROM {RANKINGS_SCHEMA}.players WHERE player_id = ANY(:ids)"
+                        ),
+                        {"ids": unique_pids},
+                    ).fetchall()
+                known = {int(r[0]) for r in rows}
+                if known:
+                    df = df.filter(pl.col("user_id").is_in(list(known)))
+        except Exception:
+            # If the filter fails for any reason, proceed without it; DB may enforce FKs
+            pass
+
+        if df.is_empty():
+            return 0
+
+        rows = [
+            {
+                "tournament_id": int(r["tournament_id"]),
+                "match_id": int(r["match_id"]),
+                "player_id": int(r["user_id"]),
+                "team_id": int(r["team_id"]),
+            }
+            for r in df.iter_rows(named=True)
+        ]
+        if not rows:
+            return 0
+
+        table = RM.PlayerAppearanceTeam.__table__
+        stmt = pg_insert(table).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                table.c.tournament_id,
+                table.c.match_id,
+                table.c.player_id,
+            ],
+            set_={"team_id": stmt.excluded.team_id},
+        )
+        with engine.begin() as conn:
+            conn.execute(stmt)
+        return len(rows)
+    except Exception as e:
+        print(f"Appearance team assignment upsert skipped due to error: {e}")
+        return 0
 
 
 def _compute_player_stats(
@@ -731,6 +818,19 @@ def main(argv: list[str] | None = None) -> int:
                         print("No appearance-based roster promotions needed.")
                 except Exception as e:
                     print(f"Roster promotion skipped due to error: {e}")
+
+            # Persist enriched team assignments to DB to warm the cache for future runs
+            try:
+                if save_to_db:
+                    up_cnt = _persist_appearance_team_assignments(
+                        engine, appearances
+                    )
+                    if up_cnt:
+                        print(
+                            f"Upserted {up_cnt} appearance team assignments to DB"
+                        )
+            except Exception as e:
+                print(f"Appearance team assignment persist failed: {e}")
         # Build engine config; allow overrides via YAML keys
         eng_cfg = ExposureLogOddsConfig()
 

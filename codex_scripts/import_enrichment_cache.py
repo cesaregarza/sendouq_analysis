@@ -22,10 +22,36 @@ import os
 from pathlib import Path
 
 import polars as pl
+from sqlalchemy import text as sqltext
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
+from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
+
+
+def _load_env(dotenv_path: str | None) -> None:
+    """Lightweight .env loader (no extra dependency).
+
+    Sets os.environ keys only if not already present.
+    """
+    if not dotenv_path:
+        return
+    p = Path(dotenv_path)
+    if not p.exists():
+        return
+    try:
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            os.environ.setdefault(k, v)
+    except Exception:
+        pass
 
 
 def _iter_cache_files(cache_dir: Path):
@@ -94,23 +120,95 @@ def _upsert(engine, df: pl.DataFrame, chunk_size: int) -> int:
     return total
 
 
+def _fetch_existing_ids(engine, table: str, col: str, ids: list[int]) -> set[int]:
+    if not ids:
+        return set()
+    out: set[int] = set()
+    with engine.connect() as conn:
+        for i in range(0, len(ids), 1000):
+            chunk = ids[i : i + 1000]
+            q = sqltext(
+                f"SELECT {col} FROM {RANKINGS_SCHEMA}.{table} WHERE {col} = ANY(:ids)"
+            )
+            rows = conn.execute(q, {"ids": chunk}).fetchall()
+            out.update(int(r[0]) for r in rows)
+    return out
+
+
+def _filter_existing_foreign_keys(engine, df: pl.DataFrame) -> pl.DataFrame:
+    """Best-effort filter to avoid FK violations by removing unknown references.
+
+    Keeps only rows where tournament_id, match_id, player_id, and team_id exist
+    in tournaments, matches, players, and tournament_teams respectively.
+    """
+    if df.is_empty():
+        return df
+    tids = [
+        int(x)
+        for x in df.select("tournament_id").unique()["tournament_id"].to_list()
+        if x is not None
+    ]
+    mids = [
+        int(x)
+        for x in df.select("match_id").unique()["match_id"].to_list()
+        if x is not None
+    ]
+    pids = [
+        int(x)
+        for x in df.select("user_id").unique()["user_id"].to_list()
+        if x is not None
+    ]
+    teams = [
+        int(x)
+        for x in df.select("team_id").unique()["team_id"].to_list()
+        if x is not None
+    ]
+
+    existing_tids = _fetch_existing_ids(engine, "tournaments", "tournament_id", tids)
+    existing_mids = _fetch_existing_ids(engine, "matches", "match_id", mids)
+    existing_pids = _fetch_existing_ids(engine, "players", "player_id", pids)
+    existing_teams = _fetch_existing_ids(
+        engine, "tournament_teams", "team_id", teams
+    )
+
+    before = df.height
+    df2 = df.filter(
+        pl.col("tournament_id").is_in(list(existing_tids))
+        & pl.col("match_id").is_in(list(existing_mids))
+        & pl.col("user_id").is_in(list(existing_pids))
+        & pl.col("team_id").is_in(list(existing_teams))
+    )
+    removed = before - df2.height
+    if removed > 0:
+        print(f"Filtered out {removed} rows due to missing FK references")
+    return df2
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Import local enrichment cache into DB.")
-    ap.add_argument(
-        "--db-url",
-        type=str,
-        default=os.getenv("RANKINGS_DATABASE_URL") or os.getenv("DATABASE_URL"),
-    )
+    ap.add_argument("--dotenv", type=str, default=".env", help="Path to .env (default: .env)")
+    ap.add_argument("--db-url", type=str, default=None, help="DB URL (falls back to env)")
     ap.add_argument(
         "--cache-dir",
         type=str,
-        default=os.getenv("RANKINGS_ENRICH_CACHE_DIR", "data/enrichment/appearances_enriched"),
+        default=None,
+        help="Cache directory (falls back to env RANKINGS_ENRICH_CACHE_DIR)",
     )
     ap.add_argument("--chunk-size", type=int, default=20000)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    cache_dir = Path(args.cache_dir)
+    # Load .env before reading env-based defaults
+    _load_env(args.dotenv)
+
+    db_url = args.db_url or os.getenv("RANKINGS_DATABASE_URL") or os.getenv("DATABASE_URL")
+    if not db_url:
+        print("Error: DB URL not provided and not found in env.")
+        raise SystemExit(2)
+
+    cache_dir_arg = args.cache_dir or os.getenv("RANKINGS_ENRICH_CACHE_DIR") or "data/enrichment/appearances_enriched"
+
+    cache_dir = Path(cache_dir_arg)
     if not cache_dir.exists():
         print(f"Cache dir not found: {cache_dir}")
         raise SystemExit(1)
@@ -136,6 +234,13 @@ if __name__ == "__main__":
         print("Dry run: not writing to DB.")
         raise SystemExit(0)
 
-    engine = rankings_create_engine(args.db_url)
+    engine = rankings_create_engine(db_url)
+    # Ensure schema/tables exist (idempotent)
+    try:
+        rankings_create_all(engine)
+    except Exception as e:
+        print(f"Warning: failed to create schema/tables: {e}")
+    # Ensure references exist to avoid FK violations
+    all_df = _filter_existing_foreign_keys(engine, all_df)
     inserted = _upsert(engine, all_df, int(args.chunk_size))
     print(f"Upserted {inserted} rows into player_appearance_teams")
