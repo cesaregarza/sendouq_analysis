@@ -30,11 +30,15 @@ from rankings.analysis.engine_state import save_engine_state
 from rankings.cli import db_import as import_cli
 from rankings.core import ExposureLogOddsConfig
 from rankings.scraping.batch import scrape_latest_tournaments
+from rankings.scraping.enrich import (
+    apply_enrichment_cache,
+    enrich_appearances_team_by_match_api,
+)
 from rankings.scraping.storage import load_match_appearances
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
-from rankings.sql.load import load_core_tables
+from rankings.sql.load import load_core_tables, load_player_appearances_df
 
 
 def _get_build_version() -> str:
@@ -351,8 +355,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             print("No data to run engine (empty matches/players)")
             return 0
 
-        # Try to use per-match appearances from scraped JSON if available
-        appearances = load_match_appearances(args.data_dir)
+        # Try to use per-match appearances from DB; fall back to scraped JSON if none
+        appearances = load_player_appearances_df(engine)
+        if appearances.is_empty():
+            appearances = load_match_appearances(args.data_dir)
         if not appearances.is_empty():
             # Filter to IDs present in current matches to avoid bloat
             try:
@@ -362,6 +368,32 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
             except Exception:
                 pass
+            # Apply local enrichment cache first (if available)
+            try:
+                cache_dir = os.getenv(
+                    "RANKINGS_ENRICH_CACHE_DIR",
+                    "data/enrichment/appearances_enriched",
+                )
+                appearances = apply_enrichment_cache(appearances, cache_dir)
+            except Exception:
+                pass
+            # Best-effort enrichment for unmatched team assignment (limited calls)
+            try:
+                needs_enrichment = False
+                if "team_id" not in appearances.columns:
+                    needs_enrichment = True
+                else:
+                    needs_enrichment = appearances.select(
+                        pl.col("team_id").is_null().any()
+                    ).item()  # type: ignore[arg-type]
+                if needs_enrichment:
+                    max_calls_env = os.getenv("RANKINGS_ENRICH_APPS_MAX_CALLS")
+                    max_calls = int(max_calls_env) if max_calls_env else 500
+                    appearances = enrich_appearances_team_by_match_api(
+                        appearances, matches, players, max_calls=max_calls
+                    )
+            except Exception as e:
+                print(f"Appearance enrichment skipped due to error: {e}")
 
         eng = ExposureLogOddsEngine(ExposureLogOddsConfig())
         if appearances.is_empty():
