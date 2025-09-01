@@ -608,10 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         setup_logging(level=lvl, format_style=fmt)
     except Exception:
         logging.basicConfig(level=logging.INFO)
-    try:
-        init_sentry(context="rankings_update", release=_get_build_version())
-    except Exception:
-        pass
+    init_sentry(context="rankings_update", release=_get_build_version())
 
     # Load config (YAML) and merge defaults
     def _load_config(path: Optional[str]) -> Dict[str, Any]:

@@ -143,7 +143,7 @@ def init_sentry(
             debug=debug,
         )
         sentry_sdk.set_tag("service", context)
-        _LOG.debug(
+        _LOG.info(
             "Sentry initialized: context=%s env=%s traces=%s profiles=%s",
             context,
             env,
