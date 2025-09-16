@@ -53,6 +53,7 @@ from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql import models as RM
 from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
 from rankings.sql.load import load_core_tables, load_player_appearances_df
+from rankings.sql.views import ensure_rankings_tournament_event_times_view
 from rankings.utils.spaces_upload import upload_outputs
 
 try:
@@ -1007,6 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
                     e,
                     build_version,
                 )
+            ensure_rankings_tournament_event_times_view(engine)
         log.info("Engine run complete: %d rankings written", ranks_rows)
     else:
         log.info("Skipping engine run (empty matches or players).")
