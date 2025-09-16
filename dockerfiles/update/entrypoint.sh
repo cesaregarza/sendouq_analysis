@@ -46,5 +46,8 @@ if [[ "${WRITE_PARQUET}" == "true" ]]; then
   ARGS+=(--write-parquet)
 fi
 
-# Prefer module execution to avoid reliance on console_scripts install
-exec poetry run python -m rankings.cli.update "${ARGS[@]}" "$@"
+if [[ -d "/app/src/rankings" ]]; then
+  export PYTHONPATH="/app/src:${PYTHONPATH:-}"
+fi
+
+exec python -m rankings.cli.update "${ARGS[@]}" "$@"

@@ -254,57 +254,18 @@ def scrape_to_database(
     batch_size: int = 10,
     max_failures: int = DEFAULT_MAX_FAILURES,
 ) -> dict[str, int | list[int]]:
+    """Minimal compatibility wrapper that defers to JSON scraping.
+
+    Direct database writes were handled by the legacy sendouq_analysis scraper,
+    which is no longer shipped with the rankings build. We keep the function
+    for API compatibility but redirect to the JSON batch scraper.
     """
-    Scrape tournaments directly to database using existing scraper.
 
-    This function uses the existing database scraper from
-    src/sendouq_analysis/scrape_tournament.py
+    if not tournament_ids:
+        return {"scraped": 0, "failed": 0, "failed_ids": []}
 
-    Parameters
-    ----------
-    tournament_ids : list of int
-        Tournament IDs to scrape
-    db_path : str, optional
-        Database file path
-    batch_size : int, optional
-        Batch size for database operations
-    max_failures : int, optional
-        Maximum failures before stopping
-
-    Returns
-    -------
-    dict
-        Results summary
-    """
-    try:
-        from sendouq_analysis.scrape_tournament import scrape_tournaments
-
-        # Convert tournament_ids to start/end range for the existing scraper
-        if not tournament_ids:
-            return {"scraped": 0, "failed": 0, "failed_ids": []}
-
-        start_value = min(tournament_ids)
-        end_value = max(tournament_ids)
-
-        logger.info(
-            f"Scraping tournaments {start_value}-{end_value} to database {db_path}"
-        )
-
-        # Use the existing database scraper
-        result = scrape_tournaments(
-            batch_size=batch_size,
-            start_value=start_value,
-            end_value=end_value,
-            max_failures=max_failures,
-        )
-
-        return {
-            "scraped": len(tournament_ids),  # Estimate
-            "failed": 0,
-            "failed_ids": [],
-        }
-
-    except ImportError as e:
-        logger.warning(f"Database scraper not available: {e}")
-        logger.info("Falling back to JSON scraping...")
-        return scrape_tournament_batch(tournament_ids)
+    logger.info(
+        "Database scraping is deprecated; using JSON batch scrape instead for %d tournaments",
+        len(tournament_ids),
+    )
+    return scrape_tournament_batch(tournament_ids, batch_size=batch_size)
