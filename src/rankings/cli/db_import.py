@@ -394,14 +394,23 @@ def import_file(
 
     if players is not None and not players.is_empty():
         # Insert players (distinct)
-        pldf_players = players.select(
-            [
-                pl.col("user_id").alias("player_id"),
-                pl.col("username").alias("display_name"),
-                pl.col("discord_id"),
-                pl.col("country"),
-            ]
-        ).unique(subset=["player_id"])
+        pldf_players = (
+            players.select(
+                [
+                    pl.col("user_id").alias("player_id"),
+                    pl.col("username").alias("display_name"),
+                    pl.col("discord_id"),
+                    pl.col("country").cast(pl.Utf8).alias("country"),
+                ]
+            )
+            .with_columns(
+                pl.col("country")
+                .str.strip_chars()
+                .str.to_uppercase()
+                .str.slice(0, 2)
+            )
+            .unique(subset=["player_id"])
+        )
         _bulk_insert(pldf_players, RM.Player, engine)
 
         # Roster entries
