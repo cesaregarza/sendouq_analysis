@@ -7,10 +7,7 @@ import sys
 import requests
 from sqlalchemy import text
 
-from rankings.cli.repull import (
-    import_with_rollback,
-    _scrape_with_players,
-)
+from rankings.cli.repull import _scrape_with_players, import_with_rollback
 from rankings.sql import create_all as rankings_create_all
 from rankings.sql import create_engine as rankings_create_engine
 from rankings.sql.constants import SCHEMA as RANKINGS_SCHEMA
@@ -57,7 +54,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _find_tournaments_without_players(
     engine, *, include_unfinalized: bool, limit: int | None
 ) -> list[int]:
-    where_clause = "" if include_unfinalized else "WHERE COALESCE(t.is_finalized, false) = true"
+    where_clause = (
+        ""
+        if include_unfinalized
+        else "WHERE COALESCE(t.is_finalized, false) = true"
+    )
     sql = f"""
         SELECT t.tournament_id
         FROM {RANKINGS_SCHEMA}.tournaments AS t
@@ -96,10 +97,16 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if not target_ids:
-        logger.info("No tournaments found without roster entries; nothing to do.")
+        logger.info(
+            "No tournaments found without roster entries; nothing to do."
+        )
         return 0
 
-    logger.info("Found %d tournament(s) without roster entries: %s", len(target_ids), target_ids)
+    logger.info(
+        "Found %d tournament(s) without roster entries: %s",
+        len(target_ids),
+        target_ids,
+    )
 
     session = requests.Session()
     payloads = []

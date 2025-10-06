@@ -104,11 +104,12 @@ def init_sentry(
     dsn = _first_env(dsn_envs)
     if not dsn:
         _LOG.info(
-            "Sentry disabled: no DSN configured (checked envs=%s)", list(dsn_envs)
+            "Sentry disabled: no DSN configured (checked envs=%s)",
+            list(dsn_envs),
         )
         return False
     # Be resilient to accidental quotes/whitespace in env secret values
-    dsn = dsn.strip().strip("\"").strip("'")
+    dsn = dsn.strip().strip('"').strip("'")
     if not _is_valid_dsn(dsn):
         _LOG.info("Sentry disabled: DSN appears invalid; check secrets/env")
         return False

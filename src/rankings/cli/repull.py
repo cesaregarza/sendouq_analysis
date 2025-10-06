@@ -18,9 +18,7 @@ from rankings.sql import models as RM
 logger = logging.getLogger(__name__)
 
 
-def _scrape_with_players(
-    tournament_id: int, session: requests.Session
-) -> dict:
+def _scrape_with_players(tournament_id: int, session: requests.Session) -> dict:
     """Fetch tournament payload and enrich it with player matches when available."""
     payload = scrape_tournament(tournament_id, session=session)
     try:
@@ -48,7 +46,9 @@ def _row_to_dict(row) -> dict:
     return dict(mapping)
 
 
-def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[dict]]:
+def _snapshot_for_rollback(
+    engine, tournament_ids: list[int]
+) -> dict[str, list[dict]]:
     if not tournament_ids:
         return {
             "tournaments": [],
@@ -96,7 +96,9 @@ def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[
         if stage_ids:
             group_rows = list(
                 conn.execute(
-                    select(group_table).where(group_table.c.stage_id.in_(stage_ids))
+                    select(group_table).where(
+                        group_table.c.stage_id.in_(stage_ids)
+                    )
                 )
             )
             snapshot["groups"] = [_row_to_dict(row) for row in group_rows]
@@ -131,7 +133,9 @@ def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[
         snapshot["roster_entries"] = [
             _row_to_dict(row)
             for row in conn.execute(
-                select(roster_table).where(roster_table.c.tournament_id.in_(tids))
+                select(roster_table).where(
+                    roster_table.c.tournament_id.in_(tids)
+                )
             )
         ]
 
@@ -173,7 +177,9 @@ def _delete_current_state(conn, tournament_ids: list[int]) -> None:
 
     stage_rows = list(
         conn.execute(
-            select(stage_table.c.stage_id).where(stage_table.c.tournament_id.in_(tids))
+            select(stage_table.c.stage_id).where(
+                stage_table.c.tournament_id.in_(tids)
+            )
         )
     )
     stage_ids = [row[0] for row in stage_rows]
@@ -200,7 +206,9 @@ def _delete_current_state(conn, tournament_ids: list[int]) -> None:
         round_ids = [row[0] for row in round_rows]
 
     conn.execute(
-        delete(appearance_table).where(appearance_table.c.tournament_id.in_(tids))
+        delete(appearance_table).where(
+            appearance_table.c.tournament_id.in_(tids)
+        )
     )
     conn.execute(
         delete(appearance_team_table).where(
@@ -214,20 +222,28 @@ def _delete_current_state(conn, tournament_ids: list[int]) -> None:
         delete(match_table).where(match_table.c.tournament_id.in_(tids))
     )
     if round_ids:
-        conn.execute(delete(round_table).where(round_table.c.round_id.in_(round_ids)))
+        conn.execute(
+            delete(round_table).where(round_table.c.round_id.in_(round_ids))
+        )
     if group_ids:
-        conn.execute(delete(group_table).where(group_table.c.group_id.in_(group_ids)))
+        conn.execute(
+            delete(group_table).where(group_table.c.group_id.in_(group_ids))
+        )
     if stage_ids:
-        conn.execute(delete(stage_table).where(stage_table.c.stage_id.in_(stage_ids)))
+        conn.execute(
+            delete(stage_table).where(stage_table.c.stage_id.in_(stage_ids))
+        )
+    conn.execute(delete(team_table).where(team_table.c.tournament_id.in_(tids)))
     conn.execute(
-        delete(team_table).where(team_table.c.tournament_id.in_(tids))
-    )
-    conn.execute(
-        delete(tournament_table).where(tournament_table.c.tournament_id.in_(tids))
+        delete(tournament_table).where(
+            tournament_table.c.tournament_id.in_(tids)
+        )
     )
 
 
-def _restore_snapshot(engine, snapshot: dict[str, list[dict]], tournament_ids: list[int]) -> None:
+def _restore_snapshot(
+    engine, snapshot: dict[str, list[dict]], tournament_ids: list[int]
+) -> None:
     if not tournament_ids:
         return
 
@@ -262,7 +278,11 @@ def _restore_snapshot(engine, snapshot: dict[str, list[dict]], tournament_ids: l
 
 
 def import_with_rollback(
-    engine, payloads: Iterable[dict], tournament_ids: list[int], *, log: logging.Logger
+    engine,
+    payloads: Iterable[dict],
+    tournament_ids: list[int],
+    *,
+    log: logging.Logger,
 ) -> int:
     snapshot = _snapshot_for_rollback(engine, tournament_ids)
     try:
