@@ -20,19 +20,24 @@ module "digitalocean_infra" {
   do_token = var.do_token
 }
 
+resource "digitalocean_tag" "scraper_worker" {
+  name = "scraper_worker"
+}
+
 resource "digitalocean_droplet" "sendouq_scraper" {
-    image = "ubuntu-22-04-x64"
-    name = "sendouq-scraper"
-    region = "nyc3"
-    size = "s-1vcpu-1gb"
+    image    = "ubuntu-22-04-x64"
+    name     = "sendouq-scraper"
+    region   = "nyc3"
+    size     = "s-1vcpu-1gb"
     ssh_keys = module.digitalocean_infra.ssh_key_ids
+    tags     = [digitalocean_tag.scraper_worker.name]
 }
 
 resource "digitalocean_database_firewall" "sendouq_scraper" {
     cluster_id = module.digitalocean_infra.database_cluster_id
     rule {
-        type = "ip_addr"
-        value = digitalocean_droplet.sendouq_scraper.ipv4_address
+        type = "tag"
+        value = digitalocean_tag.scraper_worker.name
     }
     rule {
         type = "ip_addr"
