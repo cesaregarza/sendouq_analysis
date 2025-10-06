@@ -1,0 +1,120 @@
+name: Repull Tournament
+
+on:
+  workflow_dispatch:
+    inputs:
+      tournament_ids:
+        description: "Tournament IDs to re-pull (comma or space separated)"
+        required: true
+        type: string
+      log_level:
+        description: "Log verbosity for the re-pull command"
+        required: false
+        default: "INFO"
+        type: choice
+        options:
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
+          - CRITICAL
+
+jobs:
+  repull:
+    runs-on: ubuntu-latest
+    environment: Scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get self ip
+        id: self_ip
+        run: |
+          SELF_IP=$(curl -s https://api.ipify.org)
+          echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init
+        working-directory: terraform/scraper
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/scraper
+        run: terraform plan -out=tfplan -input=false
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_source_ip: ${{ steps.self_ip.outputs.self_ip }}
+          TF_VAR_joy_ip: ${{ secrets.JOY_IP }}
+
+      - name: Terraform Apply
+        id: terraform_apply
+        working-directory: terraform/scraper
+        run: |
+          terraform apply -auto-approve tfplan
+          SCRAPER_IP=$(terraform output -raw scraper_ip)
+          SCRAPER_ID=$(terraform output -raw scraper_id)
+          echo "scraper_ip=$SCRAPER_IP" >> $GITHUB_OUTPUT
+          echo "scraper_id=$SCRAPER_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for droplet
+        run: sleep 90
+
+      - name: Run re-pull command
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.scraper_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            set +o histexpand || true
+            export PATH=$PATH:/usr/bin
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+            export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+
+            if [ -z "$RANKINGS_DATABASE_URL" ]; then
+              echo "RANKINGS_DATABASE_URL secret is required" >&2
+              exit 1
+            fi
+            if [ -z "$SENDOU_KEY" ]; then
+              echo "SENDOU_KEY secret is required" >&2
+              exit 1
+            fi
+
+            RAW_IDS="${{ inputs.tournament_ids }}"
+            TOURNAMENT_IDS=$(echo "$RAW_IDS" | tr ',' ' ' | xargs)
+            if [ -z "$TOURNAMENT_IDS" ]; then
+              echo "No tournament IDs provided" >&2
+              exit 1
+            fi
+
+            LOG_LEVEL='${{ inputs.log_level }}'
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u "$DO_API_TOKEN" -p "$DO_API_TOKEN" registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_SCHEMA \
+              -e SENDOU_KEY \
+              -e SENTRY_DSN \
+              --entrypoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run rankings_repull --log-level "$LOG_LEVEL" $TOURNAMENT_IDS
+
+      - name: Destroy droplet
+        if: ${{ always() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.scraper_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"

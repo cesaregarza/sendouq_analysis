@@ -154,6 +154,18 @@ Docker
   - To emit Parquet snapshots from the updater container, set `WRITE_PARQUET=true`.
   ```
 
+- **Re-scrape specific tournaments and import into the rankings DB:**
+  ```bash
+  poetry run rankings_repull 2511 2433
+  ```
+  Ensure `SENDOU_KEY` and `RANKINGS_DATABASE_URL`/`RANKINGS_DB_SCHEMA` are exported so the command can talk to the public API and the database. The command snapshots existing data and rolls it back automatically if the import fails.
+
+- **Fix tournaments missing roster data:**
+  ```bash
+  poetry run rankings_fix_tournaments --limit 10
+  ```
+  The command identifies tournaments with zero roster entries (defaulting to finalized ones), re-scrapes them, and reimports into Postgres. Use `--include-unfinalized` if you want to inspect in-progress events too. Existing data is restored automatically if the refresh fails mid-run.
+
 ### Running the Dashboard
 
 - **With Poetry:**

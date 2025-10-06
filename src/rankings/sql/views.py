@@ -95,7 +95,9 @@ def ensure_tournament_event_times_view(
             return
 
         with engine.begin() as connection:
-            logger.info("Ensuring tournament_event_times materialized view exists")
+            logger.info(
+                "Ensuring tournament_event_times materialized view exists"
+            )
             connection.execute(db.text(_event_times_view_sql(schema)))
             for statement in _event_times_indexes(schema):
                 connection.execute(db.text(statement))
