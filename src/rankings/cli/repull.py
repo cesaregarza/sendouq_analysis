@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     for tid in args.tournament_ids:
         try:
             payload = _scrape_with_players(tid, session=session)
-        except Exception as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
             logger.error("Failed to scrape tournament %s: %s", tid, exc)
             return 1
         payloads.append(payload)
