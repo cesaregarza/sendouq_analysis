@@ -72,6 +72,72 @@ jobs:
         run: sleep 90
 
       - name: Run fix command
+        id: ssh
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.scraper_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            set +o histexpand || true
+            export PATH=$PATH:/usr/bin
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+            export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+
+            if [ -z "$RANKINGS_DATABASE_URL" ]; then
+              echo "RANKINGS_DATABASE_URL secret is required" >&2
+              exit 1
+            fi
+            if [ -z "$SENDOU_KEY" ]; then
+              echo "SENDOU_KEY secret is required" >&2
+              exit 1
+            fi
+
+            LIMIT_INPUT='${{ inputs.limit }}'
+            ARG_LIMIT=""
+            if [ -n "$LIMIT_INPUT" ]; then
+              if ! echo "$LIMIT_INPUT" | grep -Eq '^[0-9]+$'; then
+                echo "limit must be numeric" >&2
+                exit 1
+              fi
+              ARG_LIMIT="--limit $LIMIT_INPUT"
+            fi
+
+            INCLUDE_UNFINALIZED='${{ inputs.include_unfinalized }}'
+            ARG_UNFINALIZED=""
+            if [ "$INCLUDE_UNFINALIZED" = "true" ]; then
+              ARG_UNFINALIZED="--include-unfinalized"
+            fi
+
+            LOG_LEVEL='${{ inputs.log_level }}'
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u "$DO_API_TOKEN" -p "$DO_API_TOKEN" registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_SCHEMA \
+              -e SENDOU_KEY \
+              -e SENTRY_DSN \
+              --entrypoint poetry \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              run rankings_fix_tournaments --log-level "$LOG_LEVEL" $ARG_LIMIT $ARG_UNFINALIZED
+
+      - name: Sleep if droplet is still not ready
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        run: |
+          sleep 60
+
+      - name: Run fix command (retry)
+        id: ressh
+        if: ${{ steps.ssh.outcome == 'failure' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ steps.terraform_apply.outputs.scraper_ip }}
