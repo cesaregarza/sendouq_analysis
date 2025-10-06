@@ -59,6 +59,7 @@ def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[
             "matches": [],
             "roster_entries": [],
             "player_appearances": [],
+            "player_appearance_teams": [],
         }
 
     tids = [int(t) for t in tournament_ids]
@@ -73,6 +74,7 @@ def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[
         match_table = RM.Match.__table__
         roster_table = RM.RosterEntry.__table__
         appearance_table = RM.PlayerAppearance.__table__
+        appearance_team_table = RM.PlayerAppearanceTeam.__table__
 
         snapshot["tournaments"] = [
             _row_to_dict(row)
@@ -142,6 +144,15 @@ def _snapshot_for_rollback(engine, tournament_ids: list[int]) -> dict[str, list[
             )
         ]
 
+        snapshot["player_appearance_teams"] = [
+            _row_to_dict(row)
+            for row in conn.execute(
+                select(appearance_team_table).where(
+                    appearance_team_table.c.tournament_id.in_(tids)
+                )
+            )
+        ]
+
     return snapshot
 
 
@@ -158,6 +169,7 @@ def _delete_current_state(conn, tournament_ids: list[int]) -> None:
     match_table = RM.Match.__table__
     roster_table = RM.RosterEntry.__table__
     appearance_table = RM.PlayerAppearance.__table__
+    appearance_team_table = RM.PlayerAppearanceTeam.__table__
 
     stage_rows = list(
         conn.execute(
@@ -189,6 +201,11 @@ def _delete_current_state(conn, tournament_ids: list[int]) -> None:
 
     conn.execute(
         delete(appearance_table).where(appearance_table.c.tournament_id.in_(tids))
+    )
+    conn.execute(
+        delete(appearance_team_table).where(
+            appearance_team_table.c.tournament_id.in_(tids)
+        )
     )
     conn.execute(
         delete(roster_table).where(roster_table.c.tournament_id.in_(tids))
@@ -229,6 +246,7 @@ def _restore_snapshot(engine, snapshot: dict[str, list[dict]], tournament_ids: l
         match_table = RM.Match.__table__
         roster_table = RM.RosterEntry.__table__
         appearance_table = RM.PlayerAppearance.__table__
+        appearance_team_table = RM.PlayerAppearanceTeam.__table__
 
         _insert_rows(tournament_table, snapshot.get("tournaments", []))
         _insert_rows(stage_table, snapshot.get("stages", []))
@@ -238,6 +256,9 @@ def _restore_snapshot(engine, snapshot: dict[str, list[dict]], tournament_ids: l
         _insert_rows(match_table, snapshot.get("matches", []))
         _insert_rows(roster_table, snapshot.get("roster_entries", []))
         _insert_rows(appearance_table, snapshot.get("player_appearances", []))
+        _insert_rows(
+            appearance_team_table, snapshot.get("player_appearance_teams", [])
+        )
 
 
 def import_with_rollback(
