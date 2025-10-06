@@ -90,8 +90,13 @@ def _snapshot_for_rollback(
                 select(stage_table).where(stage_table.c.tournament_id.in_(tids))
             )
         )
-        snapshot["stages"] = [_row_to_dict(row) for row in stage_rows]
-        stage_ids = [row[stage_table.c.stage_id] for row in stage_rows]
+        stage_dicts = [_row_to_dict(row) for row in stage_rows]
+        snapshot["stages"] = stage_dicts
+        stage_ids = [
+            int(row["stage_id"])
+            for row in stage_dicts
+            if row.get("stage_id") is not None
+        ]
 
         if stage_ids:
             group_rows = list(
@@ -101,8 +106,13 @@ def _snapshot_for_rollback(
                     )
                 )
             )
-            snapshot["groups"] = [_row_to_dict(row) for row in group_rows]
-            group_ids = [row[group_table.c.group_id] for row in group_rows]
+            group_dicts = [_row_to_dict(row) for row in group_rows]
+            snapshot["groups"] = group_dicts
+            group_ids = [
+                int(row["group_id"])
+                for row in group_dicts
+                if row.get("group_id") is not None
+            ]
 
             round_rows = list(
                 conn.execute(
