@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             payloads.append(_scrape_with_players(tid, session=session))
             logger.info("Fetched tournament %s", tid)
-        except Exception as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
             logger.error("Failed to scrape tournament %s: %s", tid, exc)
             return 1
 

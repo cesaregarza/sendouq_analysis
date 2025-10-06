@@ -23,7 +23,7 @@ def _scrape_with_players(tournament_id: int, session: requests.Session) -> dict:
     payload = scrape_tournament(tournament_id, session=session)
     try:
         players_payload = fetch_tournament_players(tournament_id)
-    except Exception as exc:  # noqa: BLE001 - keep going on partial fetch
+    except requests.RequestException as exc:  # keep going on partial fetch
         logger.warning(
             "Players route fetch failed for %s: %s", tournament_id, exc
         )
