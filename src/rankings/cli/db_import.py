@@ -236,6 +236,9 @@ def import_file(
     players = tables.get("players")
     matches = tables.get("matches")
 
+    # Normalized dataframes we may reference later for aliases; default to None
+    tdf = sdf = gdf = rdf = tmdf = pldf_players = mdf = None
+
     count = int(tournaments.height) if tournaments is not None else 0
 
     # Transform tournaments to rankings.sql.models.Tournament

@@ -123,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
             engine, payloads, target_ids, log=logger
         )
     except Exception:
+        logger.exception(
+            "Import failed for tournaments %s; aborting fix run", target_ids
+        )
         return 1
 
     logger.info(

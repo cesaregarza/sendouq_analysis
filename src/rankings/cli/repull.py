@@ -287,11 +287,10 @@ def import_with_rollback(
     snapshot = _snapshot_for_rollback(engine, tournament_ids)
     try:
         return _import_payloads(engine, payloads)
-    except Exception as exc:
-        log.error(
-            "Import failed for tournaments %s; attempting rollback: %s",
+    except Exception:
+        log.exception(
+            "Import failed for tournaments %s; attempting rollback",
             tournament_ids,
-            exc,
         )
         try:
             _restore_snapshot(engine, snapshot, tournament_ids)
