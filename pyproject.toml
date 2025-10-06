@@ -59,6 +59,8 @@ rankings_compile = "rankings.cli.compile:main"
 rankings_update = "rankings.cli.update:main"
 rankings_db_init = "rankings.cli.db_init:main"
 rankings_pull = "rankings.cli.pull:main"
+rankings_repull = "rankings.cli.repull:main"
+rankings_fix_tournaments = "rankings.cli.fix_tournaments:main"
 rankings_db_schema = "rankings.cli.schema:main"
 
 [tool.black]
