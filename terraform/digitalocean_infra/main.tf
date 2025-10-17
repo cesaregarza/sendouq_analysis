@@ -14,7 +14,7 @@ provider "digitalocean" {
 }
 
 data "digitalocean_database_cluster" "sendouq_db" {
-    name = "db-postgresql-nyc3-ceg"
+    name = "db-postgresql-nyc3-xscraper"
 }
 
 data "digitalocean_ssh_key" "github_actions" {
