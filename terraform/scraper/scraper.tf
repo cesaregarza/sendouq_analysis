@@ -33,18 +33,6 @@ resource "digitalocean_droplet" "sendouq_scraper" {
     tags     = [digitalocean_tag.scraper_worker.name]
 }
 
-resource "digitalocean_database_firewall" "sendouq_scraper" {
-    cluster_id = module.digitalocean_infra.database_cluster_id
-    rule {
-        type = "tag"
-        value = digitalocean_tag.scraper_worker.name
-    }
-    rule {
-        type = "ip_addr"
-        value = var.joy_ip
-    }
-}
-
 output "scraper_ip" {
     value = digitalocean_droplet.sendouq_scraper.ipv4_address
 }

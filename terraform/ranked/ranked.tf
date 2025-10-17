@@ -38,18 +38,6 @@ resource "digitalocean_droplet" "sendouq_ranked" {
   tags     = [digitalocean_tag.ranked_worker.name]
 }
 
-resource "digitalocean_database_firewall" "sendouq_ranked" {
-  cluster_id = module.digitalocean_infra.database_cluster_id
-  rule {
-    type  = "tag"
-    value = digitalocean_tag.ranked_worker.name
-  }
-  rule {
-    type  = "ip_addr"
-    value = var.joy_ip
-  }
-}
-
 output "ranked_ip" {
   value = digitalocean_droplet.sendouq_ranked.ipv4_address
 }

@@ -28,18 +28,6 @@ resource "digitalocean_droplet" "sendouq_agg" {
     ssh_keys = module.digitalocean_infra.ssh_key_ids
 }
 
-resource "digitalocean_database_firewall" "sendouq_agg" {
-    cluster_id = module.digitalocean_infra.database_cluster_id
-    rule {
-        type = "ip_addr"
-        value = digitalocean_droplet.sendouq_agg.ipv4_address
-    }
-    rule {
-        type = "ip_addr"
-        value = var.joy_ip
-    }
-}
-
 output "agg_ip" {
     value = digitalocean_droplet.sendouq_agg.ipv4_address
 }
