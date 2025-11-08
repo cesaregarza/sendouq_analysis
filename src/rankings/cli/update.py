@@ -476,6 +476,166 @@ def _promote_appearances_to_roster(
     return len(rows)
 
 
+def _calculate_loo_for_players(
+    eng,
+    ranks: pl.DataFrame,
+    stats: pl.DataFrame | None,
+    top_n: int | None = None,
+    matches_per_player: int = 30,
+    method: str = "fast",
+    num_iters: int = 5,
+    max_workers: int | None = None,
+) -> list[dict]:
+    """
+    Calculate LOO scores for eligible players.
+
+    Args:
+        eng: ExposureLogOddsEngine instance
+        ranks: Rankings DataFrame
+        stats: Player stats DataFrame (for filtering)
+        top_n: Number of top players to analyze (None = all)
+        matches_per_player: Matches to analyze per player
+        method: "fast" or "exact"
+        num_iters: Power iterations for fast method
+        max_workers: Parallel workers (None = CPU count)
+
+    Returns:
+        List of LOO result dictionaries
+    """
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+
+    log = logging.getLogger("rankings.cli.update")
+
+    # Prepare LOO analyzer
+    log.info(f"Preparing LOO analyzer (method={method}, num_iters={num_iters})...")
+    eng.prepare_loo_analyzer(method=method, num_iters=num_iters)
+
+    # Select eligible players
+    if top_n:
+        eligible = ranks.sort("player_rank", descending=True).head(top_n)["id"].to_list()
+    else:
+        # All ranked players
+        eligible = ranks["id"].to_list()
+
+    log.info(f"Calculating LOO for {len(eligible)} players...")
+
+    # Default to CPU count if not specified
+    if max_workers is None:
+        max_workers = multiprocessing.cpu_count()
+
+    log.info(f"Using {max_workers} parallel workers")
+
+    # Process players in parallel
+    results = []
+
+    def _process_player(player_id):
+        """Process one player's LOO analysis."""
+        try:
+            # Get player's match impacts
+            impacts = eng.analyze_player_matches(
+                player_id,
+                limit=matches_per_player,
+                include_teleport=True,
+                parallel=False,  # Already parallelized at player level
+                max_workers=1,
+            )
+
+            if impacts.is_empty():
+                return None
+
+            # Compute statistics
+            abs_deltas = impacts["abs_delta"].to_numpy()
+
+            # Top 10 matches for storage
+            top_matches = impacts.head(10).select([
+                "match_id", "is_win", "score_delta", "abs_delta"
+            ]).to_dicts()
+
+            return {
+                "player_id": player_id,
+                "match_count": len(impacts),
+                "avg_score_impact": float(abs_deltas.mean()),
+                "max_score_impact": float(abs_deltas.max()),
+                "total_score_variance": float((abs_deltas ** 2).sum()),
+                "top_matches": top_matches,
+                "method": method,
+                "num_iters": num_iters if method == "fast" else None,
+            }
+        except Exception as e:
+            log.error(f"LOO calculation failed for player {player_id}: {e}")
+            return None
+
+    # Use ThreadPoolExecutor (GIL-friendly for I/O and numpy operations)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_process_player, pid) for pid in eligible]
+
+        for i, fut in enumerate(as_completed(futures)):
+            if (i + 1) % 100 == 0:
+                log.info(f"Processed {i+1}/{len(eligible)} players...")
+
+            result = fut.result()
+            if result:
+                results.append(result)
+
+    log.info(f"LOO calculation complete: {len(results)} players processed")
+    return results
+
+
+def _persist_loo_results(
+    engine,
+    loo_results: list[dict],
+    build_version: str,
+    calculated_at_ms: int,
+) -> int:
+    """
+    Persist LOO results to database.
+
+    Note: This requires a player_loo_scores table to exist.
+    Table schema should include:
+    - player_id, calculated_at_ms, build_version (unique constraint)
+    - match_count, avg_score_impact, max_score_impact, total_score_variance
+    - top_matches (JSONB), method, num_iters
+
+    Args:
+        engine: Database engine
+        loo_results: List of LOO result dictionaries
+        build_version: Build version string
+        calculated_at_ms: Timestamp
+
+    Returns:
+        Number of rows inserted
+    """
+    if not loo_results:
+        return 0
+
+    # Add metadata to each result
+    rows = [
+        {
+            **result,
+            "calculated_at_ms": calculated_at_ms,
+            "build_version": build_version,
+            "top_matches": result.get("top_matches", []),  # Ensure JSON serializable
+        }
+        for result in loo_results
+    ]
+
+    # TODO: Add table definition to models.py and persist here
+    # For now, just log that we would persist
+    log = logging.getLogger("rankings.cli.update")
+    log.info(f"Would persist {len(rows)} LOO results to database (table not yet created)")
+
+    # Placeholder for actual DB persistence:
+    # from sqlalchemy.dialects.postgresql import insert as pg_insert
+    # table = RM.PlayerLOOScore.__table__
+    # stmt = pg_insert(table).values(rows)
+    # stmt = stmt.on_conflict_do_nothing(...)
+    # with engine.begin() as conn:
+    #     conn.execute(stmt)
+
+    return len(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Discover, scrape, import, and rank recent tournaments"
@@ -598,6 +758,44 @@ def main(argv: list[str] | None = None) -> int:
         "--promote-appearances",
         action="store_true",
         help="Upsert appearance-only players into roster_entries using enriched team assignments",
+    )
+
+    # LOO (Leave-One-Out) calculation arguments
+    parser.add_argument(
+        "--calculate-loo",
+        action="store_true",
+        help="Calculate LOO scores for players after ranking",
+    )
+    parser.add_argument(
+        "--loo-method",
+        type=str,
+        choices=["fast", "exact"],
+        default=None,
+        help="LOO calculation method: fast (5-iter approx, 20-50x faster) or exact (pre-factorized, slower)",
+    )
+    parser.add_argument(
+        "--loo-top-players",
+        type=int,
+        default=None,
+        help="Number of top players to calculate LOO for (default: all active)",
+    )
+    parser.add_argument(
+        "--loo-matches-per-player",
+        type=int,
+        default=None,
+        help="Maximum matches to analyze per player (default: 30)",
+    )
+    parser.add_argument(
+        "--loo-workers",
+        type=int,
+        default=None,
+        help="Parallel workers for LOO calculation (default: matches CPU count)",
+    )
+    parser.add_argument(
+        "--loo-num-iters",
+        type=int,
+        default=None,
+        help="Power iterations for fast method (default: 5, range: 3-10)",
     )
 
     args = parser.parse_args(argv)
@@ -969,6 +1167,65 @@ def main(argv: list[str] | None = None) -> int:
         # Always save compact state for influence
         out_run.mkdir(parents=True, exist_ok=True)
         save_engine_state(eng, str(out_run / "engine_state.json"))
+
+        # Calculate LOO if requested
+        calculate_loo = bool(_get("calculate_loo", args.calculate_loo, False))
+        if calculate_loo:
+            loo_method = _get("loo_method", args.loo_method, "fast")
+            loo_top_players = _get("loo_top_players", args.loo_top_players, None)
+            loo_matches = _get("loo_matches_per_player", args.loo_matches_per_player, 30)
+            loo_workers = _get("loo_workers", args.loo_workers, None)
+            loo_num_iters = _get("loo_num_iters", args.loo_num_iters, 5)
+
+            # Override from environment variables if set
+            if os.getenv("RANKINGS_LOO_ENABLED"):
+                calculate_loo = os.getenv("RANKINGS_LOO_ENABLED").lower() in ("true", "1", "yes")
+            if os.getenv("RANKINGS_LOO_METHOD"):
+                loo_method = os.getenv("RANKINGS_LOO_METHOD")
+            if os.getenv("RANKINGS_LOO_TOP_PLAYERS"):
+                loo_top_players = int(os.getenv("RANKINGS_LOO_TOP_PLAYERS"))
+            if os.getenv("RANKINGS_LOO_MATCHES_PER_PLAYER"):
+                loo_matches = int(os.getenv("RANKINGS_LOO_MATCHES_PER_PLAYER"))
+            if os.getenv("RANKINGS_LOO_WORKERS"):
+                loo_workers = int(os.getenv("RANKINGS_LOO_WORKERS"))
+            if os.getenv("RANKINGS_LOO_NUM_ITERS"):
+                loo_num_iters = int(os.getenv("RANKINGS_LOO_NUM_ITERS"))
+
+            if calculate_loo:
+                log.info(f"Starting LOO calculation (method={loo_method}, top_n={loo_top_players}, matches={loo_matches})...")
+                try:
+                    # Get stats for filtering if available
+                    try:
+                        stats = _compute_player_stats(matches, players, appearances)
+                    except Exception:
+                        stats = None
+
+                    loo_results = _calculate_loo_for_players(
+                        eng,
+                        ranks,
+                        stats,
+                        top_n=loo_top_players,
+                        matches_per_player=loo_matches,
+                        method=loo_method,
+                        num_iters=loo_num_iters,
+                        max_workers=loo_workers,
+                    )
+
+                    # Persist LOO results if saving to DB
+                    if save_to_db and loo_results:
+                        build_version = (
+                            args.build_version or build_version_cfg or _get_build_version()
+                        )
+                        calculated_at_ms = int(datetime.utcnow().timestamp() * 1000)
+                        loo_inserted = _persist_loo_results(
+                            engine, loo_results, build_version, calculated_at_ms
+                        )
+                        log.info(f"LOO results: {loo_inserted} rows prepared for persistence")
+
+                    log.info(f"LOO calculation complete: {len(loo_results)} players analyzed")
+                except Exception as e:
+                    log.error(f"LOO calculation failed: {e}", exc_info=True)
+
         if save_to_db:
             build_version = (
                 args.build_version or build_version_cfg or _get_build_version()
