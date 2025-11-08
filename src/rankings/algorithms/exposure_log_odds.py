@@ -19,6 +19,7 @@ from rankings.core import (
 from rankings.core.logging import get_logger, log_timing
 
 if TYPE_CHECKING:
+    from rankings.analysis.fast_loo_analyzer import FastLOOAnalyzer
     from rankings.analysis.loo_analyzer import LOOAnalyzer
 
 
@@ -54,6 +55,7 @@ class ExposureLogOddsEngine:
         self.last_result: ExposureLogOddsResult | None = None
         self._last_rho: np.ndarray | None = None
         self._loo_analyzer: LOOAnalyzer | None = None
+        self._fast_loo_analyzer: FastLOOAnalyzer | None = None
         self._loo_matches_df: pl.DataFrame | None = None
         self._loo_players_df: pl.DataFrame | None = None
         self._converted_matches_df: pl.DataFrame | None = None
@@ -289,9 +291,11 @@ class ExposureLogOddsEngine:
         matches_df: pl.DataFrame | None = None,
         players_df: pl.DataFrame | None = None,
         force_rebuild: bool = False,
+        method: str = "fast",
+        num_iters: int = 5,
     ) -> None:
         """
-        Prepare LOO analyzer with pre-factorized solvers for fast repeated analysis.
+        Prepare LOO analyzer for repeated analysis.
 
         This should be called after rank_players() to set up the LOO infrastructure.
         The analyzer is cached and reused unless force_rebuild is True.
@@ -300,6 +304,8 @@ class ExposureLogOddsEngine:
             matches_df: Optional matches DataFrame (uses internal converted if None)
             players_df: Optional players DataFrame (uses last ranking data if None)
             force_rebuild: Force rebuild even if analyzer exists
+            method: "fast" (5-iter approx, 20-50x faster) or "exact" (pre-factorized, slower)
+            num_iters: Number of power iterations for fast method (5-10 recommended)
         """
         if self.last_result is None:
             raise ValueError(
@@ -327,7 +333,14 @@ class ExposureLogOddsEngine:
             self.logger.info("Using player IDs from last ranking result")
 
         # Check if we need to rebuild
-        if not force_rebuild and self._loo_analyzer is not None:
+        if method == "fast":
+            analyzer_attr = "_fast_loo_analyzer"
+            existing_analyzer = self._fast_loo_analyzer
+        else:
+            analyzer_attr = "_loo_analyzer"
+            existing_analyzer = self._loo_analyzer
+
+        if not force_rebuild and existing_analyzer is not None:
             # Check if data has changed
             if (
                 self._loo_matches_df is not None
@@ -336,27 +349,41 @@ class ExposureLogOddsEngine:
                 and players_df.equals(self._loo_players_df)
             ):
                 self.logger.info(
-                    "LOO analyzer already prepared, reusing existing infrastructure"
+                    f"LOO analyzer ({method}) already prepared, reusing existing infrastructure"
                 )
                 return
 
-        self.logger.info(
-            "Preparing LOO analyzer with pre-factorized solvers..."
-        )
-        from rankings.analysis.loo_analyzer import LOOAnalyzer
-
         start_time = time.time()
-        self._loo_analyzer = LOOAnalyzer(self, matches_df, players_df)
+
+        if method == "fast":
+            self.logger.info(
+                f"Preparing Fast LOO analyzer ({num_iters} iterations, no factorization)..."
+            )
+            from rankings.analysis.fast_loo_analyzer import FastLOOAnalyzer
+
+            self._fast_loo_analyzer = FastLOOAnalyzer(
+                self, matches_df, players_df, num_iters=num_iters
+            )
+            analyzer = self._fast_loo_analyzer
+        else:
+            self.logger.info(
+                "Preparing LOO analyzer with pre-factorized solvers..."
+            )
+            from rankings.analysis.loo_analyzer import LOOAnalyzer
+
+            self._loo_analyzer = LOOAnalyzer(self, matches_df, players_df)
+            analyzer = self._loo_analyzer
+
         self._loo_matches_df = matches_df
         self._loo_players_df = players_df
 
         prep_time = time.time() - start_time
-        self.logger.info(f"LOO analyzer prepared in {prep_time:.2f}s")
-        self.logger.info(f"  - {len(self._loo_analyzer.node_to_idx)} nodes")
-        self.logger.info(f"  - {self._loo_analyzer.A_win.nnz} win edges")
-        self.logger.info(f"  - {self._loo_analyzer.A_loss.nnz} loss edges")
+        self.logger.info(f"LOO analyzer ({method}) prepared in {prep_time:.2f}s")
+        self.logger.info(f"  - {len(analyzer.node_to_idx)} nodes")
+        self.logger.info(f"  - {analyzer.A_win.nnz} win edges")
+        self.logger.info(f"  - {analyzer.A_loss.nnz} loss edges")
         self.logger.info(
-            f"  - {len(self._loo_analyzer._match_cache)} matches cached"
+            f"  - {len(analyzer._match_cache)} matches cached"
         )
 
     def analyze_match_impact(
@@ -366,7 +393,7 @@ class ExposureLogOddsEngine:
         Analyze the impact of removing a match on a player's score.
 
         Automatically prepares LOO analyzer if needed.
-        Uses pre-factorized solvers for extremely fast analysis.
+        Prefers fast analyzer if available, falls back to exact.
 
         Args:
             match_id: Match to analyze
@@ -377,11 +404,13 @@ class ExposureLogOddsEngine:
             Dictionary with impact analysis
         """
         # Auto-prepare LOO analyzer if not ready
-        if self._loo_analyzer is None:
+        analyzer = self._fast_loo_analyzer or self._loo_analyzer
+        if analyzer is None:
             self.logger.info("LOO analyzer not prepared, initializing now...")
-            self.prepare_loo_analyzer()
+            self.prepare_loo_analyzer(method="fast")
+            analyzer = self._fast_loo_analyzer
 
-        return self._loo_analyzer.impact_of_match_on_player(
+        return analyzer.impact_of_match_on_player(
             match_id, player_id, include_teleport
         )
 
@@ -397,7 +426,7 @@ class ExposureLogOddsEngine:
         Analyze impact of all matches involving a player.
 
         Automatically prepares LOO analyzer if needed.
-        Uses pre-factorized solvers and parallel processing for speed.
+        Prefers fast analyzer for speed, falls back to exact if available.
 
         Args:
             player_id: Player to analyze
@@ -410,11 +439,13 @@ class ExposureLogOddsEngine:
             DataFrame with match impacts sorted by score change
         """
         # Auto-prepare LOO analyzer if not ready
-        if self._loo_analyzer is None:
+        analyzer = self._fast_loo_analyzer or self._loo_analyzer
+        if analyzer is None:
             self.logger.info("LOO analyzer not prepared, initializing now...")
-            self.prepare_loo_analyzer()
+            self.prepare_loo_analyzer(method="fast")
+            analyzer = self._fast_loo_analyzer
 
-        return self._loo_analyzer.analyze_player_matches(
+        return analyzer.analyze_player_matches(
             player_id,
             limit,
             include_teleport,
@@ -428,9 +459,9 @@ class ExposureLogOddsEngine:
         Get the underlying LOO analyzer for advanced usage.
 
         Returns:
-            LOOAnalyzer instance or None if not prepared
+            LOOAnalyzer or FastLOOAnalyzer instance (prefers fast), or None if not prepared
         """
-        return self._loo_analyzer
+        return self._fast_loo_analyzer or self._loo_analyzer
 
     # ---------------------------------------------------------------------
     # internals
