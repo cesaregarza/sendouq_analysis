@@ -125,6 +125,10 @@ DO_API_TOKEN=your_digitalocean_token
   - Configure DB via `RANKINGS_DATABASE_URL` (or `DATABASE_URL`) and `RANKINGS_DB_SCHEMA`.
   - Add `--skip-discovery` for a dry run that avoids network scraping and uses existing DB data.
   - Add `--no-save-to-db` to skip persisting rankings (useful for local testing).
+  - Add `--no-upload-s3` to skip S3/Spaces uploads (useful for local runs without AWS creds).
+  - If `--weeks-back` is not provided, `rankings_update` auto-expands the discovery window based on the latest `player_rankings.calculated_at_ms` so a single run can catch up after downtime.
+  - Discovery decides what to scrape based on which tournaments are missing match rows (not just missing a `tournaments` row), so it can backfill partially ingested tournaments.
+  - For one-per-day historical backfills, use `poetry run rankings_backfill_daily --start-date YYYY-MM-DD --end-date YYYY-MM-DD`.
 
 - **Compile core tables from Postgres (optional scrape + import):**
 
