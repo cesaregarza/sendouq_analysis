@@ -62,24 +62,26 @@ def _load_json_payload(path: Path):
         return []
 
 
+def _py(v):
+    """Convert numpy/polars types to Python natives for SQLAlchemy."""
+    try:
+        if isinstance(v, np.generic):
+            return v.item()
+        if isinstance(v, np.ndarray):
+            return [_py(x) for x in v.tolist()]
+        if isinstance(v, (list, tuple, set)):
+            return [_py(x) for x in list(v)]
+        if isinstance(v, dict):
+            return {k: _py(x) for k, x in v.items()}
+        return v
+    except Exception:
+        return v
+
+
 def _bulk_insert(df: pl.DataFrame | None, model, engine) -> None:
     """Insert rows using SQLAlchemy Core with ON CONFLICT DO NOTHING (no pandas)."""
     if df is None or df.is_empty():
         return
-
-    def _py(v):
-        try:
-            if isinstance(v, np.generic):
-                return v.item()
-            if isinstance(v, np.ndarray):
-                return [_py(x) for x in v.tolist()]
-            if isinstance(v, (list, tuple, set)):
-                return [_py(x) for x in list(v)]
-            if isinstance(v, dict):
-                return {k: _py(x) for k, x in v.items()}
-            return v
-        except Exception:
-            return v
 
     rows = [{k: _py(v) for k, v in r.items()} for r in df.iter_rows(named=True)]
     if not rows:
@@ -87,6 +89,30 @@ def _bulk_insert(df: pl.DataFrame | None, model, engine) -> None:
 
     table = model.__table__
     stmt = pg_insert(table).values(rows).on_conflict_do_nothing()
+    with engine.begin() as conn:
+        conn.execute(stmt)
+
+
+def _upsert_players(df: pl.DataFrame | None, engine) -> None:
+    """Upsert players, updating display_name/discord_id/country on conflict."""
+    if df is None or df.is_empty():
+        return
+
+    rows = [{k: _py(v) for k, v in r.items()} for r in df.iter_rows(named=True)]
+    if not rows:
+        return
+
+    table = RM.Player.__table__
+    stmt = pg_insert(table).values(rows)
+    # Update display_name, discord_id, country when player already exists
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[table.c.player_id],
+        set_={
+            "display_name": stmt.excluded.display_name,
+            "discord_id": stmt.excluded.discord_id,
+            "country": stmt.excluded.country,
+        },
+    )
     with engine.begin() as conn:
         conn.execute(stmt)
 
@@ -411,7 +437,7 @@ def import_file(
             )
             .unique(subset=["player_id"])
         )
-        _bulk_insert(pldf_players, RM.Player, engine)
+        _upsert_players(pldf_players, engine)
 
         # Roster entries
         redf = players.select(
