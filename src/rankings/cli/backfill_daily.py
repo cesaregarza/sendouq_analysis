@@ -11,6 +11,7 @@ Typical usage (production container):
 """
 
 import argparse
+import calendar
 import logging
 from datetime import date, datetime, timedelta, timezone
 
@@ -19,6 +20,9 @@ from sqlalchemy import text
 from rankings.cli import update as update_cli
 from rankings.sql import create_engine
 from rankings.sql.constants import SCHEMA
+
+
+_MS_PER_DAY = 86_400_000
 
 
 def _parse_date(value: str) -> date:
@@ -37,20 +41,22 @@ def _iter_dates(start: date, end: date) -> list[date]:
 
 
 def _day_anchor_ms(d: date, *, cutoff: str) -> int:
+    dt = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    start_ms = calendar.timegm(dt.utctimetuple()) * 1000
     if cutoff == "start":
-        dt = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=timezone.utc)
-    else:
-        dt = datetime(
-            d.year, d.month, d.day, 23, 59, 59, 999000, tzinfo=timezone.utc
-        )
-    return int(dt.timestamp() * 1000)
+        return start_ms
+    return start_ms + _MS_PER_DAY - 1
 
 
 def _format_build_version(template: str, d: date) -> str:
-    return template.format(date=d.isoformat(), date_compact=d.strftime("%Y%m%d"))
+    return template.format(
+        date=d.isoformat(), date_compact=d.strftime("%Y%m%d")
+    )
 
 
-def _run_exists(engine, calculated_at_ms: int, build_version: str) -> bool:  # noqa: ANN001
+def _run_exists(
+    engine, calculated_at_ms: int, build_version: str
+) -> bool:  # noqa: ANN001
     q = text(
         f"""
         SELECT 1
@@ -153,9 +159,11 @@ def main(argv: list[str] | None = None) -> int:
     log = logging.getLogger("rankings.cli.backfill_daily")
 
     start = _parse_date(args.start_date)
-    end = _parse_date(args.end_date) if args.end_date else datetime.now(
-        timezone.utc
-    ).date()
+    end = (
+        _parse_date(args.end_date)
+        if args.end_date
+        else datetime.now(timezone.utc).date()
+    )
 
     days = _iter_dates(start, end)
     log.info("Backfill days: %s -> %s (%d days)", start, end, len(days))
@@ -163,7 +171,6 @@ def main(argv: list[str] | None = None) -> int:
     # Shared engine for existence checks (update_cli uses its own engine per run)
     engine = create_engine()
     try:
-
         for idx, d in enumerate(days, 1):
             anchor_ms = _day_anchor_ms(d, cutoff=args.cutoff)
             build_version = _format_build_version(

@@ -3,6 +3,7 @@ from __future__ import annotations
 """Helpers for Postgres materialized views used by the rankings pipeline."""
 
 import logging
+import re
 
 import sqlalchemy as db
 from sqlalchemy.engine import Engine
@@ -10,6 +11,8 @@ from sqlalchemy.engine import Engine
 from rankings.sql.constants import SCHEMA as DEFAULT_SCHEMA
 
 logger = logging.getLogger(__name__)
+
+_VALID_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 CHECK_TABLE_EXISTS_QUERY = """
 SELECT EXISTS (
@@ -19,6 +22,15 @@ SELECT EXISTS (
       AND table_name = :table_name
 );
 """
+
+
+def _validate_schema(schema: str) -> str:
+    if not schema:
+        raise ValueError("schema must be non-empty")
+    schema = schema.strip()
+    if not _VALID_IDENTIFIER_RE.match(schema):
+        raise ValueError(f"Invalid schema name: {schema!r}")
+    return schema
 
 
 def _event_times_view_sql(schema: str) -> str:
@@ -82,6 +94,7 @@ def ensure_tournament_event_times_view(
             "Skipping tournament_event_times refresh; engine lacks connect()"
         )
         return
+    schema = _validate_schema(schema)
     try:
         with engine.connect() as connection:
             missing = _missing_tables(

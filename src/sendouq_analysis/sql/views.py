@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Iterable
 
 import sqlalchemy as db
@@ -10,6 +11,8 @@ from sendouq_analysis.constants.table_names import SCHEMA as DEFAULT_SCHEMA
 
 logger = logging.getLogger(__name__)
 
+_VALID_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 CHECK_TABLE_EXISTS_QUERY = """
 SELECT EXISTS (
     SELECT 1
@@ -18,6 +21,15 @@ SELECT EXISTS (
       AND table_name = :table_name
 );
 """
+
+
+def _validate_schema(schema: str) -> str:
+    if not schema:
+        raise ValueError("schema must be non-empty")
+    schema = schema.strip()
+    if not _VALID_IDENTIFIER_RE.match(schema):
+        raise ValueError(f"Invalid schema name: {schema!r}")
+    return schema
 
 
 def _tournament_event_times_view_sql(schema: str) -> str:
@@ -76,6 +88,7 @@ def ensure_tournament_event_times_view(
     engine: Engine, *, schema: str = DEFAULT_SCHEMA
 ) -> None:
     """Ensure the tournament_event_times materialized view exists and is refreshed."""
+    schema = _validate_schema(schema)
     try:
         with engine.connect() as connection:
             missing = _missing_tables(

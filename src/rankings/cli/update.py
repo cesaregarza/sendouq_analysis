@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import calendar
 import logging
 import math
 import os
@@ -66,7 +67,16 @@ except Exception:  # pragma: no cover
 
 def _timestamp() -> str:
     """Return a compact UTC timestamp string for output folders."""
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+
+def _dt_to_epoch_ms(dt: datetime) -> int:
+    """Convert a datetime to epoch milliseconds (UTC), truncating to milliseconds."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return calendar.timegm(dt.utctimetuple()) * 1000 + (dt.microsecond // 1000)
 
 
 def _parse_ts_to_ms(value: str, *, end_of_day_for_date: bool = True) -> int:
@@ -97,28 +107,15 @@ def _parse_ts_to_ms(value: str, *, end_of_day_for_date: bool = True) -> int:
     # Date-only
     if len(s) == 10 and s[4] == "-" and s[7] == "-":
         d = date.fromisoformat(s)
+        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        start_ms = _dt_to_epoch_ms(day_start)
         if end_of_day_for_date:
-            dt = datetime(
-                d.year,
-                d.month,
-                d.day,
-                23,
-                59,
-                59,
-                999000,  # 999ms
-                tzinfo=timezone.utc,
-            )
-        else:
-            dt = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
-        return int(dt.timestamp() * 1000)
+            return start_ms + 86_400_000 - 1
+        return start_ms
 
     # Datetime
     dt = datetime.fromisoformat(s)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
-    return int(dt.timestamp() * 1000)
+    return _dt_to_epoch_ms(dt)
 
 
 def _set_sslmode_env_if_needed(
@@ -188,7 +185,7 @@ def _auto_expand_weeks_back(
     rankings persistence). Falls back to latest match timestamp if rankings
     table is empty.
     """
-    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    now_ms = _dt_to_epoch_ms(datetime.now(timezone.utc))
     last_ms = _db_latest_rankings_calculated_at_ms(db_url, sslmode)
     if last_ms is None:
         last_ms = _db_latest_match_event_ms(db_url, sslmode)
@@ -882,7 +879,7 @@ def main(argv: list[str] | None = None) -> int:
     anchor_ms = (
         _parse_ts_to_ms(args.as_of, end_of_day_for_date=True)
         if args.as_of
-        else int(datetime.utcnow().timestamp() * 1000)
+        else _dt_to_epoch_ms(datetime.now(timezone.utc))
     )
     anchor_dt = datetime.fromtimestamp(anchor_ms / 1000, tz=timezone.utc)
     anchor_sec = float(anchor_ms) / 1000.0
@@ -970,15 +967,11 @@ def main(argv: list[str] | None = None) -> int:
             log.warning("Skipping DDL due to error: %s", e)
 
     if since_days is not None:
-        since_ms = int(
-            (anchor_dt - timedelta(days=int(since_days))).timestamp() * 1000
-        )
+        since_ms = _dt_to_epoch_ms(anchor_dt - timedelta(days=int(since_days)))
     else:
         since_ms = None
     if until_days is not None:
-        until_ms = int(
-            (anchor_dt - timedelta(days=int(until_days))).timestamp() * 1000
-        )
+        until_ms = _dt_to_epoch_ms(anchor_dt - timedelta(days=int(until_days)))
     else:
         # Default: do not include future-dated tournaments/matches.
         until_ms = int(anchor_ms)
