@@ -144,10 +144,7 @@ def _db_latest_rankings_calculated_at_ms(
                 )
             ).scalar()
     finally:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+        engine.dispose()
 
 
 def _db_latest_match_event_ms(
@@ -175,10 +172,7 @@ def _db_latest_match_event_ms(
                 )
             ).scalar()
     finally:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+        engine.dispose()
 
 
 def _auto_expand_weeks_back(
@@ -200,10 +194,7 @@ def _auto_expand_weeks_back(
         last_ms = _db_latest_match_event_ms(db_url, sslmode)
     if last_ms is None:
         return weeks_back
-    try:
-        last_ms_i = int(last_ms)
-    except Exception:
-        return weeks_back
+    last_ms_i = int(last_ms)
     # Tolerate seconds-based timestamps, though calculated_at_ms should be ms.
     if last_ms_i < 1000000000000:
         last_ms_i *= 1000
@@ -234,10 +225,7 @@ def _db_tournament_ids_with_matches(
         with engine.connect() as conn:
             rows = conn.execute(q, {"ids": ids}).fetchall()
     finally:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+        engine.dispose()
     out: set[int] = set()
     for (tid,) in rows:
         try:
@@ -296,10 +284,7 @@ def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
             total += import_cli.import_file(engine, payload)
         return total
     finally:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+        engine.dispose()
 
 
 def _write_manifest(run_dir: Path, data: dict) -> None:
@@ -1278,10 +1263,7 @@ def main(argv: list[str] | None = None) -> int:
         upload_outputs(out_run, s3_prefix=s3_prefix_cfg)
 
     log.info("Run complete. Outputs: %s", out_run)
-    try:
-        engine.dispose()
-    except Exception:
-        pass
+    engine.dispose()
     return 0
 
 

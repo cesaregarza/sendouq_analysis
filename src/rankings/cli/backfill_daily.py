@@ -174,24 +174,15 @@ def main(argv: list[str] | None = None) -> int:
             ).strftime("%Y%m%d_%H%M%S")
 
             if not args.no_skip_existing:
-                try:
-                    if _run_exists(engine, anchor_ms, build_version):
-                        log.info(
-                            "[%d/%d] %s already present (build=%s); skipping",
-                            idx,
-                            len(days),
-                            d.isoformat(),
-                            build_version,
-                        )
-                        continue
-                except Exception as e:
-                    log.warning(
-                        "[%d/%d] %s run existence check failed; proceeding: %s",
+                if _run_exists(engine, anchor_ms, build_version):
+                    log.info(
+                        "[%d/%d] %s already present (build=%s); skipping",
                         idx,
                         len(days),
                         d.isoformat(),
-                        e,
+                        build_version,
                     )
+                    continue
 
             cmd = [
                 "--skip-discovery",
@@ -238,10 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("Backfill complete.")
         return 0
     finally:
-        try:
-            engine.dispose()
-        except Exception:
-            pass
+        engine.dispose()
 
 
 if __name__ == "__main__":
