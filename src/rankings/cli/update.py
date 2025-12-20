@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Update-and-rank pipeline:
   - Discover recently completed tournaments
-  - Compare with DB to find missing tournaments
-  - Scrape missing tournaments to a fresh folder and import into DB
+  - Compare with DB to find tournaments missing match data
+  - Scrape tournaments needing ingest to a fresh folder and import into DB
   - Load core tables, run the ranking engine, and save outputs
 
 Usage:
@@ -18,15 +18,18 @@ Usage:
 """
 
 import argparse
+import calendar
 import logging
+import math
 import os
 import subprocess
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 import polars as pl
+from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rankings.algorithms import ExposureLogOddsEngine
@@ -64,31 +67,169 @@ except Exception:  # pragma: no cover
 
 def _timestamp() -> str:
     """Return a compact UTC timestamp string for output folders."""
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
-def _db_existing_tournament_ids(
+def _dt_to_epoch_ms(dt: datetime) -> int:
+    """Convert a datetime to epoch milliseconds (UTC), truncating to milliseconds."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return calendar.timegm(dt.utctimetuple()) * 1000 + (dt.microsecond // 1000)
+
+
+def _parse_ts_to_ms(value: str, *, end_of_day_for_date: bool = True) -> int:
+    """Parse a CLI timestamp argument into milliseconds since epoch (UTC).
+
+    Accepted formats:
+      - epoch seconds or milliseconds (int)
+      - YYYY-MM-DD (treated as end-of-day UTC by default)
+      - ISO8601 datetime (assumes UTC if timezone is omitted; accepts trailing 'Z')
+    """
+    raw = (value or "").strip()
+    if not raw:
+        raise ValueError("Empty timestamp value")
+
+    # Fast path: epoch seconds/ms
+    try:
+        iv = int(raw)
+    except Exception:
+        iv = None
+    if iv is not None:
+        # Heuristic: treat values > 10^12 as milliseconds
+        return int(iv * 1000) if abs(iv) < 1_000_000_000_000 else int(iv)
+
+    s = raw
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+
+    # Date-only
+    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+        d = date.fromisoformat(s)
+        day_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        start_ms = _dt_to_epoch_ms(day_start)
+        if end_of_day_for_date:
+            return start_ms + 86_400_000 - 1
+        return start_ms
+
+    # Datetime
+    dt = datetime.fromisoformat(s)
+    return _dt_to_epoch_ms(dt)
+
+
+def _set_sslmode_env_if_needed(
     db_url: str | None, sslmode: Optional[str]
-) -> set[int]:
-    """Return set of tournament IDs currently present in the database."""
+) -> None:
     # Ensure sslmode env is respected when using component envs (no URL provided)
     if not db_url and sslmode:
         os.environ["RANKINGS_DB_SSLMODE"] = str(sslmode)
-    engine = rankings_create_engine(db_url)
-    rankings_create_all(engine)
-    ids: set[int] = set()
-    from sqlalchemy import text
 
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text(f"SELECT tournament_id FROM {RANKINGS_SCHEMA}.tournaments")
-        ).fetchall()
-        for (tid,) in rows:
-            try:
-                ids.add(int(tid))
-            except Exception:
-                continue
-    return ids
+
+def _db_latest_rankings_calculated_at_ms(
+    db_url: str | None, sslmode: Optional[str]
+) -> int | None:
+    """Return max(calculated_at_ms) from player_rankings, if any."""
+    _set_sslmode_env_if_needed(db_url, sslmode)
+    engine = rankings_create_engine(db_url)
+    try:
+        rankings_create_all(engine)
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    f"SELECT max(calculated_at_ms) FROM {RANKINGS_SCHEMA}.player_rankings"
+                )
+            ).scalar()
+    finally:
+        engine.dispose()
+
+
+def _db_latest_match_event_ms(
+    db_url: str | None, sslmode: Optional[str]
+) -> int | None:
+    """Return latest known match timestamp (ms) from matches, if any."""
+    _set_sslmode_env_if_needed(db_url, sslmode)
+    engine = rankings_create_engine(db_url)
+    try:
+        rankings_create_all(engine)
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    f"""
+                    SELECT max(
+                        CASE
+                            WHEN COALESCE(last_game_finished_at_ms, created_at_ms) < 1000000000000
+                                THEN COALESCE(last_game_finished_at_ms, created_at_ms) * 1000
+                            ELSE COALESCE(last_game_finished_at_ms, created_at_ms)
+                        END
+                    )
+                    FROM {RANKINGS_SCHEMA}.matches
+                    WHERE COALESCE(last_game_finished_at_ms, created_at_ms) IS NOT NULL
+                    """
+                )
+            ).scalar()
+    finally:
+        engine.dispose()
+
+
+def _auto_expand_weeks_back(
+    weeks_back: int,
+    *,
+    db_url: str | None,
+    sslmode: Optional[str],
+    max_weeks: int = 260,
+) -> int:
+    """Auto-expand discovery window when the pipeline hasn't run recently.
+
+    Uses player_rankings.calculated_at_ms as the primary signal (last successful
+    rankings persistence). Falls back to latest match timestamp if rankings
+    table is empty.
+    """
+    now_ms = _dt_to_epoch_ms(datetime.now(timezone.utc))
+    last_ms = _db_latest_rankings_calculated_at_ms(db_url, sslmode)
+    if last_ms is None:
+        last_ms = _db_latest_match_event_ms(db_url, sslmode)
+    if last_ms is None:
+        return weeks_back
+    last_ms_i = int(last_ms)
+    # Tolerate seconds-based timestamps, though calculated_at_ms should be ms.
+    if last_ms_i < 1000000000000:
+        last_ms_i *= 1000
+    delta_days = max(0.0, (now_ms - last_ms_i) / (1000 * 60 * 60 * 24))
+    needed = int(math.ceil(delta_days / 7.0) + 2)
+    needed = max(1, min(needed, int(max_weeks)))
+    return max(int(weeks_back), needed)
+
+
+def _db_tournament_ids_with_matches(
+    db_url: str | None, sslmode: Optional[str], tournament_ids: Iterable[int]
+) -> set[int]:
+    """Return the subset of `tournament_ids` that already have matches in DB."""
+    ids = sorted({int(t) for t in tournament_ids if isinstance(t, int)})
+    if not ids:
+        return set()
+    _set_sslmode_env_if_needed(db_url, sslmode)
+    engine = rankings_create_engine(db_url)
+    try:
+        rankings_create_all(engine)
+        q = text(
+            f"""
+            SELECT DISTINCT tournament_id
+            FROM {RANKINGS_SCHEMA}.matches
+            WHERE tournament_id IN :ids
+            """
+        ).bindparams(bindparam("ids", expanding=True))
+        with engine.connect() as conn:
+            rows = conn.execute(q, {"ids": ids}).fetchall()
+    finally:
+        engine.dispose()
+    out: set[int] = set()
+    for (tid,) in rows:
+        try:
+            out.add(int(tid))
+        except Exception:
+            continue
+    return out
 
 
 def _discover_recent_finalized(weeks_back: int) -> list[int]:
@@ -129,15 +270,18 @@ def _discover_recent_finalized(weeks_back: int) -> list[int]:
 def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
     """Import newly scraped JSON files under `json_dir` into the database."""
     engine = rankings_create_engine(db_url)
-    rankings_create_all(engine)
-    files = import_cli._find_json_files(json_dir)
-    total = 0
-    for path in files:
-        payload = import_cli._load_json_payload(path)
-        if not payload:
-            continue
-        total += import_cli.import_file(engine, payload)
-    return total
+    try:
+        rankings_create_all(engine)
+        files = import_cli._find_json_files(json_dir)
+        total = 0
+        for path in files:
+            payload = import_cli._load_json_payload(path)
+            if not payload:
+                continue
+            total += import_cli.import_file(engine, payload)
+        return total
+    finally:
+        engine.dispose()
 
 
 def _write_manifest(run_dir: Path, data: dict) -> None:
@@ -533,6 +677,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--as-of",
+        type=str,
+        default=None,
+        help=(
+            "Anchor timestamp (UTC) for time-window filters and decay calculations. "
+            "Accepts epoch seconds/ms, YYYY-MM-DD (end-of-day UTC), or ISO8601."
+        ),
+    )
+    parser.add_argument(
         "--until-days",
         type=int,
         default=None,
@@ -570,6 +723,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Explicit build version tag to store with rankings (overrides env/git)",
     )
     parser.add_argument(
+        "--calculated-at",
+        type=str,
+        default=None,
+        help=(
+            "Override calculated_at_ms stored with rankings/stats. "
+            "Accepts the same formats as --as-of."
+        ),
+    )
+    parser.add_argument(
+        "--run-ts",
+        type=str,
+        default=None,
+        help=(
+            "Override run timestamp string used for output directory naming "
+            "(default: current UTC timestamp)."
+        ),
+    )
+    parser.add_argument(
         "--write-parquet",
         action="store_true",
         help="Write Parquet snapshots (matches/players and rankings)",
@@ -588,11 +759,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Upload outputs (engine_state, manifest) to S3 using env RANKINGS_S3_URI or RANKINGS_S3_BUCKET/PREFIX",
     )
+    parser.add_argument(
+        "--no-upload-s3",
+        action="store_true",
+        help="Do not upload outputs to S3 (overrides config/--upload-s3)",
+    )
 
     parser.add_argument(
         "--no-ddl",
         action="store_true",
         help="Do not attempt to create schema/tables (skip DDL)",
+    )
+    parser.add_argument(
+        "--no-persist-appearance-teams",
+        action="store_true",
+        help="Do not upsert appearance team assignments to DB (skip player_appearance_teams cache writes).",
     )
     parser.add_argument(
         "--promote-appearances",
@@ -666,6 +847,8 @@ def main(argv: list[str] | None = None) -> int:
     sslmode = _get("sslmode", args.sslmode, None)
     write_parquet = bool(_get("write_parquet", args.write_parquet, False))
     upload_s3 = bool(_get("upload_s3", args.upload_s3, False))
+    if args.no_upload_s3:
+        upload_s3 = False
     s3_prefix_cfg = cfg.get("s3_prefix")
     # Build/version can be sourced from config as a fallback before env/git
     build_version_cfg = cfg.get("build_version")
@@ -691,21 +874,55 @@ def main(argv: list[str] | None = None) -> int:
         db_url = urlunparse(parts)
 
     log = logging.getLogger("rankings.cli.update")
+
+    # Anchor timestamp for this run (UTC)
+    anchor_ms = (
+        _parse_ts_to_ms(args.as_of, end_of_day_for_date=True)
+        if args.as_of
+        else _dt_to_epoch_ms(datetime.now(timezone.utc))
+    )
+    anchor_dt = datetime.fromtimestamp(anchor_ms / 1000, tz=timezone.utc)
+    anchor_sec = float(anchor_ms) / 1000.0
+    calculated_at_ms_for_run = (
+        _parse_ts_to_ms(args.calculated_at, end_of_day_for_date=True)
+        if args.calculated_at
+        else int(anchor_ms)
+    )
+
+    if args.weeks_back is None and args.as_of is None:
+        try:
+            eff = _auto_expand_weeks_back(
+                int(weeks_back), db_url=db_url, sslmode=sslmode
+            )
+            if eff != int(weeks_back):
+                log.info(
+                    "Auto-expanded weeks_back %s -> %s based on DB recency",
+                    weeks_back,
+                    eff,
+                )
+                weeks_back = eff
+        except Exception as e:
+            log.warning("Auto weeks_back expansion skipped: %s", e)
     to_fetch: list[int] = []
     if args.skip_discovery:
         log.info(
             "Skip-discovery enabled: bypassing calendar lookup and scraping."
         )
     else:
-        existing = _db_existing_tournament_ids(db_url, sslmode)
         finalized = _discover_recent_finalized(int(weeks_back))
-        to_fetch = [tid for tid in finalized if tid not in existing]
+        ingested = _db_tournament_ids_with_matches(db_url, sslmode, finalized)
+        to_fetch = [tid for tid in finalized if tid not in ingested]
         log.info(
-            "Discovered finalized tournaments: %d; missing in DB: %d",
+            "Discovered finalized tournaments: %d; needing scrape (missing matches): %d",
             len(finalized),
             len(to_fetch),
         )
-    run_ts = _timestamp()
+    if args.run_ts:
+        run_ts = str(args.run_ts)
+    elif args.as_of:
+        run_ts = anchor_dt.strftime("%Y%m%d_%H%M%S")
+    else:
+        run_ts = _timestamp()
 
     # Default scratch path under /tmp if not specified
     data_dir = (
@@ -749,22 +966,18 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             log.warning("Skipping DDL due to error: %s", e)
 
-    since_ms = (
-        int(
-            (datetime.utcnow() - timedelta(days=int(since_days))).timestamp()
-            * 1000
-        )
-        if since_days is not None
-        else None
-    )
-    until_ms = (
-        int(
-            (datetime.utcnow() - timedelta(days=int(until_days))).timestamp()
-            * 1000
-        )
-        if until_days is not None
-        else None
-    )
+    if since_days is not None:
+        since_ms = _dt_to_epoch_ms(anchor_dt - timedelta(days=int(since_days)))
+    else:
+        since_ms = None
+    if until_days is not None:
+        until_ms = _dt_to_epoch_ms(anchor_dt - timedelta(days=int(until_days)))
+    else:
+        # Default: do not include future-dated tournaments/matches.
+        until_ms = int(anchor_ms)
+    if args.no_time_filter:
+        since_ms = None
+        until_ms = None
 
     # Load with a wide retrieval window to keep dataset manageable
     tables = load_core_tables(
@@ -794,9 +1007,15 @@ def main(argv: list[str] | None = None) -> int:
 
     ranks_rows = 0
     if not matches.is_empty() and not players.is_empty():
+        persist_appearance_teams = not bool(args.no_persist_appearance_teams)
         # Load appearances from DB (preferred), fallback to scraped JSONs when missing
         try:
-            appearances = load_player_appearances_df(engine)
+            appearances = load_player_appearances_df(
+                engine,
+                since_ms=since_ms,
+                until_ms=until_ms,
+                only_ranked=only_ranked,
+            )
         except Exception:
             appearances = pl.DataFrame([])
         if appearances.is_empty():
@@ -872,7 +1091,7 @@ def main(argv: list[str] | None = None) -> int:
 
             # Persist enriched team assignments to DB to warm the cache for future runs
             try:
-                if save_to_db:
+                if save_to_db and persist_appearance_teams:
                     up_cnt = _persist_appearance_team_assignments(
                         engine, appearances
                     )
@@ -957,7 +1176,7 @@ def main(argv: list[str] | None = None) -> int:
         eng_cfg.engine.score_decay_rate = 0.01
         eng_cfg.use_tick_tock_active = True
 
-        eng = ExposureLogOddsEngine(eng_cfg)
+        eng = ExposureLogOddsEngine(eng_cfg, now_ts=anchor_sec)
         if appearances.is_empty():
             ranks = eng.rank_players(matches, players)
         else:
@@ -973,9 +1192,8 @@ def main(argv: list[str] | None = None) -> int:
             build_version = (
                 args.build_version or build_version_cfg or _get_build_version()
             )
-            calculated_at_ms = int(datetime.utcnow().timestamp() * 1000)
             inserted = _persist_rankings(
-                engine, ranks, build_version, calculated_at_ms
+                engine, ranks, build_version, calculated_at_ms_for_run
             )
             # Compute and persist per-player stats for eligibility display
             try:
@@ -987,7 +1205,7 @@ def main(argv: list[str] | None = None) -> int:
                     ).unique()
                     stats = stats.join(id_df, on="player_id", how="inner")
                     s_ins = _persist_ranking_stats(
-                        engine, stats, build_version, calculated_at_ms
+                        engine, stats, build_version, calculated_at_ms_for_run
                     )
                     log.info(
                         "Saved %d rankings and %d stats to DB (build=%s)",
@@ -1038,6 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
         upload_outputs(out_run, s3_prefix=s3_prefix_cfg)
 
     log.info("Run complete. Outputs: %s", out_run)
+    engine.dispose()
     return 0
 
 

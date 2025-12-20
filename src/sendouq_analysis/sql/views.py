@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-"""Helpers for Postgres materialized views used by the rankings pipeline."""
-
 import logging
 import re
+from typing import Iterable
 
 import sqlalchemy as db
 from sqlalchemy.engine import Engine
 
-from rankings.sql.constants import SCHEMA as DEFAULT_SCHEMA
+from sendouq_analysis.constants.table_names import SCHEMA as DEFAULT_SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ def _validate_schema(schema: str) -> str:
     return schema
 
 
-def _event_times_view_sql(schema: str) -> str:
+def _tournament_event_times_view_sql(schema: str) -> str:
     return f"""
 CREATE MATERIALIZED VIEW IF NOT EXISTS {schema}.tournament_event_times AS
 SELECT
@@ -59,7 +58,7 @@ GROUP BY t.tournament_id, t.start_time_ms, t.is_ranked;
 """
 
 
-def _event_times_indexes(schema: str) -> tuple[str, ...]:
+def _tournament_event_times_indexes(schema: str) -> tuple[str, ...]:
     return (
         f"CREATE UNIQUE INDEX IF NOT EXISTS tet_pk ON {schema}.tournament_event_times(tournament_id)",
         f"CREATE INDEX IF NOT EXISTS tet_event_ms ON {schema}.tournament_event_times(event_ms)",
@@ -67,12 +66,12 @@ def _event_times_indexes(schema: str) -> tuple[str, ...]:
     )
 
 
-def _refresh_event_times_sql(schema: str) -> str:
+def _refresh_tournament_event_times_view_sql(schema: str) -> str:
     return f"REFRESH MATERIALIZED VIEW {schema}.tournament_event_times"
 
 
 def _missing_tables(
-    connection: db.engine.Connection, schema: str, tables: tuple[str, ...]
+    connection: db.engine.Connection, schema: str, tables: Iterable[str]
 ) -> list[str]:
     missing: list[str] = []
     for table_name in tables:
@@ -89,11 +88,6 @@ def ensure_tournament_event_times_view(
     engine: Engine, *, schema: str = DEFAULT_SCHEMA
 ) -> None:
     """Ensure the tournament_event_times materialized view exists and is refreshed."""
-    if not hasattr(engine, "connect"):
-        logging.getLogger(__name__).debug(
-            "Skipping tournament_event_times refresh; engine lacks connect()"
-        )
-        return
     schema = _validate_schema(schema)
     try:
         with engine.connect() as connection:
@@ -111,15 +105,19 @@ def ensure_tournament_event_times_view(
             logger.info(
                 "Ensuring tournament_event_times materialized view exists"
             )
-            connection.execute(db.text(_event_times_view_sql(schema)))
-            for statement in _event_times_indexes(schema):
+            connection.execute(
+                db.text(_tournament_event_times_view_sql(schema))
+            )
+            for statement in _tournament_event_times_indexes(schema):
                 connection.execute(db.text(statement))
 
-        with engine.connect().execution_options(  # type: ignore[arg-type]
+        with engine.connect().execution_options(
             isolation_level="AUTOCOMMIT"
         ) as connection:
             logger.info("Refreshing tournament_event_times materialized view")
-            connection.execute(db.text(_refresh_event_times_sql(schema)))
+            connection.execute(
+                db.text(_refresh_tournament_event_times_view_sql(schema))
+            )
             logger.info("tournament_event_times materialized view refreshed")
     except Exception:  # pragma: no cover - surfaced to caller for logging
         logger.exception(

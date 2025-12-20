@@ -62,6 +62,7 @@ rankings_pull = "rankings.cli.pull:main"
 rankings_repull = "rankings.cli.repull:main"
 rankings_fix_tournaments = "rankings.cli.fix_tournaments:main"
 rankings_db_schema = "rankings.cli.schema:main"
+rankings_backfill_daily = "rankings.cli.backfill_daily:main"
 
 [tool.black]
 line-length = 80

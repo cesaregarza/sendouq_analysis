@@ -3,6 +3,11 @@ import polars as pl
 import rankings.cli.update as update_cli
 
 
+class _DummyEngine:
+    def dispose(self) -> None:
+        return None
+
+
 def test_update_main_persists_rankings_and_stats_when_enabled(
     tmp_path, monkeypatch, capsys
 ):
@@ -34,7 +39,7 @@ def test_update_main_persists_rankings_and_stats_when_enabled(
 
     # Monkeypatch DB and loaders
     monkeypatch.setattr(
-        update_cli, "rankings_create_engine", lambda *_a, **_k: object()
+        update_cli, "rankings_create_engine", lambda *_a, **_k: _DummyEngine()
     )
     monkeypatch.setattr(
         update_cli, "rankings_create_all", lambda *_a, **_k: None

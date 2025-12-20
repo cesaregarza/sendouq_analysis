@@ -344,7 +344,8 @@ def parse_tournaments_data(
                 "match_number": match.get("number"),
                 "status": match.get("status"),
                 "last_game_finished_at": match.get("lastGameFinishedAt"),
-                "match_created_at": match.get("createdAt"),
+                # Prefer createdAt, fall back to startedAt (from public API)
+                "match_created_at": match.get("createdAt") or match.get("startedAt"),
             }
             # Opponents may be missing (e.g. byes)
             opp1 = match.get("opponent1", {}) or {}

@@ -37,6 +37,12 @@ def load_matches_df(
     - team1_id, team1_position, team1_score
     - team2_id, team2_position, team2_score
     - winner_team_id, loser_team_id, is_bye
+
+    Time filtering semantics:
+    - Prefer per-match timestamps (last_game_finished_at_ms, created_at_ms)
+    - When per-match timestamps are missing, fall back to the tournament
+      start_time_ms so tournaments with incomplete match time metadata can
+      still participate in time-windowed runs.
     """
 
     def _to_db_seconds(v: Optional[int]) -> Optional[int]:
@@ -49,10 +55,24 @@ def load_matches_df(
         # Heuristic: treat values > 10^12 as milliseconds
         return iv // 1000 if iv > 1_000_000_000_000 else iv
 
-    where = []
+    def _sec_expr(column_expr: str) -> str:
+        # Normalize seconds-or-milliseconds DB values to seconds using a
+        # conservative heuristic (same threshold as other modules).
+        return (
+            f"(CASE "
+            f"WHEN {column_expr} IS NULL THEN NULL "
+            f"WHEN {column_expr} >= 1000000000000 THEN {column_expr} / 1000 "
+            f"ELSE {column_expr} END)"
+        )
+
+    where: list[str] = []
     params: dict[str, Any] = {}
-    # Prefer last_game_finished_at_ms, but fall back to created_at_ms when missing
-    time_expr = "COALESCE(m.last_game_finished_at_ms, m.created_at_ms)"
+    # Prefer last_game_finished_at, but fall back to created_at, then tournament
+    # start time when match timestamps are missing.
+    m_last_sec = _sec_expr("m.last_game_finished_at_ms")
+    m_created_sec = _sec_expr("m.created_at_ms")
+    t_start_sec = _sec_expr("t.start_time_ms")
+    time_expr = f"COALESCE({m_last_sec}, {m_created_sec}, {t_start_sec})"
     since_ts = _to_db_seconds(since_ms)
     until_ts = _to_db_seconds(until_ms)
     if since_ts is not None:
@@ -66,12 +86,9 @@ def load_matches_df(
 
     where_clause = f"WHERE {' AND '.join(where)}" if where else ""
 
-    join_clause = (
-        "JOIN {SCHEMA}.tournaments t ON t.tournament_id = m.tournament_id"
-        if only_ranked
-        else ""
-    )
+    join_clause = "JOIN {SCHEMA}.tournaments t ON t.tournament_id = m.tournament_id"
 
+    match_created_at_sec = f"COALESCE({m_created_sec}, {t_start_sec})"
     sql = f"""
         SELECT
             m.match_id,
@@ -81,8 +98,8 @@ def load_matches_df(
             m.round_id,
             m.number AS match_number,
             m.status,
-            m.last_game_finished_at_ms AS last_game_finished_at,
-            m.created_at_ms AS match_created_at,
+            {m_last_sec} AS last_game_finished_at,
+            {match_created_at_sec} AS match_created_at,
             m.team1_id,
             m.team1_position,
             m.team1_score,
@@ -194,19 +211,75 @@ def load_core_tables(
     return {"matches": matches, "players": players}
 
 
-def load_player_appearances_df(engine: Engine) -> pl.DataFrame:
+def load_player_appearances_df(
+    engine: Engine,
+    *,
+    since_ms: Optional[int] = None,
+    until_ms: Optional[int] = None,
+    only_ranked: bool = False,
+) -> pl.DataFrame:
     """Load per-match player appearances from the database.
 
     Returns a DataFrame with columns: tournament_id, match_id, user_id.
+
+    When `since_ms`/`until_ms` are provided, filters appearances by joining to
+    matches and applying the same time semantics as `load_matches_df`:
+    per-match timestamps first, then tournament start time fallback.
     """
+
+    def _to_db_seconds(v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return None
+        try:
+            iv = int(v)
+        except Exception:
+            return None
+        # Heuristic: treat values > 10^12 as milliseconds
+        return iv // 1000 if iv > 1_000_000_000_000 else iv
+
+    def _sec_expr(column_expr: str) -> str:
+        return (
+            f"(CASE "
+            f"WHEN {column_expr} IS NULL THEN NULL "
+            f"WHEN {column_expr} >= 1000000000000 THEN {column_expr} / 1000 "
+            f"ELSE {column_expr} END)"
+        )
+
+    where: list[str] = []
+    params: dict[str, Any] = {}
+    m_last_sec = _sec_expr("m.last_game_finished_at_ms")
+    m_created_sec = _sec_expr("m.created_at_ms")
+    t_start_sec = _sec_expr("t.start_time_ms")
+    time_expr = f"COALESCE({m_last_sec}, {m_created_sec}, {t_start_sec})"
+
+    since_ts = _to_db_seconds(since_ms)
+    until_ts = _to_db_seconds(until_ms)
+    if since_ts is not None:
+        where.append(f"{time_expr} >= :since_ts")
+        params["since_ts"] = since_ts
+    if until_ts is not None:
+        where.append(f"{time_expr} <= :until_ts")
+        params["until_ts"] = until_ts
+    if only_ranked:
+        where.append("COALESCE(t.is_ranked, false) = true")
+
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+
     sql = f"""
         SELECT
-            tournament_id,
-            match_id,
-            player_id AS user_id
-        FROM {SCHEMA}.player_appearances
+            pa.tournament_id,
+            pa.match_id,
+            pa.player_id AS user_id
+        FROM {SCHEMA}.player_appearances pa
+        JOIN {SCHEMA}.matches m
+            ON m.match_id = pa.match_id
+           AND m.tournament_id = pa.tournament_id
+        JOIN {SCHEMA}.tournaments t
+            ON t.tournament_id = m.tournament_id
+        {where_clause}
     """
-    df = _read_sql(engine, sql)
+
+    df = _read_sql(engine, sql, params)
     if df.is_empty():
         return df
     df = df.with_columns(
