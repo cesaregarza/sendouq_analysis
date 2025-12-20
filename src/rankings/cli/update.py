@@ -188,7 +188,7 @@ def _auto_expand_weeks_back(
     rankings persistence). Falls back to latest match timestamp if rankings
     table is empty.
     """
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     last_ms = _db_latest_rankings_calculated_at_ms(db_url, sslmode)
     if last_ms is None:
         last_ms = _db_latest_match_event_ms(db_url, sslmode)
