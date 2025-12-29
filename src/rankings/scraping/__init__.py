@@ -38,6 +38,15 @@ from rankings.scraping.storage import (
     load_scraped_tournaments,
 )
 
+# Turbo-stream decoder for new .data endpoints
+from rankings.scraping.turbo_stream import (
+    TurboStreamDecoder,
+    decode_turbo_stream,
+    extract_match_data,
+    extract_route_data,
+    extract_tournament_data,
+)
+
 __all__ = [
     # API
     "scrape_tournament",
@@ -60,4 +69,10 @@ __all__ = [
     "get_existing_tournament_ids",
     "find_missing_tournament_ids",
     "scrape_missing_tournaments",
+    # Turbo-stream decoder
+    "TurboStreamDecoder",
+    "decode_turbo_stream",
+    "extract_match_data",
+    "extract_route_data",
+    "extract_tournament_data",
 ]

@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING
 
 import requests
 
+from rankings.scraping.turbo_stream import extract_match_data
+
 if TYPE_CHECKING:
     from typing import Literal
 
+# New .data endpoint format (React Router Single Fetch / turbo-stream)
 base_url = "https://sendou.ink/q/match/"
-url_suffix = r"?_data=features%2Fsendouq%2Froutes%2Fq.match.%24id"
+url_suffix = ".data"
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +23,25 @@ logger = logging.getLogger(__name__)
 def scrape_match(match_id: int) -> dict:
     """Scrapes a single match from sendou.ink
 
+    Uses the new .data endpoint format (turbo-stream).
+
     Args:
         match_id (int): The id of the match to scrape
 
     Returns:
-        dict: The match data as a dictionary
+        dict: The match data as a dictionary with 'match' key
     """
     logger.info("Scraping match id: %s", match_id)
     url = base_url + str(match_id) + url_suffix
     response = requests.get(url)
-    return response.json()
+    raw_data = response.json()
+
+    # Decode turbo-stream format
+    data = extract_match_data(raw_data)
+    if data is None:
+        raise ValueError(f"Could not extract match data for {match_id}")
+
+    return data
 
 
 def scrape_matches(

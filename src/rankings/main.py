@@ -24,6 +24,8 @@ from sqlalchemy.orm import sessionmaker
 from rankings.algorithms.exposure_log_odds import ExposureLogOddsEngine
 from rankings.core import ExposureLogOddsConfig
 from rankings.core.logging import get_logger, log_timing
+from rankings.scraping.api import validate_tournament_data
+from rankings.scraping.turbo_stream import extract_tournament_data
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Engine
@@ -113,8 +115,40 @@ class RankingScraper:
                 return result[0]
         return None
 
+    def _try_turbo_stream_endpoint(self, tournament_id: int) -> dict | None:
+        """Try fetching from the new turbo-stream .data endpoint."""
+        url = f"{self.api_base_url}/to/{tournament_id}/results.data"
+        try:
+            response = self.session.get(url, timeout=self.api_timeout)
+            response.raise_for_status()
+            raw_data = response.json()
+            data = extract_tournament_data(raw_data)
+            if data and validate_tournament_data(data):
+                logger.debug(f"Fetched tournament {tournament_id} via turbo-stream")
+                return data
+        except Exception as e:
+            logger.debug(f"Turbo-stream endpoint failed for {tournament_id}: {e}")
+        return None
+
+    def _try_legacy_endpoint(self, tournament_id: int) -> dict | None:
+        """Try fetching from the legacy ?_data endpoint (plain JSON)."""
+        url = f"{self.api_base_url}/to/{tournament_id}?_data=features%2Ftournament%2Froutes%2Fto.%24id"
+        try:
+            response = self.session.get(url, timeout=self.api_timeout)
+            response.raise_for_status()
+            data = response.json()
+            if data and validate_tournament_data(data):
+                logger.debug(f"Fetched tournament {tournament_id} via legacy endpoint")
+                return data
+        except Exception as e:
+            logger.debug(f"Legacy endpoint failed for {tournament_id}: {e}")
+        return None
+
     def scrape_tournament(self, tournament_id: int) -> dict:
         """Scrape tournament data from the API with retries.
+
+        Tries the new turbo-stream .data endpoint first, then falls back
+        to the legacy ?_data endpoint for resilience.
 
         Args:
             tournament_id: Tournament ID to scrape.
@@ -125,29 +159,34 @@ class RankingScraper:
         Raises:
             Exception: If scraping fails after all retry attempts.
         """
-        url = f"{self.api_base_url}/to/{tournament_id}?_data=features%2Ftournament%2Froutes%2Fto.%24id"
         logger.info(f"Scraping tournament {tournament_id}")
 
         for attempt in range(self.api_retry_count):
-            try:
-                with log_timing(logger, f"tournament {tournament_id} scraping"):
-                    response = self.session.get(url, timeout=self.api_timeout)
-                    response.raise_for_status()
-                    data = response.json()
-                logger.info(f"Successfully scraped tournament {tournament_id}")
-                return data
-            except Exception as e:
-                if attempt == self.api_retry_count - 1:
-                    logger.error(
-                        f"Failed to scrape tournament {tournament_id} after {self.api_retry_count} attempts: {e}"
-                    )
-                    raise
-                logger.warning(
-                    f"Attempt {attempt + 1} failed for tournament {tournament_id}: {e}"
+            with log_timing(logger, f"tournament {tournament_id} scraping"):
+                # Try turbo-stream endpoint first (new format)
+                data = self._try_turbo_stream_endpoint(tournament_id)
+                if data is not None:
+                    logger.info(f"Successfully scraped tournament {tournament_id}")
+                    return data
+
+                # Fall back to legacy endpoint
+                data = self._try_legacy_endpoint(tournament_id)
+                if data is not None:
+                    logger.info(f"Successfully scraped tournament {tournament_id}")
+                    return data
+
+            # Both failed, retry with backoff
+            if attempt == self.api_retry_count - 1:
+                logger.error(
+                    f"Failed to scrape tournament {tournament_id} after {self.api_retry_count} attempts"
                 )
-                time.sleep(
-                    self.rate_limit_delay * (attempt + 1)
-                )  # Exponential backoff
+                raise RuntimeError(
+                    f"Failed to fetch tournament {tournament_id} after {self.api_retry_count} attempts"
+                )
+            logger.warning(
+                f"Attempt {attempt + 1} failed for tournament {tournament_id}"
+            )
+            time.sleep(self.rate_limit_delay * (attempt + 1))
 
     def load_match_data(self, days_back: int = 90) -> pl.DataFrame:
         """Load match data from database for the specified time window.

@@ -9,6 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
 from rankings.core.logging import get_logger, log_timing
+from rankings.scraping.api import validate_tournament_data
+from rankings.scraping.turbo_stream import extract_tournament_data
 from sendouq_analysis.sql.tourney_models import (  # ParticipatedUser  # Uncomment if this model exists
     Base,
     BracketProgression,
@@ -38,26 +40,75 @@ from sendouq_analysis.sql.tourney_models import (  # ParticipatedUser  # Uncomme
 )
 
 
-def build_url(tournament_id: int) -> str:
-    """Construct the URL for a given tournament ID."""
-    return f"https://sendou.ink/to/{tournament_id}?_data=features%2Ftournament%2Froutes%2Fto.%24id"
+def build_url(tournament_id: int, legacy: bool = False) -> str:
+    """Construct the URL for a given tournament ID.
+
+    Args:
+        tournament_id: Tournament ID to scrape
+        legacy: If True, use the legacy ?_data endpoint format
+    """
+    if legacy:
+        return f"https://sendou.ink/to/{tournament_id}?_data=features%2Ftournament%2Froutes%2Fto.%24id"
+    return f"https://sendou.ink/to/{tournament_id}/results.data"
+
+
+def _try_turbo_stream_endpoint(
+    tournament_id: int, session: requests.Session, logger
+) -> dict | None:
+    """Try fetching from the new turbo-stream .data endpoint."""
+    url = build_url(tournament_id, legacy=False)
+    try:
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        raw_data = response.json()
+        data = extract_tournament_data(raw_data)
+        if data and validate_tournament_data(data):
+            logger.debug(f"Fetched tournament {tournament_id} via turbo-stream")
+            return data
+    except Exception as e:
+        logger.debug(f"Turbo-stream endpoint failed for {tournament_id}: {e}")
+    return None
+
+
+def _try_legacy_endpoint(
+    tournament_id: int, session: requests.Session, logger
+) -> dict | None:
+    """Try fetching from the legacy ?_data endpoint (plain JSON)."""
+    url = build_url(tournament_id, legacy=True)
+    try:
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data and validate_tournament_data(data):
+            logger.debug(f"Fetched tournament {tournament_id} via legacy endpoint")
+            return data
+    except Exception as e:
+        logger.debug(f"Legacy endpoint failed for {tournament_id}: {e}")
+    return None
 
 
 def scrape_tournament(tournament_id: int, session=requests.Session()) -> dict:
     """Scrape tournament data from the API."""
     logger = get_logger(__name__)
-    url = build_url(tournament_id)
-    logger.debug(f"Scraping tournament {tournament_id} from {url}")
+    logger.debug(f"Scraping tournament {tournament_id}")
 
     with log_timing(logger, f"tournament {tournament_id} scraping"):
-        response = session.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        # Try turbo-stream endpoint first (new format)
+        data = _try_turbo_stream_endpoint(tournament_id, session, logger)
+        if data is not None:
+            logger.info(f"Successfully scraped tournament {tournament_id}")
+            return data
 
-    logger.info(
-        f"Successfully scraped tournament {tournament_id} ({len(json.dumps(data))} bytes)"
+        # Fall back to legacy endpoint
+        data = _try_legacy_endpoint(tournament_id, session, logger)
+        if data is not None:
+            logger.info(f"Successfully scraped tournament {tournament_id}")
+            return data
+
+    raise ValueError(
+        f"Could not extract tournament data for {tournament_id} "
+        "(tried both turbo-stream and legacy endpoints)"
     )
-    return data
 
 
 def parse_staff_user(user_data: dict, db_session) -> User:
