@@ -31,7 +31,10 @@ SECONDS_PER_DAY: float = 86_400.0
 
 # Sendou.ink URLs
 SENDOU_BASE_URL = "https://sendou.ink/to/"
-SENDOU_DATA_SUFFIX = "?_data=features%2Ftournament%2Froutes%2Fto.%24id"
+# New .data endpoint format (React Router Single Fetch / turbo-stream)
+SENDOU_DATA_SUFFIX = "/results.data"
+# Legacy suffix (deprecated, no longer works)
+SENDOU_DATA_SUFFIX_LEGACY = "?_data=features%2Ftournament%2Froutes%2Fto.%24id"
 CALENDAR_URL = "https://sendou.ink/calendar.ics?tournament=true"
 SENDOU_PUBLIC_API_BASE_URL = "https://sendou.ink/api"
 

@@ -64,18 +64,15 @@ def _load_json_payload(path: Path):
 
 def _py(v):
     """Convert numpy/polars types to Python natives for SQLAlchemy."""
-    try:
-        if isinstance(v, np.generic):
-            return v.item()
-        if isinstance(v, np.ndarray):
-            return [_py(x) for x in v.tolist()]
-        if isinstance(v, (list, tuple, set)):
-            return [_py(x) for x in list(v)]
-        if isinstance(v, dict):
-            return {k: _py(x) for k, x in v.items()}
-        return v
-    except Exception:
-        return v
+    if isinstance(v, np.generic):
+        return v.item()
+    if isinstance(v, np.ndarray):
+        return [_py(x) for x in v.tolist()]
+    if isinstance(v, (list, tuple, set)):
+        return [_py(x) for x in list(v)]
+    if isinstance(v, dict):
+        return {k: _py(x) for k, x in v.items()}
+    return v
 
 
 def _bulk_insert(df: pl.DataFrame | None, model, engine) -> None:
@@ -104,7 +101,6 @@ def _upsert_players(df: pl.DataFrame | None, engine) -> None:
 
     table = RM.Player.__table__
     stmt = pg_insert(table).values(rows)
-    # Update display_name, discord_id, country when player already exists
     stmt = stmt.on_conflict_do_update(
         index_elements=[table.c.player_id],
         set_={
@@ -121,20 +117,6 @@ def _upsert_tournaments(df: pl.DataFrame | None, engine) -> None:
     """Upsert tournaments so new nullable columns (counts, jsonb) backfill existing rows."""
     if df is None or df.is_empty():
         return
-
-    def _py(v):
-        try:
-            if isinstance(v, np.generic):
-                return v.item()
-            if isinstance(v, np.ndarray):
-                return [_py(x) for x in v.tolist()]
-            if isinstance(v, (list, tuple, set)):
-                return [_py(x) for x in list(v)]
-            if isinstance(v, dict):
-                return {k: _py(x) for k, x in v.items()}
-            return v
-        except Exception:
-            return v
 
     # Limit to columns that exist in the table
     table = RM.Tournament.__table__
@@ -338,19 +320,13 @@ def import_file(
 
             def _to_settings(d: dict) -> dict:
                 def _py(v):
-                    try:
-                        # numpy scalars
-                        if hasattr(v, "item"):
-                            return v.item()
-                        # numpy arrays / sequences
-                        if hasattr(v, "tolist"):
-                            return v.tolist()
-                        # polars list -> python list
-                        if isinstance(v, (tuple, set)):
-                            return list(v)
-                        return v
-                    except Exception:
-                        return v
+                    if hasattr(v, "item"):
+                        return v.item()
+                    if hasattr(v, "tolist"):
+                        return v.tolist()
+                    if isinstance(v, (tuple, set)):
+                        return list(v)
+                    return v
 
                 return {
                     k.replace("setting_", ""): _py(d[k])
