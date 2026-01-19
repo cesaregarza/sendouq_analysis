@@ -115,6 +115,27 @@ def fetch_tournament_players(
     return res.json()
 
 
+def fetch_tournament_teams(
+    tournament_id: int, *, timeout: float = DEFAULT_TIMEOUT
+) -> List[dict]:
+    """Fetch public tournament teams route by ID.
+
+    Returns the raw JSON from GET /api/tournament/{id}/teams, which contains
+    full team rosters including members, seeding power, and registration info.
+    This can be used as a fallback when turbo-stream scraping fails to extract
+    teams data.
+
+    Returns
+    -------
+    list of dict
+        List of team objects with keys like 'id', 'name', 'members', etc.
+    """
+    url = f"{SENDOU_PUBLIC_API_BASE_URL}/tournament/{tournament_id}/teams"
+    res = requests.get(url, headers=_auth_headers(), timeout=timeout)
+    res.raise_for_status()
+    return res.json()
+
+
 def is_tournament_finalized(meta: dict) -> bool:
     """Return True if the public metadata marks the tournament as finalized."""
     return bool(meta.get("isFinalized", False))

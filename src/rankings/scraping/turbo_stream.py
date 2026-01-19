@@ -162,6 +162,12 @@ class TurboStreamDecoder:
             route_data = decoded[route_key]
             if isinstance(route_data, dict) and "data" in route_data:
                 data = route_data["data"]
+                # Handle case where data is a JSON string (new format as of late 2025)
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
                 if isinstance(data, dict) and "tournament" in data:
                     return data
 
@@ -170,7 +176,15 @@ class TurboStreamDecoder:
         if results_key in decoded:
             route_data = decoded[results_key]
             if isinstance(route_data, dict) and "data" in route_data:
-                return route_data["data"]
+                data = route_data["data"]
+                # Handle case where data is a JSON string (new format as of late 2025)
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if isinstance(data, dict):
+                    return data
 
         return None
 

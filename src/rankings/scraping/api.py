@@ -30,6 +30,7 @@ from rankings.core.constants import (
     SENDOU_DATA_SUFFIX_LEGACY,
 )
 from rankings.scraping.turbo_stream import extract_tournament_data
+from rankings.scraping.calendar_api import fetch_tournament_teams
 
 
 def build_tournament_url(tournament_id: int, legacy: bool = False) -> str:
@@ -90,7 +91,13 @@ def scrape_tournament(
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
     session: requests.Session | None = None,
 ) -> dict:
-    """Scrape tournament data from Sendou.ink API with turbo-stream and legacy fallback."""
+    """Scrape tournament data from Sendou.ink API with turbo-stream and legacy fallback.
+
+    The scraping order is:
+    1. Try turbo-stream endpoint (new format as of late 2025)
+    2. Fall back to legacy ?_data= endpoint
+    3. If teams are missing from the result, fetch from /api/tournament/{id}/teams
+    """
     if session is None:
         session = requests.Session()
 
@@ -100,11 +107,15 @@ def scrape_tournament(
         # Try turbo-stream endpoint first (new format)
         result = _try_turbo_stream_endpoint(tournament_id, session, timeout)
         if result is not None:
+            # Enrich with teams API if teams are missing
+            result = _enrich_with_teams_api(result, tournament_id)
             return result
 
         # Fall back to legacy endpoint
         result = _try_legacy_endpoint(tournament_id, session, timeout)
         if result is not None:
+            # Enrich with teams API if teams are missing
+            result = _enrich_with_teams_api(result, tournament_id)
             return result
 
         # Both failed, retry with backoff
@@ -138,6 +149,94 @@ def validate_tournament_data(tournament_data: dict) -> bool:
 
     except (AttributeError, TypeError):
         return False
+
+
+def _enrich_with_teams_api(
+    tournament_data: dict, tournament_id: int
+) -> dict:
+    """Enrich tournament data with teams from the public API if missing.
+
+    This is a fallback for when turbo-stream or legacy scraping doesn't
+    return teams data. The public API endpoint /api/tournament/{id}/teams
+    returns team rosters in a slightly different format that we normalize.
+    """
+    try:
+        tournament = tournament_data.get("tournament", {})
+        ctx = tournament.get("ctx", {})
+        existing_teams = ctx.get("teams", [])
+
+        # Only fetch if teams are missing or empty
+        if existing_teams:
+            return tournament_data
+
+        logger.info(f"Teams missing for tournament {tournament_id}, fetching from API")
+        api_teams = fetch_tournament_teams(tournament_id)
+
+        if not api_teams:
+            logger.warning(f"No teams returned from API for tournament {tournament_id}")
+            return tournament_data
+
+        # Normalize API format to match expected ctx.teams structure
+        normalized_teams = []
+        for team in api_teams:
+            normalized = {
+                "id": team.get("id"),
+                "name": team.get("name"),
+                "seed": team.get("seed"),
+                "prefersNotToHost": 1 if team.get("prefersNotToHost") else 0,
+                "droppedOut": 0,
+                "inviteCode": None,
+                "createdAt": None,
+                "activeRosterUserIds": None,
+                "startingBracketIdx": None,
+                "pickupAvatarUrl": None,
+                "members": [],
+                "checkIns": [],
+                "mapPool": [],
+                "team": None,
+                "avgSeedingSkillOrdinal": None,
+            }
+
+            # Normalize members
+            for member in team.get("members", []):
+                normalized["members"].append({
+                    "userId": member.get("userId"),
+                    "username": member.get("name"),
+                    "discordId": member.get("discordId"),
+                    "discordAvatar": member.get("avatarUrl", "").split("/")[-1] if member.get("avatarUrl") else None,
+                    "customUrl": None,
+                    "country": member.get("country"),
+                    "twitch": None,
+                    "plusTier": None,
+                    "isOwner": 1 if member.get("captain") else 0,
+                    "createdAt": None,
+                    "inGameName": member.get("inGameName"),
+                })
+
+            # Extract seeding skill if available
+            seeding = team.get("seedingPower", {})
+            if seeding:
+                # Use ranked skill as primary
+                normalized["avgSeedingSkillOrdinal"] = seeding.get("ranked")
+
+            # Extract team logo info
+            if team.get("teamPageUrl"):
+                normalized["team"] = {
+                    "customUrl": team.get("teamPageUrl", "").split("/")[-1] if team.get("teamPageUrl") else None,
+                    "logoUrl": team.get("logoUrl"),
+                    "deletedAt": None,
+                }
+
+            normalized_teams.append(normalized)
+
+        # Update the tournament data with fetched teams
+        tournament_data["tournament"]["ctx"]["teams"] = normalized_teams
+        logger.info(f"Enriched tournament {tournament_id} with {len(normalized_teams)} teams from API")
+
+    except Exception as e:
+        logger.warning(f"Failed to enrich teams from API for tournament {tournament_id}: {e}")
+
+    return tournament_data
 
 
 def extract_tournament_id_from_url(url: str) -> int | None:
