@@ -96,7 +96,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker.io
 
-            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
             docker pull registry.digitalocean.com/sendouq/scraper:latest
 
             # Run rankings_update in attached mode (no Parquet flag)
@@ -156,7 +156,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker.io
 
-            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
             docker pull registry.digitalocean.com/sendouq/scraper:latest
 
             docker run --rm \
