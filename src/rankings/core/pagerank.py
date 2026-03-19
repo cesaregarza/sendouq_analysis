@@ -99,6 +99,13 @@ def pagerank_sparse(
     return rank_vector
 
 
+from loopr.core.pagerank import (  # noqa: E402,F401
+    pagerank_dense,
+    pagerank_from_adjacency,
+    pagerank_sparse,
+)
+
+
 def pagerank_dense(
     adjacency: np.ndarray,
     teleport: np.ndarray,

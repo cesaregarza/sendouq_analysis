@@ -183,3 +183,6 @@ class RowPRBackend:
         )
 
         return result
+
+
+from loopr.algorithms.backends.row_pr import RowPRBackend  # noqa: E402,F401

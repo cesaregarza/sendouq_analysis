@@ -267,3 +267,15 @@ def create_time_windows(
         current_start += stride
 
     return windows
+
+
+from loopr.core.time import (  # noqa: E402,F401
+    Clock,
+    add_time_features,
+    apply_inactivity_decay,
+    compute_decay_factor,
+    create_time_windows,
+    decay_expr,
+    event_ts_expr,
+    filter_by_recency,
+)

@@ -220,3 +220,11 @@ def aggregate_multi_round_influence(
             aggregated[tournament_id] = 1.0
 
     return aggregated
+
+
+from loopr.core.influence import (  # noqa: E402,F401
+    aggregate_multi_round_influence,
+    compute_retrospective_strength,
+    compute_tournament_influence,
+    normalize_influence,
+)

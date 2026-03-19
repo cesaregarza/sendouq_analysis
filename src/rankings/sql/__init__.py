@@ -27,6 +27,7 @@ from rankings.sql.load import (
     load_matches_df,
     load_player_appearance_teams_df,
     load_player_appearances_df,
+    load_player_match_loo_impacts_df,
     load_player_ranking_stats_df,
     load_players_df,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "load_players_df",
     "load_player_appearance_teams_df",
     "load_player_appearances_df",
+    "load_player_match_loo_impacts_df",
     "load_player_ranking_stats_df",
     # Models submodule
     "models",

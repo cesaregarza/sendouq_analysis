@@ -471,3 +471,113 @@ def build_node_mapping(
         raise ValueError(f"Columns {winner_column} or {loser_column} not found")
 
     return factorize_ids(all_node_ids)
+
+
+from loopr.core.convert import (  # noqa: E402
+    build_node_mapping,
+    convert_matches_dataframe as _loopr_convert_matches_dataframe,
+    convert_matches_format as _loopr_convert_matches_format,
+    convert_team_matches as _loopr_convert_team_matches,
+    factorize_ids,
+)
+from rankings._legacy_inputs import (  # noqa: E402
+    expand_players_for_legacy_matches,
+    filter_legacy_appearances,
+)
+
+_LEGACY_MATCH_RENAMES = {
+    "tournament_id": "event_id",
+    "winner_team_id": "winner_id",
+    "loser_team_id": "loser_id",
+}
+
+_LEGACY_PARTICIPANT_RENAMES = {
+    "tournament_id": "event_id",
+    "team_id": "group_id",
+    "user_id": "entity_id",
+}
+
+
+def _rename_legacy_columns(
+    dataframe: pl.DataFrame | None,
+    rename_map: dict[str, str],
+) -> pl.DataFrame | None:
+    if dataframe is None:
+        return None
+
+    present = {
+        source: target
+        for source, target in rename_map.items()
+        if source in dataframe.columns and target not in dataframe.columns
+    }
+    return dataframe.rename(present) if present else dataframe
+
+
+def convert_matches_dataframe(
+    matches: pl.DataFrame,
+    players: pl.DataFrame | None,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
+    decay_rate: float,
+    beta: float = 0.0,
+    *,
+    rosters: pl.DataFrame | None = None,
+    appearances: pl.DataFrame | None = None,
+    include_share: bool = True,
+    streaming: bool = False,
+) -> pl.DataFrame:
+    players = (
+        expand_players_for_legacy_matches(matches, players)
+        if players is not None
+        else None
+    )
+    appearances = filter_legacy_appearances(matches, players, appearances)
+    return _loopr_convert_matches_dataframe(
+        _rename_legacy_columns(matches, _LEGACY_MATCH_RENAMES),
+        _rename_legacy_columns(players, _LEGACY_PARTICIPANT_RENAMES),
+        tournament_influence,
+        now_timestamp,
+        decay_rate,
+        beta,
+        rosters=_rename_legacy_columns(rosters, _LEGACY_PARTICIPANT_RENAMES),
+        appearances=_rename_legacy_columns(
+            appearances,
+            _LEGACY_PARTICIPANT_RENAMES,
+        ),
+        include_share=include_share,
+        streaming=streaming,
+    )
+
+
+def convert_matches_format(
+    matches: pl.DataFrame,
+    players: pl.DataFrame | None,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
+    decay_rate: float,
+    beta: float = 0.0,
+):
+    return _loopr_convert_matches_format(
+        _rename_legacy_columns(matches, _LEGACY_MATCH_RENAMES),
+        _rename_legacy_columns(players, _LEGACY_PARTICIPANT_RENAMES),
+        tournament_influence,
+        now_timestamp,
+        decay_rate,
+        beta,
+    )
+
+
+def convert_team_matches(
+    matches: pl.DataFrame,
+    tournament_influence: dict[int, float],
+    now_timestamp: float,
+    decay_rate: float,
+    beta: float = 0.0,
+):
+    return _loopr_convert_team_matches(
+        _rename_legacy_columns(matches, _LEGACY_MATCH_RENAMES),
+        tournament_influence,
+        now_timestamp,
+        decay_rate,
+        beta,
+    )

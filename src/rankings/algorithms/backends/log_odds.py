@@ -202,3 +202,6 @@ class LogOddsBackend:
                 "lambda_used": [lambda_smooth] * num_nodes,
             }
         )
+
+
+from loopr.algorithms.backends.log_odds import LogOddsBackend  # noqa: E402,F401

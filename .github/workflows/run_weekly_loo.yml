@@ -1,0 +1,232 @@
+name: Run Weekly LOO
+
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: Optional UTC anchor timestamp for the weekly run
+        required: false
+        type: string
+      since_days:
+        description: Retrieval window in days
+        required: false
+        default: '540'
+        type: string
+      top_k:
+        description: Positive and negative perturb_2 matches to shortlist per player
+        required: false
+        default: '10'
+        type: string
+      player_limit:
+        description: Optional cap on visible players processed
+        required: false
+        type: string
+      include_unranked:
+        description: Include unranked tournaments in the weekly base ranking
+        required: false
+        default: false
+        type: boolean
+      log_level:
+        description: Log level for the weekly LOO command
+        required: false
+        default: INFO
+        type: choice
+        options:
+          - INFO
+          - DEBUG
+          - WARNING
+          - ERROR
+          - CRITICAL
+  schedule:
+    - cron: '0 2 * * 1'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: Scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get self ip
+        id: self_ip
+        run: |
+          SELF_IP=$(curl -s https://api.ipify.org)
+          echo $SELF_IP
+          echo "self_ip=$SELF_IP" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init
+        working-directory: terraform/ranked
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform/ranked
+        run: |
+          terraform plan -out=tfplan -input=false
+        env:
+          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          TF_VAR_source_ip: ${{ steps.self_ip.outputs.self_ip }}
+          TF_VAR_joy_ip: ${{ secrets.JOY_IP }}
+
+      - name: Terraform Apply
+        id: terraform_apply
+        working-directory: terraform/ranked
+        run: |
+          terraform apply -auto-approve tfplan
+          RANKED_IP=$(terraform output -raw ranked_ip)
+          RANKED_ID=$(terraform output -raw ranked_id)
+          echo "ranked_ip=$RANKED_IP" >> $GITHUB_OUTPUT
+          echo "ranked_id=$RANKED_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for Droplet to come online
+        run: |
+          sleep 90
+
+      - name: SSH to Ranked Droplet (attempt 1)
+        id: ssh
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.ranked_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            set +o histexpand || true
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+            export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+            export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
+            export SENTRY_ENVIRONMENT=production
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
+            export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
+            export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
+            export WEEKLY_LOO_TOP_K="${{ github.event.inputs.top_k || '10' }}"
+            export WEEKLY_LOO_PLAYER_LIMIT="${{ github.event.inputs.player_limit }}"
+            export WEEKLY_LOO_INCLUDE_UNRANKED="${{ github.event.inputs.include_unranked || 'false' }}"
+            export WEEKLY_LOO_LOG_LEVEL="${{ github.event.inputs.log_level || 'INFO' }}"
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_SCHEMA \
+              -e SENDOU_KEY \
+              -e SENTRY_DSN \
+              -e RANKINGS_SENTRY_DSN \
+              -e SENTRY_ENV=production \
+              -e SENTRY_ENVIRONMENT=production \
+              -e WEEKLY_LOO_AS_OF \
+              -e WEEKLY_LOO_SINCE_DAYS \
+              -e WEEKLY_LOO_TOP_K \
+              -e WEEKLY_LOO_PLAYER_LIMIT \
+              -e WEEKLY_LOO_INCLUDE_UNRANKED \
+              -e WEEKLY_LOO_LOG_LEVEL \
+              -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
+              --entrypoint bash \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              -lc '
+                set -euo pipefail
+                cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
+                if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
+                if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi
+                if [ -n "${WEEKLY_LOO_TOP_K:-}" ]; then cmd+=(--top-k "$WEEKLY_LOO_TOP_K"); fi
+                if [ -n "${WEEKLY_LOO_PLAYER_LIMIT:-}" ]; then cmd+=(--player-limit "$WEEKLY_LOO_PLAYER_LIMIT"); fi
+                if [ "${WEEKLY_LOO_INCLUDE_UNRANKED:-false}" = "true" ]; then cmd+=(--include-unranked); fi
+                if [ -n "${WEEKLY_LOO_LOG_LEVEL:-}" ]; then cmd+=(--log-level "$WEEKLY_LOO_LOG_LEVEL"); fi
+                "${cmd[@]}"
+              '
+
+      - name: Sleep before retry
+        id: resleep
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        run: |
+          sleep 60
+
+      - name: SSH to Ranked Droplet (attempt 2)
+        id: ressh
+        if: ${{ steps.ssh.outcome == 'failure' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.terraform_apply.outputs.ranked_ip }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          script: |
+            export PATH=$PATH:/usr/bin
+            set +o histexpand || true
+            export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
+            export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
+            export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+            export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
+            export SENTRY_ENVIRONMENT=production
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
+            export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
+            export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
+            export WEEKLY_LOO_TOP_K="${{ github.event.inputs.top_k || '10' }}"
+            export WEEKLY_LOO_PLAYER_LIMIT="${{ github.event.inputs.player_limit }}"
+            export WEEKLY_LOO_INCLUDE_UNRANKED="${{ github.event.inputs.include_unranked || 'false' }}"
+            export WEEKLY_LOO_LOG_LEVEL="${{ github.event.inputs.log_level || 'INFO' }}"
+
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+
+            docker login -u $DO_API_TOKEN -p $DO_API_TOKEN registry.digitalocean.com/sendouq
+            docker pull registry.digitalocean.com/sendouq/scraper:latest
+
+            docker run --rm \
+              -e RANKINGS_DATABASE_URL \
+              -e RANKINGS_DB_SCHEMA \
+              -e SENDOU_KEY \
+              -e SENTRY_DSN \
+              -e RANKINGS_SENTRY_DSN \
+              -e SENTRY_ENV=production \
+              -e SENTRY_ENVIRONMENT=production \
+              -e WEEKLY_LOO_AS_OF \
+              -e WEEKLY_LOO_SINCE_DAYS \
+              -e WEEKLY_LOO_TOP_K \
+              -e WEEKLY_LOO_PLAYER_LIMIT \
+              -e WEEKLY_LOO_INCLUDE_UNRANKED \
+              -e WEEKLY_LOO_LOG_LEVEL \
+              -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
+              --entrypoint bash \
+              registry.digitalocean.com/sendouq/scraper:latest \
+              -lc '
+                set -euo pipefail
+                cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
+                if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
+                if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi
+                if [ -n "${WEEKLY_LOO_TOP_K:-}" ]; then cmd+=(--top-k "$WEEKLY_LOO_TOP_K"); fi
+                if [ -n "${WEEKLY_LOO_PLAYER_LIMIT:-}" ]; then cmd+=(--player-limit "$WEEKLY_LOO_PLAYER_LIMIT"); fi
+                if [ "${WEEKLY_LOO_INCLUDE_UNRANKED:-false}" = "true" ]; then cmd+=(--include-unranked); fi
+                if [ -n "${WEEKLY_LOO_LOG_LEVEL:-}" ]; then cmd+=(--log-level "$WEEKLY_LOO_LOG_LEVEL"); fi
+                "${cmd[@]}"
+              '
+
+      - name: Kill droplet on success
+        if: ${{ success() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.ranked_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"
+
+      - name: Kill droplet if fail
+        if: ${{ failure() && steps.terraform_apply.outcome == 'success' }}
+        run: |
+          DROPLET_ID=${{ steps.terraform_apply.outputs.ranked_id }}
+          curl -X DELETE "https://api.digitalocean.com/v2/droplets/$DROPLET_ID" \
+          -H "Authorization: Bearer ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" \
+          -H "Content-Type: application/json"

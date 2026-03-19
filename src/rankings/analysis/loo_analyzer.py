@@ -1109,3 +1109,6 @@ class LOOAnalyzer:
             return pl.DataFrame()
 
         return pl.DataFrame(results).sort("abs_delta", descending=True)
+
+
+from loopr.analysis.loo_analyzer import LOOAnalyzer  # noqa: E402,F401
