@@ -50,6 +50,16 @@ jobs:
         with:
           ref: main
 
+      - name: Resolve scraper image
+        id: scraper_image
+        run: |
+          VERSION=$(tr -d '[:space:]' < .github/scraper-image-version.txt)
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+$'; then
+            echo "Expected numeric scraper image version, got: $VERSION" >&2
+            exit 1
+          fi
+          echo "image=registry.digitalocean.com/sendouq/scraper:v$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -105,6 +115,7 @@ jobs:
             export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
             export SENTRY_ENVIRONMENT=production
             export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
             export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
             export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
             export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
@@ -117,7 +128,7 @@ jobs:
             sudo apt-get install -y docker.io
 
             printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            docker pull "$SCRAPER_IMAGE"
 
             docker run --rm \
               -e RANKINGS_DATABASE_URL \
@@ -135,7 +146,7 @@ jobs:
               -e WEEKLY_LOO_LOG_LEVEL \
               -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
               --entrypoint bash \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               -lc '
                 set -euo pipefail
                 cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
@@ -172,6 +183,7 @@ jobs:
             export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
             export SENTRY_ENVIRONMENT=production
             export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
             export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
             export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
             export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
@@ -184,7 +196,7 @@ jobs:
             sudo apt-get install -y docker.io
 
             printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            docker pull "$SCRAPER_IMAGE"
 
             docker run --rm \
               -e RANKINGS_DATABASE_URL \
@@ -202,7 +214,7 @@ jobs:
               -e WEEKLY_LOO_LOG_LEVEL \
               -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
               --entrypoint bash \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               -lc '
                 set -euo pipefail
                 cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")

@@ -21,6 +21,16 @@ jobs:
         with:
           ref: main
 
+      - name: Resolve scraper image
+        id: scraper_image
+        run: |
+          VERSION=$(tr -d '[:space:]' < .github/scraper-image-version.txt)
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+$'; then
+            echo "Expected numeric scraper image version, got: $VERSION" >&2
+            exit 1
+          fi
+          echo "image=registry.digitalocean.com/sendouq/scraper:v$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -77,11 +87,11 @@ jobs:
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
             export NEW_AGGREGATION=${{ github.event.inputs.reset-aggregation }}
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
             sudo apt-get update
             sudo apt-get install -y docker.io
-            docker login -u $DO_API_TOKEN \
-              -p $DO_API_TOKEN registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
+            docker pull "$SCRAPER_IMAGE"
             docker run -d --name scraper_container \
               -e POSTGRES_USER=$POSTGRES_USER \
               -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
@@ -91,7 +101,7 @@ jobs:
               -e DO_API_TOKEN=$DO_API_TOKEN \
               -e NEW_AGGREGATION=$NEW_AGGREGATION \
               --entrypoint poetry \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               run aggregate
 
       - name: Sleep if droplet is still not ready
@@ -117,11 +127,11 @@ jobs:
             export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             export DO_API_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
             export NEW_AGGREGATION=${{ github.event.inputs.reset-aggregation }}
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
             sudo apt-get update
             sudo apt-get install -y docker.io
-            docker login -u $DO_API_TOKEN \
-              -p $DO_API_TOKEN registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
+            docker pull "$SCRAPER_IMAGE"
             docker run -d --name scraper_container \
               -e POSTGRES_USER=$POSTGRES_USER \
               -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
@@ -131,7 +141,7 @@ jobs:
               -e DO_API_TOKEN=$DO_API_TOKEN \
               -e NEW_AGGREGATION=$NEW_AGGREGATION \
               --entrypoint poetry \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               run aggregate
 
       - name: Kill droplet if fail

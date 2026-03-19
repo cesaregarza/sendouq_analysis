@@ -37,6 +37,16 @@ jobs:
         with:
           ref: main
 
+      - name: Resolve scraper image
+        id: scraper_image
+        run: |
+          VERSION=$(tr -d '[:space:]' < .github/scraper-image-version.txt)
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+$'; then
+            echo "Expected numeric scraper image version, got: $VERSION" >&2
+            exit 1
+          fi
+          echo "image=registry.digitalocean.com/sendouq/scraper:v$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -87,6 +97,7 @@ jobs:
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
             export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
             export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
 
             if [ -z "$RANKINGS_DATABASE_URL" ]; then
               echo "RANKINGS_DATABASE_URL secret is required" >&2
@@ -118,8 +129,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker.io
 
-            docker login -u "$DO_API_TOKEN" -p "$DO_API_TOKEN" registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
+            docker pull "$SCRAPER_IMAGE"
 
             docker run --rm \
               -e RANKINGS_DATABASE_URL \
@@ -127,7 +138,7 @@ jobs:
               -e SENDOU_KEY \
               -e SENTRY_DSN \
               --entrypoint poetry \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               run rankings_fix_tournaments --log-level "$LOG_LEVEL" $ARG_LIMIT $ARG_UNFINALIZED
 
       - name: Sleep if droplet is still not ready
@@ -151,6 +162,7 @@ jobs:
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
             export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
             export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
+            export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
 
             if [ -z "$RANKINGS_DATABASE_URL" ]; then
               echo "RANKINGS_DATABASE_URL secret is required" >&2
@@ -182,8 +194,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker.io
 
-            docker login -u "$DO_API_TOKEN" -p "$DO_API_TOKEN" registry.digitalocean.com/sendouq
-            docker pull registry.digitalocean.com/sendouq/scraper:latest
+            printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
+            docker pull "$SCRAPER_IMAGE"
 
             docker run --rm \
               -e RANKINGS_DATABASE_URL \
@@ -191,7 +203,7 @@ jobs:
               -e SENDOU_KEY \
               -e SENTRY_DSN \
               --entrypoint poetry \
-              registry.digitalocean.com/sendouq/scraper:latest \
+              "$SCRAPER_IMAGE" \
               run rankings_fix_tournaments --log-level "$LOG_LEVEL" $ARG_LIMIT $ARG_UNFINALIZED
 
       - name: Destroy droplet

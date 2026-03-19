@@ -13,4 +13,6 @@ def test_run_weekly_loo_workflow_contains_schedule_and_command():
     assert "RANKINGS_DB_SCHEMA" in workflow
     assert "SENTRY_DSN" in workflow
     assert "RANKINGS_SENTRY_DSN" in workflow
-    assert "registry.digitalocean.com/sendouq/scraper:latest" in workflow
+    assert ".github/scraper-image-version.txt" in workflow
+    assert "registry.digitalocean.com/sendouq/scraper:v$VERSION" in workflow
+    assert "registry.digitalocean.com/sendouq/scraper:latest" not in workflow
