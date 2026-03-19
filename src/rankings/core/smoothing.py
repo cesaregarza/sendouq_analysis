@@ -204,3 +204,14 @@ def get_smoothing_strategy(mode: str, **kwargs: Any) -> SmoothingStrategy:
         return strategy_class(**filtered_kwargs)
     else:
         return strategy_class(**kwargs)
+
+
+from loopr.core.smoothing import (  # noqa: E402,F401
+    AdaptiveSmoothing,
+    ConstantSmoothing,
+    HybridSmoothing,
+    NoSmoothing,
+    SmoothingStrategy,
+    WinsProportional,
+    get_smoothing_strategy,
+)

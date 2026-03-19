@@ -359,3 +359,71 @@ def load_player_ranking_stats_df(
             pl.col("last_active_ms").cast(pl.Int64, strict=False),
         ]
     )
+
+
+def load_player_match_loo_impacts_df(
+    engine: Engine,
+    *,
+    build_version: str | None = None,
+    calculated_at_ms: int | None = None,
+    player_id: int | None = None,
+) -> pl.DataFrame:
+    """Load persisted weekly LOO player-match impacts for one or more runs."""
+    where = []
+    params: dict[str, Any] = {}
+    if build_version is not None:
+        where.append("build_version = :bv")
+        params["bv"] = build_version
+    if calculated_at_ms is not None:
+        where.append("calculated_at_ms = :ts")
+        params["ts"] = int(calculated_at_ms)
+    if player_id is not None:
+        where.append("player_id = :pid")
+        params["pid"] = int(player_id)
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+    sql = f"""
+        SELECT
+            player_id,
+            match_id,
+            tournament_id,
+            calculated_at_ms,
+            build_version,
+            player_rank,
+            player_score,
+            is_win,
+            approx_variant,
+            approx_positive_rank,
+            approx_negative_rank,
+            approx_old_score,
+            approx_new_score,
+            approx_score_delta,
+            approx_abs_delta,
+            exact_variant,
+            exact_old_score,
+            exact_new_score,
+            exact_score_delta,
+            exact_abs_delta
+        FROM {SCHEMA}.player_match_loo_impacts
+        {where_clause}
+    """
+    df = _read_sql(engine, sql, params)
+    if df.is_empty():
+        return df
+    cast_exprs = []
+    for col in [
+        "player_id",
+        "match_id",
+        "tournament_id",
+        "calculated_at_ms",
+        "player_rank",
+        "approx_positive_rank",
+        "approx_negative_rank",
+    ]:
+        if col in df.columns:
+            cast_exprs.append(pl.col(col).cast(pl.Int64, strict=False))
+    if "is_win" in df.columns:
+        cast_exprs.append(pl.col("is_win").cast(pl.Boolean, strict=False))
+    if cast_exprs:
+        df = df.with_columns(cast_exprs)
+    return df

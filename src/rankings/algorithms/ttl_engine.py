@@ -314,3 +314,19 @@ class TTLEngine:
         """Compute number of matches for each player."""
         # Simplified - would need proper implementation
         return np.ones(len(player_ids))
+
+
+# Use loopr's extracted engine while preserving the legacy rank_players API.
+from loopr.algorithms.ttl_engine import TTLEngine as _LooprTTLEngine  # noqa: E402
+from rankings._legacy_inputs import expand_players_for_legacy_matches  # noqa: E402
+
+
+class TTLEngine(_LooprTTLEngine):  # type: ignore[no-redef]
+    def rank_players(
+        self,
+        matches: pl.DataFrame,
+        players: pl.DataFrame,
+        initial_influence: Dict[int, float] | None = None,
+    ) -> pl.DataFrame:
+        players = expand_players_for_legacy_matches(matches, players)
+        return self._rank_internal(matches, players, initial_influence)

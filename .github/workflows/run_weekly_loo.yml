@@ -1,9 +1,44 @@
-name: Run Ranked Update
+name: Run Weekly LOO
 
 on:
   workflow_dispatch:
+    inputs:
+      as_of:
+        description: Optional UTC anchor timestamp for the weekly run
+        required: false
+        type: string
+      since_days:
+        description: Retrieval window in days
+        required: false
+        default: '540'
+        type: string
+      top_k:
+        description: Positive and negative perturb_2 matches to shortlist per player
+        required: false
+        default: '10'
+        type: string
+      player_limit:
+        description: Optional cap on visible players processed
+        required: false
+        type: string
+      include_unranked:
+        description: Include unranked tournaments in the weekly base ranking
+        required: false
+        default: false
+        type: boolean
+      log_level:
+        description: Log level for the weekly LOO command
+        required: false
+        default: INFO
+        type: choice
+        options:
+          - INFO
+          - DEBUG
+          - WARNING
+          - ERROR
+          - CRITICAL
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 2 * * 1'
 
 jobs:
   run:
@@ -58,7 +93,6 @@ jobs:
           echo "ranked_ip=$RANKED_IP" >> $GITHUB_OUTPUT
           echo "ranked_id=$RANKED_ID" >> $GITHUB_OUTPUT
 
-      # Allow time for droplet boot and DB firewall readiness
       - name: Wait for Droplet to come online
         run: |
           sleep 90
@@ -74,35 +108,21 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
-            # Database URL (preferred for rankings update)
-            # Define a single secret containing the full SQLAlchemy URL
-            # e.g., postgresql+psycopg2://user:pass@host:5432/dbname?sslmode=require
             export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
-            # Optional schema override (defaults to comp_rankings if unset)
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export SENDOU_KEY=${{ secrets.SENDOU_KEY }}
-            # Sentry DSN for error reporting (optional, safe if unset)
+            export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
             export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
-            # Provide DSN under an alternate name recognized by our code
             export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
-            # Explicit Sentry environment (some setups use SENTRY_ENVIRONMENT)
             export SENTRY_ENVIRONMENT=production
-            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
             export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
             export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
-
-            # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
-            export AWS_SECRET_ACCESS_KEY='${{ secrets.DIGITALOCEAN_SPACES_SECRET }}'
-            export AWS_DEFAULT_REGION='${{ secrets.DIGITALOCEAN_SPACES_REGION }}'
-            export RANKINGS_S3_ENDPOINT='${{ secrets.RANKINGS_S3_ENDPOINT }}'
-            export RANKINGS_S3_BUCKET='${{ secrets.RANKINGS_S3_BUCKET }}'
-            # Provide sane defaults if not set via secrets
-            if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
-            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
-            if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
-            # Ensure no stray prefix is present; default logic will use rankings/<ts>
-            unset RANKINGS_S3_PREFIX || true
+            export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
+            export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
+            export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
+            export WEEKLY_LOO_TOP_K="${{ github.event.inputs.top_k || '10' }}"
+            export WEEKLY_LOO_PLAYER_LIMIT="${{ github.event.inputs.player_limit }}"
+            export WEEKLY_LOO_INCLUDE_UNRANKED="${{ github.event.inputs.include_unranked || 'false' }}"
+            export WEEKLY_LOO_LOG_LEVEL="${{ github.event.inputs.log_level || 'INFO' }}"
 
             sudo apt-get update
             sudo apt-get install -y docker.io
@@ -110,7 +130,6 @@ jobs:
             printf '%s' "$DO_API_TOKEN" | docker login -u "$DO_API_TOKEN" --password-stdin registry.digitalocean.com/sendouq
             docker pull "$SCRAPER_IMAGE"
 
-            # Run rankings_update in attached mode (no Parquet flag)
             docker run --rm \
               -e RANKINGS_DATABASE_URL \
               -e RANKINGS_DB_SCHEMA \
@@ -119,12 +138,26 @@ jobs:
               -e RANKINGS_SENTRY_DSN \
               -e SENTRY_ENV=production \
               -e SENTRY_ENVIRONMENT=production \
-              -e RANKINGS_BUILD="$BUILD_VERSION" \
-              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
-              --entrypoint poetry \
+              -e WEEKLY_LOO_AS_OF \
+              -e WEEKLY_LOO_SINCE_DAYS \
+              -e WEEKLY_LOO_TOP_K \
+              -e WEEKLY_LOO_PLAYER_LIMIT \
+              -e WEEKLY_LOO_INCLUDE_UNRANKED \
+              -e WEEKLY_LOO_LOG_LEVEL \
+              -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
+              --entrypoint bash \
               "$SCRAPER_IMAGE" \
-              run rankings_update
+              -lc '
+                set -euo pipefail
+                cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
+                if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
+                if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi
+                if [ -n "${WEEKLY_LOO_TOP_K:-}" ]; then cmd+=(--top-k "$WEEKLY_LOO_TOP_K"); fi
+                if [ -n "${WEEKLY_LOO_PLAYER_LIMIT:-}" ]; then cmd+=(--player-limit "$WEEKLY_LOO_PLAYER_LIMIT"); fi
+                if [ "${WEEKLY_LOO_INCLUDE_UNRANKED:-false}" = "true" ]; then cmd+=(--include-unranked); fi
+                if [ -n "${WEEKLY_LOO_LOG_LEVEL:-}" ]; then cmd+=(--log-level "$WEEKLY_LOO_LOG_LEVEL"); fi
+                "${cmd[@]}"
+              '
 
       - name: Sleep before retry
         id: resleep
@@ -143,27 +176,21 @@ jobs:
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
-            # Database URL (preferred for rankings update)
             export RANKINGS_DATABASE_URL='${{ secrets.RANKINGS_DATABASE_URL }}'
             export RANKINGS_DB_SCHEMA='${{ secrets.RANKINGS_DB_SCHEMA }}'
-            export BUILD_VERSION='${{ github.run_id }}-${{ github.run_attempt }}'
-            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
             export SENDOU_KEY='${{ secrets.SENDOU_KEY }}'
-            # Sentry DSN for error reporting (optional, safe if unset)
             export SENTRY_DSN='${{ secrets.SENTRY_DSN }}'
             export RANKINGS_SENTRY_DSN="$SENTRY_DSN"
             export SENTRY_ENVIRONMENT=production
+            export DO_API_TOKEN='${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}'
             export SCRAPER_IMAGE='${{ steps.scraper_image.outputs.image }}'
-            # DigitalOcean Spaces / S3 credentials and destination
-            export AWS_ACCESS_KEY_ID='${{ secrets.DIGITALOCEAN_SPACES_KEY }}'
-            export AWS_SECRET_ACCESS_KEY='${{ secrets.DIGITALOCEAN_SPACES_SECRET }}'
-            export AWS_DEFAULT_REGION='${{ secrets.DIGITALOCEAN_SPACES_REGION }}'
-            export RANKINGS_S3_ENDPOINT='${{ secrets.RANKINGS_S3_ENDPOINT }}'
-            export RANKINGS_S3_BUCKET='${{ secrets.RANKINGS_S3_BUCKET }}'
-            if [ -z "$RANKINGS_S3_ENDPOINT" ]; then export RANKINGS_S3_ENDPOINT="https://nyc3.digitaloceanspaces.com"; fi
-            if [ -z "$RANKINGS_S3_BUCKET" ]; then export RANKINGS_S3_BUCKET="rankings"; fi
-            if [ -z "$AWS_DEFAULT_REGION" ]; then export AWS_DEFAULT_REGION="nyc3"; fi
-            unset RANKINGS_S3_PREFIX || true
+            export BUILD_VERSION='weekly-loo-${{ github.run_id }}-${{ github.run_attempt }}'
+            export WEEKLY_LOO_AS_OF="${{ github.event.inputs.as_of }}"
+            export WEEKLY_LOO_SINCE_DAYS="${{ github.event.inputs.since_days || '540' }}"
+            export WEEKLY_LOO_TOP_K="${{ github.event.inputs.top_k || '10' }}"
+            export WEEKLY_LOO_PLAYER_LIMIT="${{ github.event.inputs.player_limit }}"
+            export WEEKLY_LOO_INCLUDE_UNRANKED="${{ github.event.inputs.include_unranked || 'false' }}"
+            export WEEKLY_LOO_LOG_LEVEL="${{ github.event.inputs.log_level || 'INFO' }}"
 
             sudo apt-get update
             sudo apt-get install -y docker.io
@@ -179,12 +206,26 @@ jobs:
               -e RANKINGS_SENTRY_DSN \
               -e SENTRY_ENV=production \
               -e SENTRY_ENVIRONMENT=production \
-              -e RANKINGS_BUILD="$BUILD_VERSION" \
-              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-              -e RANKINGS_S3_BUCKET -e RANKINGS_S3_ENDPOINT \
-              --entrypoint poetry \
+              -e WEEKLY_LOO_AS_OF \
+              -e WEEKLY_LOO_SINCE_DAYS \
+              -e WEEKLY_LOO_TOP_K \
+              -e WEEKLY_LOO_PLAYER_LIMIT \
+              -e WEEKLY_LOO_INCLUDE_UNRANKED \
+              -e WEEKLY_LOO_LOG_LEVEL \
+              -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
+              --entrypoint bash \
               "$SCRAPER_IMAGE" \
-              run rankings_update
+              -lc '
+                set -euo pipefail
+                cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
+                if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
+                if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi
+                if [ -n "${WEEKLY_LOO_TOP_K:-}" ]; then cmd+=(--top-k "$WEEKLY_LOO_TOP_K"); fi
+                if [ -n "${WEEKLY_LOO_PLAYER_LIMIT:-}" ]; then cmd+=(--player-limit "$WEEKLY_LOO_PLAYER_LIMIT"); fi
+                if [ "${WEEKLY_LOO_INCLUDE_UNRANKED:-false}" = "true" ]; then cmd+=(--include-unranked); fi
+                if [ -n "${WEEKLY_LOO_LOG_LEVEL:-}" ]; then cmd+=(--log-level "$WEEKLY_LOO_LOG_LEVEL"); fi
+                "${cmd[@]}"
+              '
 
       - name: Kill droplet on success
         if: ${{ success() && steps.terraform_apply.outcome == 'success' }}

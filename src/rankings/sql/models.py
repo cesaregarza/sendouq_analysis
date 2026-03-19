@@ -378,3 +378,57 @@ class PlayerRankingStats(Base):
     build_version = Column(String(64), nullable=False)
     tournament_count = Column(Integer, nullable=True)
     last_active_ms = Column(BigInteger, nullable=True)
+
+
+class PlayerMatchLooImpact(Base):
+    __tablename__ = "player_match_loo_impacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id",
+            "match_id",
+            "calculated_at_ms",
+            "build_version",
+            name="uq_player_match_loo_impacts_run",
+        ),
+        Index("ix_player_match_loo_impacts_player", "player_id"),
+        Index("ix_player_match_loo_impacts_match", "match_id"),
+        Index(
+            "ix_player_match_loo_impacts_build_ts",
+            "build_version",
+            "calculated_at_ms",
+        ),
+        {"schema": SCHEMA},
+    )
+
+    impact_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    player_id = Column(
+        BigInteger, ForeignKey(f"{SCHEMA}.players.player_id"), nullable=False
+    )
+    match_id = Column(
+        BigInteger, ForeignKey(f"{SCHEMA}.matches.match_id"), nullable=False
+    )
+    tournament_id = Column(
+        BigInteger,
+        ForeignKey(f"{SCHEMA}.tournaments.tournament_id"),
+        nullable=False,
+    )
+    calculated_at_ms = Column(BigInteger, nullable=False)
+    build_version = Column(String(64), nullable=False)
+
+    player_rank = Column(Integer, nullable=True)
+    player_score = Column(Float, nullable=True)
+    is_win = Column(Boolean, nullable=False, default=False)
+
+    approx_variant = Column(String(32), nullable=False)
+    approx_positive_rank = Column(Integer, nullable=True)
+    approx_negative_rank = Column(Integer, nullable=True)
+    approx_old_score = Column(Float, nullable=True)
+    approx_new_score = Column(Float, nullable=True)
+    approx_score_delta = Column(Float, nullable=False)
+    approx_abs_delta = Column(Float, nullable=False)
+
+    exact_variant = Column(String(32), nullable=False)
+    exact_old_score = Column(Float, nullable=True)
+    exact_new_score = Column(Float, nullable=True)
+    exact_score_delta = Column(Float, nullable=False)
+    exact_abs_delta = Column(Float, nullable=False)

@@ -42,3 +42,6 @@ class RatingBackend(Protocol):
             win_pr, loss_pr, exposure, lambda_used.
         """
         ...
+
+
+from loopr.core.protocols import RatingBackend  # noqa: E402,F401

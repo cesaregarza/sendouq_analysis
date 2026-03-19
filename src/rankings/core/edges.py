@@ -458,3 +458,13 @@ def edges_to_triplets(
     weights = edges_with_indices[weight_column].to_numpy()
 
     return row_indices, col_indices, weights
+
+
+from loopr.core.edges import (  # noqa: E402,F401
+    build_exposure_triplets,
+    build_player_edges,
+    build_team_edges,
+    compute_denominators,
+    edges_to_triplets,
+    normalize_edges,
+)

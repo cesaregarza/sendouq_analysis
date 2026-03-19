@@ -504,3 +504,36 @@ class ExposureLogOddsEngine:
 
         last_ts[last_ts == 0.0] = float(self.clock.now)
         return last_ts
+
+
+# Use loopr's extracted engine while preserving the legacy rank_players API.
+from loopr.algorithms.exposure_log_odds import (  # noqa: E402
+    ExposureLogOddsEngine as _LooprExposureLogOddsEngine,
+)
+from rankings._legacy_inputs import (  # noqa: E402
+    expand_players_for_legacy_matches,
+    filter_legacy_appearances,
+)
+
+
+class ExposureLogOddsEngine(_LooprExposureLogOddsEngine):  # type: ignore[no-redef]
+    def rank_players(
+        self,
+        matches: pl.DataFrame,
+        players: pl.DataFrame,
+        tournament_influence: dict[int, float] | None = None,
+        *,
+        appearances: pl.DataFrame | None = None,
+    ) -> pl.DataFrame:
+        players = expand_players_for_legacy_matches(matches, players)
+        appearances = filter_legacy_appearances(
+            matches,
+            players,
+            appearances,
+        )
+        return self._rank_internal(
+            matches,
+            players,
+            tournament_influence,
+            appearances=appearances,
+        )

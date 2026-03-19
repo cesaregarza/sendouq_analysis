@@ -196,3 +196,14 @@ def volume_inverse(
         Volume-inverse teleport probability vector.
     """
     return VolumeInverseTeleport()(nodes, edges, from_column)
+
+
+from loopr.core.teleport import (  # noqa: E402,F401
+    ActivePlayersTeleport,
+    CustomTeleport,
+    TeleportStrategy,
+    UniformTeleport,
+    VolumeInverseTeleport,
+    uniform,
+    volume_inverse,
+)

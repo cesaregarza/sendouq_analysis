@@ -70,6 +70,35 @@ def _timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
+def _capture_rankings_logger_state() -> tuple[
+    list[logging.Handler], int, bool
+]:
+    logger = logging.getLogger("rankings")
+    return list(logger.handlers), logger.level, logger.propagate
+
+
+def _restore_rankings_logger_state(
+    state: tuple[list[logging.Handler], int, bool],
+) -> None:
+    logger = logging.getLogger("rankings")
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        try:
+            handler.flush()
+        except Exception:
+            pass
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+    handlers, level, propagate = state
+    logger.setLevel(level)
+    logger.propagate = propagate
+    for handler in handlers:
+        logger.addHandler(handler)
+
+
 def _dt_to_epoch_ms(dt: datetime) -> int:
     """Convert a datetime to epoch milliseconds (UTC), truncating to milliseconds."""
     if dt.tzinfo is None:
@@ -782,6 +811,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
+    rankings_logger_state = _capture_rankings_logger_state()
 
     # Initialize logging and Sentry as early as possible
     try:
@@ -1257,6 +1287,7 @@ def main(argv: list[str] | None = None) -> int:
 
     log.info("Run complete. Outputs: %s", out_run)
     engine.dispose()
+    _restore_rankings_logger_state(rankings_logger_state)
     return 0
 
 
