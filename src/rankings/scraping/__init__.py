@@ -32,6 +32,17 @@ from rankings.scraping.missing import (
     scrape_missing_tournaments,
 )
 
+# Plus-voting scrape helpers
+from rankings.scraping.plus_voting import (
+    PLUS_ROUTE_KEY,
+    PLUS_VOTING_RESULTS_URL,
+    extract_plus_voting_rows,
+    fetch_plus_voting_tier_results,
+    plus_voting_rows_to_dataframe,
+    scrape_plus_voting_dataframe,
+    write_plus_voting_csv,
+)
+
 # Storage and data management
 from rankings.scraping.storage import (
     get_tournament_summary,
@@ -69,6 +80,14 @@ __all__ = [
     "get_existing_tournament_ids",
     "find_missing_tournament_ids",
     "scrape_missing_tournaments",
+    # Plus-voting helpers
+    "PLUS_VOTING_RESULTS_URL",
+    "PLUS_ROUTE_KEY",
+    "fetch_plus_voting_tier_results",
+    "extract_plus_voting_rows",
+    "plus_voting_rows_to_dataframe",
+    "scrape_plus_voting_dataframe",
+    "write_plus_voting_csv",
     # Turbo-stream decoder
     "TurboStreamDecoder",
     "decode_turbo_stream",

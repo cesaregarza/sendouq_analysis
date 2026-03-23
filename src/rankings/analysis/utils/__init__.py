@@ -42,6 +42,23 @@ from rankings.analysis.utils.names import (
     get_tournament_name_lookup,
 )
 
+# LOOPR drift/diagnostics helpers
+from rankings.analysis.utils.plus_loopr import (
+    auc_bootstrap_ci,
+    build_last_active_lookup,
+    cohen_d,
+    distribution_overlap,
+    kde_mode_and_peaks,
+    load_last_active_lookup,
+    normalize_rankings_schema,
+    normalize_suggested,
+    parse_cutoff_ts,
+    safe_auc,
+    split_map,
+    top_decile_pass_rate,
+    ts_expr_to_seconds,
+)
+
 # Summary functions
 from rankings.analysis.utils.summaries import (
     derive_team_ratings_from_players,
@@ -93,4 +110,18 @@ __all__ = [
     "add_match_timestamps",
     "create_match_summary_with_names",
     "get_tournament_name_lookup",
+    # LOOPR diagnostics
+    "parse_cutoff_ts",
+    "ts_expr_to_seconds",
+    "normalize_rankings_schema",
+    "normalize_suggested",
+    "load_last_active_lookup",
+    "build_last_active_lookup",
+    "split_map",
+    "safe_auc",
+    "auc_bootstrap_ci",
+    "kde_mode_and_peaks",
+    "distribution_overlap",
+    "cohen_d",
+    "top_decile_pass_rate",
 ]
