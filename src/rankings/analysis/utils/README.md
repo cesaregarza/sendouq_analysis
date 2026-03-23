@@ -32,6 +32,16 @@ Functions for adding human-readable names to DataFrames:
 - `add_match_timestamps()` - Convert Unix timestamps to readable dates
 - `create_match_summary_with_names()` - Create comprehensive match summaries
 
+### plus_loopr.py
+Reusable utilities for Plus-server LOOPR diagnostics and drift analysis:
+- `normalize_rankings_schema()` - Standardize `id/score` vs `player_id/display_score`
+- `normalize_suggested()` - Canonicalize `suggested` values to boolean
+- `build_last_active_lookup()` - Derive/join `last_active` for active-window cohort alignment
+- `split_map()` - Build `all/incumbents/suggests` subsets
+- `safe_auc()`, `auc_bootstrap_ci()` - Stable AUC helpers with class checks
+- `kde_mode_and_peaks()`, `distribution_overlap()`, `cohen_d()` - Separation diagnostics
+- `top_decile_pass_rate()` - Operational top-end purity metric
+
 ## Usage Examples
 
 ```python
@@ -62,4 +72,5 @@ Or you can import from specific submodules:
 ```python
 from rankings.analysis.utils.summaries import prepare_player_summary
 from rankings.analysis.utils.names import add_player_names
+from rankings.analysis.utils.plus_loopr import normalize_rankings_schema
 ```

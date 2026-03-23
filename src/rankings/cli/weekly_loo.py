@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -25,6 +27,7 @@ from rankings.sql.load import load_core_tables
 
 APPROX_VARIANT = "perturb_2"
 EXACT_VARIANT = "exact_combined"
+LOO_IMPACT_UPSERT_BATCH_SIZE = 1000
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -97,6 +100,21 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include unranked tournaments in the weekly base ranking",
     )
     parser.add_argument(
+        "--save-to-db",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Persist rankings, stats, and weekly LOO rows to Postgres",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help=(
+            "Optional base directory for a local parquet bundle. "
+            "Defaults to data/weekly_loo when --no-save-to-db is used."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -107,6 +125,23 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def _default_build_version(anchor_dt: datetime) -> str:
     return f"weekly-loo-{anchor_dt.date().isoformat()}"
+
+
+def _slugify_path_component(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
+    slug = slug.strip("-._")
+    return slug or "weekly-loo"
+
+
+def _resolve_output_run_dir(
+    *,
+    base_dir: str | None,
+    build_version: str,
+    calculated_at_ms: int,
+) -> Path:
+    out_base = Path(base_dir) if base_dir else Path("data/weekly_loo")
+    run_name = f"{calculated_at_ms}_{_slugify_path_component(build_version)}"
+    return out_base / run_name
 
 
 def _shortlist_matches(approx_df: pl.DataFrame, top_k: int) -> pl.DataFrame:
@@ -308,30 +343,119 @@ def _persist_weekly_loo_impacts(
         return 0
 
     table = RM.PlayerMatchLooImpact.__table__
-    stmt = pg_insert(table).values(rows)
     key_columns = {
         "player_id",
         "match_id",
         "calculated_at_ms",
         "build_version",
     }
-    update_columns = {
-        col.name: getattr(stmt.excluded, col.name)
-        for col in table.c
-        if col.name not in key_columns and col.name != "impact_id"
-    }
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[
-            table.c.player_id,
-            table.c.match_id,
-            table.c.calculated_at_ms,
-            table.c.build_version,
-        ],
-        set_=update_columns,
-    )
+    total = 0
     with engine.begin() as conn:
-        conn.execute(stmt)
-    return len(rows)
+        for start in range(0, len(rows), LOO_IMPACT_UPSERT_BATCH_SIZE):
+            batch = rows[start : start + LOO_IMPACT_UPSERT_BATCH_SIZE]
+            stmt = pg_insert(table).values(batch)
+            update_columns = {
+                col.name: getattr(stmt.excluded, col.name)
+                for col in table.c
+                if col.name not in key_columns and col.name != "impact_id"
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[
+                    table.c.player_id,
+                    table.c.match_id,
+                    table.c.calculated_at_ms,
+                    table.c.build_version,
+                ],
+                set_=update_columns,
+            )
+            conn.execute(stmt)
+            total += len(batch)
+    return total
+
+
+def _write_parquet_artifact(
+    run_dir: Path,
+    artifact_name: str,
+    df: pl.DataFrame | None,
+) -> dict[str, Any]:
+    if df is None or df.width == 0:
+        return {
+            "path": None,
+            "rows": 0,
+            "columns": [],
+            "written": False,
+        }
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / f"{artifact_name}.parquet"
+    df.write_parquet(str(path))
+    return {
+        "path": path.name,
+        "rows": int(df.height),
+        "columns": list(df.columns),
+        "written": True,
+    }
+
+
+def _write_weekly_local_bundle(
+    *,
+    output_dir: str | None,
+    build_version: str,
+    calculated_at_ms: int,
+    anchor_ms: int,
+    since_days: int,
+    top_k: int,
+    player_limit: int | None,
+    max_workers: int,
+    max_enrich_calls: int,
+    include_unranked: bool,
+    save_to_db: bool,
+    matches: pl.DataFrame,
+    players: pl.DataFrame,
+    appearances: pl.DataFrame | None,
+    rankings: pl.DataFrame,
+    ranking_stats: pl.DataFrame,
+    weekly_loo_impacts: pl.DataFrame,
+) -> Path:
+    run_dir = _resolve_output_run_dir(
+        base_dir=output_dir,
+        build_version=build_version,
+        calculated_at_ms=calculated_at_ms,
+    )
+    artifacts = {
+        "matches": _write_parquet_artifact(run_dir, "matches", matches),
+        "players": _write_parquet_artifact(run_dir, "players", players),
+        "appearances": _write_parquet_artifact(
+            run_dir, "appearances", appearances
+        ),
+        "rankings": _write_parquet_artifact(run_dir, "rankings", rankings),
+        "ranking_stats": _write_parquet_artifact(
+            run_dir, "ranking_stats", ranking_stats
+        ),
+        "weekly_loo_impacts": _write_parquet_artifact(
+            run_dir, "weekly_loo_impacts", weekly_loo_impacts
+        ),
+    }
+    update_cli._write_manifest(
+        run_dir,
+        {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "build_version": build_version,
+            "anchor_ms": int(anchor_ms),
+            "calculated_at_ms": int(calculated_at_ms),
+            "since_days": int(since_days),
+            "top_k": int(top_k),
+            "player_limit": (
+                int(player_limit) if player_limit is not None else None
+            ),
+            "max_workers": int(max_workers),
+            "max_enrich_calls": int(max_enrich_calls),
+            "include_unranked": bool(include_unranked),
+            "save_to_db": bool(save_to_db),
+            "artifacts": artifacts,
+        },
+    )
+    return run_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -365,12 +489,14 @@ def main(argv: list[str] | None = None) -> int:
         or os.getenv("RANKINGS_BUILD")
         or _default_build_version(anchor_dt)
     )
+    write_local_bundle = bool(args.output_dir) or not bool(args.save_to_db)
 
     init_sentry(context="rankings_weekly_loo", release=build_version)
 
     engine = rankings_create_engine(args.db_url)
     try:
-        rankings_create_all(engine)
+        if args.save_to_db:
+            rankings_create_all(engine)
 
         since_ms = update_cli._dt_to_epoch_ms(
             anchor_dt - timedelta(days=int(args.since_days))
@@ -411,24 +537,32 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         stats = update_cli._compute_player_stats(matches, players, appearances)
-        inserted_ranks = update_cli._persist_rankings(
-            engine,
-            ranks,
-            build_version,
-            calculated_at_ms,
-        )
-        inserted_stats = update_cli._persist_ranking_stats(
-            engine,
-            stats,
-            build_version,
-            calculated_at_ms,
-        )
-        log.info(
-            "Persisted weekly base run: rankings=%d stats=%d build=%s",
-            inserted_ranks,
-            inserted_stats,
-            build_version,
-        )
+        if args.save_to_db:
+            inserted_ranks = update_cli._persist_rankings(
+                engine,
+                ranks,
+                build_version,
+                calculated_at_ms,
+            )
+            inserted_stats = update_cli._persist_ranking_stats(
+                engine,
+                stats,
+                build_version,
+                calculated_at_ms,
+            )
+            log.info(
+                "Persisted weekly base run: rankings=%d stats=%d build=%s",
+                inserted_ranks,
+                inserted_stats,
+                build_version,
+            )
+        else:
+            log.info(
+                "Skipping DB persist for weekly base run: rankings=%d stats=%d build=%s",
+                ranks.height,
+                stats.height,
+                build_version,
+            )
 
         cohort = (
             ranks.filter(pl.col("id").is_not_null())
@@ -449,12 +583,36 @@ def main(argv: list[str] | None = None) -> int:
             max_workers=max(1, int(args.max_workers)),
             logger=log,
         )
-        inserted_loo = _persist_weekly_loo_impacts(
-            engine,
-            loo_rows,
-            build_version=build_version,
-            calculated_at_ms=calculated_at_ms,
-        )
+        if write_local_bundle:
+            run_dir = _write_weekly_local_bundle(
+                output_dir=args.output_dir,
+                build_version=build_version,
+                calculated_at_ms=calculated_at_ms,
+                anchor_ms=int(anchor_ms),
+                since_days=int(args.since_days),
+                top_k=int(args.top_k),
+                player_limit=args.player_limit,
+                max_workers=max(1, int(args.max_workers)),
+                max_enrich_calls=int(args.max_enrich_calls),
+                include_unranked=bool(args.include_unranked),
+                save_to_db=bool(args.save_to_db),
+                matches=matches,
+                players=players,
+                appearances=appearances,
+                rankings=ranks,
+                ranking_stats=stats,
+                weekly_loo_impacts=loo_rows,
+            )
+            log.info("Wrote weekly LOO local bundle to %s", run_dir)
+        if args.save_to_db:
+            inserted_loo = _persist_weekly_loo_impacts(
+                engine,
+                loo_rows,
+                build_version=build_version,
+                calculated_at_ms=calculated_at_ms,
+            )
+        else:
+            inserted_loo = loo_rows.height
         log.info(
             "Weekly LOO complete: cohort=%d persisted_rows=%d build=%s",
             cohort.height,

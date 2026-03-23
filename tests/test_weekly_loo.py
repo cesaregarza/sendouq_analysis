@@ -1,3 +1,5 @@
+import json
+
 import polars as pl
 
 import rankings.cli.weekly_loo as weekly_loo
@@ -268,3 +270,124 @@ def test_weekly_loo_main_persists_base_run_and_shortlisted_exact_rows(
         weekly_loo.APPROX_VARIANT
     ] * 4
     assert impacts["exact_variant"].to_list() == [weekly_loo.EXACT_VARIANT] * 4
+
+
+def test_weekly_loo_main_writes_local_bundle_without_db_persist(
+    monkeypatch,
+    tmp_path,
+):
+    matches = pl.DataFrame(
+        {
+            "match_id": [11, 21],
+            "tournament_id": [7, 8],
+            "winner_team_id": [10, 20],
+            "loser_team_id": [11, 21],
+            "last_game_finished_at": [1_700_000_000.0, 1_700_010_000.0],
+            "match_created_at": [1_700_000_000.0, 1_700_010_000.0],
+        }
+    )
+    players = pl.DataFrame(
+        {
+            "tournament_id": [7] * 4 + [8] * 4,
+            "team_id": [10, 10, 11, 11, 20, 20, 21, 21],
+            "user_id": [100, 101, 102, 103, 200, 201, 202, 203],
+        }
+    )
+    appearances = pl.DataFrame(
+        {
+            "tournament_id": [7] * 4 + [8] * 4,
+            "match_id": [11] * 4 + [21] * 4,
+            "user_id": [100, 101, 102, 103, 200, 201, 202, 203],
+            "team_id": [10, 10, 11, 11, 20, 20, 21, 21],
+        }
+    )
+    stats = pl.DataFrame(
+        {
+            "player_id": [100, 200],
+            "tournament_count": [1, 1],
+            "last_active_ms": [1_700_000_000_000, 1_700_010_000_000],
+        }
+    )
+
+    monkeypatch.setattr(
+        weekly_loo, "rankings_create_engine", lambda *_a, **_k: _DummyEngine()
+    )
+    monkeypatch.setattr(
+        weekly_loo,
+        "rankings_create_all",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("rankings_create_all should not be called")
+        ),
+    )
+    monkeypatch.setattr(
+        weekly_loo,
+        "load_core_tables",
+        lambda *_a, **_k: {"matches": matches, "players": players},
+    )
+    monkeypatch.setattr(
+        weekly_loo, "_load_appearances", lambda *_a, **_k: appearances
+    )
+    monkeypatch.setattr(weekly_loo, "setup_logging", lambda **_k: None)
+    monkeypatch.setattr(weekly_loo, "init_sentry", lambda **_k: None)
+    monkeypatch.setattr(weekly_loo, "ExposureLogOddsEngine", _FakeRankEngine)
+    monkeypatch.setattr(weekly_loo, "_build_engine_config", lambda: object())
+    monkeypatch.setattr(
+        weekly_loo.update_cli,
+        "_compute_player_stats",
+        lambda *_a, **_k: stats,
+    )
+    monkeypatch.setattr(
+        weekly_loo.update_cli,
+        "_persist_rankings",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("_persist_rankings should not be called")
+        ),
+    )
+    monkeypatch.setattr(
+        weekly_loo.update_cli,
+        "_persist_ranking_stats",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("_persist_ranking_stats should not be called")
+        ),
+    )
+    monkeypatch.setattr(
+        weekly_loo,
+        "_persist_weekly_loo_impacts",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("_persist_weekly_loo_impacts should not be called")
+        ),
+    )
+
+    rc = weekly_loo.main(
+        [
+            "--build-version",
+            "weekly-test-local",
+            "--calculated-at",
+            "2026-03-17",
+            "--top-k",
+            "1",
+            "--max-workers",
+            "1",
+            "--no-save-to-db",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert rc == 0
+
+    run_dir = tmp_path / (
+        f"{weekly_loo.update_cli._parse_ts_to_ms('2026-03-17', end_of_day_for_date=True)}"
+        "_weekly-test-local"
+    )
+    assert (run_dir / "matches.parquet").exists()
+    assert (run_dir / "players.parquet").exists()
+    assert (run_dir / "appearances.parquet").exists()
+    assert (run_dir / "rankings.parquet").exists()
+    assert (run_dir / "ranking_stats.parquet").exists()
+    assert (run_dir / "weekly_loo_impacts.parquet").exists()
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["build_version"] == "weekly-test-local"
+    assert manifest["save_to_db"] is False
+    assert manifest["artifacts"]["weekly_loo_impacts"]["rows"] == 4
