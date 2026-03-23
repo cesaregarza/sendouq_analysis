@@ -147,8 +147,9 @@ jobs:
               -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
               --entrypoint bash \
               "$SCRAPER_IMAGE" \
-              -lc '
+              -c '
                 set -euo pipefail
+                export PATH="/opt/poetry/bin:$PATH"
                 cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
                 if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
                 if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi
@@ -215,8 +216,9 @@ jobs:
               -e WEEKLY_LOO_BUILD_VERSION="$BUILD_VERSION" \
               --entrypoint bash \
               "$SCRAPER_IMAGE" \
-              -lc '
+              -c '
                 set -euo pipefail
+                export PATH="/opt/poetry/bin:$PATH"
                 cmd=(poetry run rankings_weekly_loo --build-version "$WEEKLY_LOO_BUILD_VERSION")
                 if [ -n "${WEEKLY_LOO_AS_OF:-}" ]; then cmd+=(--as-of "$WEEKLY_LOO_AS_OF"); fi
                 if [ -n "${WEEKLY_LOO_SINCE_DAYS:-}" ]; then cmd+=(--since-days "$WEEKLY_LOO_SINCE_DAYS"); fi

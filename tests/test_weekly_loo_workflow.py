@@ -9,6 +9,8 @@ def test_run_weekly_loo_workflow_contains_schedule_and_command():
     assert "workflow_dispatch:" in workflow
     assert "cron: '0 2 * * 1'" in workflow
     assert "run rankings_weekly_loo" in workflow
+    assert 'export PATH="/opt/poetry/bin:$PATH"' in workflow
+    assert "-lc '" not in workflow
     assert "RANKINGS_DATABASE_URL" in workflow
     assert "RANKINGS_DB_SCHEMA" in workflow
     assert "SENTRY_DSN" in workflow
