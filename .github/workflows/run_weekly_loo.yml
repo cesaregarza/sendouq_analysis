@@ -105,6 +105,7 @@ jobs:
           host: ${{ steps.terraform_apply.outputs.ranked_ip }}
           username: root
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          command_timeout: 330m
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true
@@ -174,6 +175,7 @@ jobs:
           host: ${{ steps.terraform_apply.outputs.ranked_ip }}
           username: root
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY_ED }}
+          command_timeout: 330m
           script: |
             export PATH=$PATH:/usr/bin
             set +o histexpand || true

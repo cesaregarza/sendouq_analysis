@@ -18,3 +18,4 @@ def test_run_weekly_loo_workflow_contains_schedule_and_command():
     assert ".github/scraper-image-version.txt" in workflow
     assert "registry.digitalocean.com/sendouq/scraper:v$VERSION" in workflow
     assert "registry.digitalocean.com/sendouq/scraper:latest" not in workflow
+    assert workflow.count("command_timeout: 330m") == 2
