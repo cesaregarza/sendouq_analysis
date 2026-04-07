@@ -13,7 +13,11 @@ variable "do_token" {}
 variable "droplet_size" {
   description = "Droplet size slug for the ranked worker"
   type        = string
-  default     = "s-1vcpu-2gb"
+  default     = "c-32"  # CPU-optimized: 32 vCPUs, 64GB RAM (for fast LOO at scale)
+  # Alternative options:
+  # "c-16"  - 16 vCPUs, 32GB RAM (~$0.286/hr, good for 10-15k players)
+  # "c-8"   - 8 vCPUs, 16GB RAM (~$0.143/hr, good for <10k players)
+  # "s-1vcpu-2gb" - 1 vCPU, 2GB RAM (~$0.007/hr, original, no LOO support)
 }
 
 provider "digitalocean" {
