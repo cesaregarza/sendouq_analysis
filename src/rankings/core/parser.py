@@ -12,6 +12,21 @@ from typing import Dict, List, Optional
 import polars as pl
 
 
+def _normalize_tags(raw_tags: object) -> list[str] | None:
+    """Normalize Sendou tournament tags from current and legacy payloads."""
+    if isinstance(raw_tags, str):
+        tags = raw_tags.split(",")
+    elif isinstance(raw_tags, list):
+        tags = raw_tags
+    else:
+        return None
+
+    normalized = [
+        tag.strip() for tag in tags if isinstance(tag, str) and tag.strip()
+    ]
+    return normalized or None
+
+
 def parse_tournaments_data(
     tournaments: list[dict],
 ) -> Dict[str, Optional[pl.DataFrame]]:
@@ -99,14 +114,8 @@ def parse_tournaments_data(
             "rules": ctx.get("rules"),
         }
 
-        # Tags (convert comma-separated string to list)
-        tags_str = ctx.get("tags")
-        if tags_str:
-            row["tags"] = [
-                tag.strip() for tag in tags_str.split(",") if tag.strip()
-            ]
-        else:
-            row["tags"] = None
+        # Current payloads use lists; legacy payloads used comma-separated text.
+        row["tags"] = _normalize_tags(ctx.get("tags"))
 
         # Cast accounts (keep as list)
         cast_accounts = ctx.get("castTwitchAccounts", []) or []
@@ -345,7 +354,8 @@ def parse_tournaments_data(
                 "status": match.get("status"),
                 "last_game_finished_at": match.get("lastGameFinishedAt"),
                 # Prefer createdAt, fall back to startedAt (from public API)
-                "match_created_at": match.get("createdAt") or match.get("startedAt"),
+                "match_created_at": match.get("createdAt")
+                or match.get("startedAt"),
             }
             # Opponents may be missing (e.g. byes)
             opp1 = match.get("opponent1", {}) or {}
