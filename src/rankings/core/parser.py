@@ -27,6 +27,16 @@ def _normalize_tags(raw_tags: object) -> list[str] | None:
     return normalized or None
 
 
+def _get_compatible_id(
+    payload: dict, snake_case_key: str, camel_case_key: str
+) -> object:
+    """Read an ID from legacy snake_case or current camelCase payloads."""
+    snake_case_value = payload.get(snake_case_key)
+    if snake_case_value is not None:
+        return snake_case_value
+    return payload.get(camel_case_key)
+
+
 def parse_tournaments_data(
     tournaments: list[dict],
 ) -> Dict[str, Optional[pl.DataFrame]]:
@@ -255,7 +265,9 @@ def parse_tournaments_data(
             group_rows.append(
                 {
                     "tournament_id": tournament_id,
-                    "stage_id": group.get("stage_id"),
+                    "stage_id": _get_compatible_id(
+                        group, "stage_id", "stageId"
+                    ),
                     "group_id": group.get("id"),
                     "group_number": group.get("number"),
                 }
@@ -267,8 +279,8 @@ def parse_tournaments_data(
             round_rows.append(
                 {
                     "tournament_id": tournament_id,
-                    "stage_id": rnd.get("stage_id"),
-                    "group_id": rnd.get("group_id"),
+                    "stage_id": _get_compatible_id(rnd, "stage_id", "stageId"),
+                    "group_id": _get_compatible_id(rnd, "group_id", "groupId"),
                     "round_id": rnd.get("id"),
                     "round_number": rnd.get("number"),
                     "maps_count": maps.get("count"),
@@ -346,9 +358,9 @@ def parse_tournaments_data(
             # Basic identifiers and meta
             row = {
                 "tournament_id": tournament_id,
-                "stage_id": match.get("stage_id"),
-                "group_id": match.get("group_id"),
-                "round_id": match.get("round_id"),
+                "stage_id": _get_compatible_id(match, "stage_id", "stageId"),
+                "group_id": _get_compatible_id(match, "group_id", "groupId"),
+                "round_id": _get_compatible_id(match, "round_id", "roundId"),
                 "match_id": match_id,
                 "match_number": match.get("number"),
                 "status": match.get("status"),
