@@ -372,6 +372,27 @@ def manifest(data, source_root: Path, plus_path: Path) -> dict[str, Any]:
             "counts_by_tier_status_outcome": plus_counts,
             "uncertainty": "candidate bootstrap stratified by tier, status, and outcome; 2,000 repetitions",
             "vote_percentage": "not exported in available CSVs; continuous analysis omitted",
+            "incumbent_autopsy_preregistration": {
+                "analysis_id": "N2",
+                "registered_on": "2026-08-01",
+                "registered_before_computation": True,
+                "question": "What relationship, if any, exists between pre-vote LOOPR score and the historical Plus decision once candidate status and exposure are visible?",
+                "two_sided_expectation": (
+                    "LOOPR score may rise with vote percentage within tier and candidate status if the vote responds to demonstrated organized-play outcomes. "
+                    "It may instead be weak, flat, non-monotone, or differ between incumbents and suggested candidates if retention, reputation, visibility, or the institutional status prior dominates the vote. "
+                    "Neither direction is defined as success in advance."
+                ),
+                "planned_display": "score versus vote percentage, faceted by incumbent/suggested status; pass/fail encoded by color and shape; exposure encoded by size or band",
+                "planned_reading": [
+                    "A within-status slope would be convergent evidence, not ground truth.",
+                    "Separation driven mainly by status or exposure would weaken a score-specific interpretation of pooled AUC.",
+                    "A null or reversed relationship will be reported without relabeling the estimand."
+                ],
+                "missing_data_contingency": (
+                    "If repository history contains no candidate-level vote percentage or vote counts, do not reconstruct or impute it. "
+                    "Retain pass/fail as the only vote measure, render a clearly labeled threshold-outcome autopsy using score and exposure, and record the deviation."
+                )
+            },
         },
         "outcome_shuffle": {
             "repetitions": 200,
