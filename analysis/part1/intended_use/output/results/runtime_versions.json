@@ -1,0 +1,15 @@
+{
+  "loopr-ranking": "0.0.1",
+  "matplotlib": "3.7.1",
+  "nbclient": "0.10.2",
+  "nbformat": "5.10.4",
+  "networkx": "3.1",
+  "numpy": "1.24.3",
+  "openskill": "6.2.0",
+  "pandas": "2.0.3",
+  "polars": "1.39.0",
+  "pyarrow": "13.0.0",
+  "python": "3.10.12",
+  "scikit-learn": "1.7.2",
+  "scipy": "1.11.2"
+}

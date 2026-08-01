@@ -1,0 +1,376 @@
+removed_tournament_id,removed_tournament_name,active_core8_player_match_appearances,valid_matches,method,support_threshold,top100_denominator,top100_retained,top100_retention,median_abs_rank_change_original_top100,p90_abs_rank_change_original_top100,largest_abs_rank_change_original_top100
+1137,FLUTI 6,2023,517,LOOPR,0,100,100,1.0,0.0,1.0,3.0
+1137,FLUTI 6,2023,517,OpenSkill μ,0,100,98,0.98,1.0,4.0,12.0
+1137,FLUTI 6,2023,517,OpenSkill ordinal,0,100,99,0.99,1.0,4.0,10.0
+1137,FLUTI 6,2023,517,Bradley–Terry (L2),0,100,99,0.99,0.0,2.0,8.0
+1137,FLUTI 6,2023,517,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1137,FLUTI 6,2023,517,LOOPR,8,100,100,1.0,0.0,1.0,3.0
+1137,FLUTI 6,2023,517,OpenSkill μ,8,100,98,0.98,1.0,4.0,12.0
+1137,FLUTI 6,2023,517,OpenSkill ordinal,8,100,99,0.99,1.0,4.0,10.0
+1137,FLUTI 6,2023,517,Bradley–Terry (L2),8,100,99,0.99,0.0,2.0,8.0
+1137,FLUTI 6,2023,517,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1137,FLUTI 6,2023,517,LOOPR,16,100,100,1.0,0.0,1.0,3.0
+1137,FLUTI 6,2023,517,OpenSkill μ,16,100,98,0.98,1.0,4.0,12.0
+1137,FLUTI 6,2023,517,OpenSkill ordinal,16,100,99,0.99,1.0,4.0,10.0
+1137,FLUTI 6,2023,517,Bradley–Terry (L2),16,100,99,0.99,0.0,2.0,8.0
+1137,FLUTI 6,2023,517,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+3059,Swim or Sink 212,1184,148,LOOPR,0,100,99,0.99,0.0,1.0,12.0
+3059,Swim or Sink 212,1184,148,OpenSkill μ,0,100,98,0.98,1.0,3.0,35.0
+3059,Swim or Sink 212,1184,148,OpenSkill ordinal,0,100,99,0.99,0.0,2.0,11.0
+3059,Swim or Sink 212,1184,148,Bradley–Terry (L2),0,100,100,1.0,0.0,2.0,9.0
+3059,Swim or Sink 212,1184,148,90-day win rate,0,100,96,0.96,3.0,5.1000000000000085,145.0
+3059,Swim or Sink 212,1184,148,LOOPR,8,100,99,0.99,0.0,1.0,12.0
+3059,Swim or Sink 212,1184,148,OpenSkill μ,8,100,98,0.98,1.0,3.0,35.0
+3059,Swim or Sink 212,1184,148,OpenSkill ordinal,8,100,99,0.99,0.0,2.0,11.0
+3059,Swim or Sink 212,1184,148,Bradley–Terry (L2),8,100,100,1.0,0.0,2.0,9.0
+3059,Swim or Sink 212,1184,148,90-day win rate,8,100,96,0.96,3.0,5.1000000000000085,145.0
+3059,Swim or Sink 212,1184,148,LOOPR,16,100,98,0.98,0.0,1.0,12.0
+3059,Swim or Sink 212,1184,148,OpenSkill μ,16,100,98,0.98,1.0,3.0,35.0
+3059,Swim or Sink 212,1184,148,OpenSkill ordinal,16,100,99,0.99,0.0,2.0,11.0
+3059,Swim or Sink 212,1184,148,Bradley–Terry (L2),16,100,100,1.0,0.0,2.0,9.0
+3059,Swim or Sink 212,1184,148,90-day win rate,16,100,96,0.96,3.0,6.0,142.0
+2788,Swim or Sink 208,1181,149,LOOPR,0,100,100,1.0,0.0,0.10000000000000853,1.0
+2788,Swim or Sink 208,1181,149,OpenSkill μ,0,100,99,0.99,0.0,1.1000000000000085,4.0
+2788,Swim or Sink 208,1181,149,OpenSkill ordinal,0,100,99,0.99,0.0,1.0,5.0
+2788,Swim or Sink 208,1181,149,Bradley–Terry (L2),0,100,98,0.98,0.0,2.0,7.0
+2788,Swim or Sink 208,1181,149,90-day win rate,0,100,99,0.99,2.0,4.0,54.0
+2788,Swim or Sink 208,1181,149,LOOPR,8,100,100,1.0,0.0,0.10000000000000853,1.0
+2788,Swim or Sink 208,1181,149,OpenSkill μ,8,100,99,0.99,0.0,1.1000000000000085,4.0
+2788,Swim or Sink 208,1181,149,OpenSkill ordinal,8,100,99,0.99,0.0,1.0,5.0
+2788,Swim or Sink 208,1181,149,Bradley–Terry (L2),8,100,98,0.98,0.0,2.0,7.0
+2788,Swim or Sink 208,1181,149,90-day win rate,8,100,99,0.99,2.0,4.0,54.0
+2788,Swim or Sink 208,1181,149,LOOPR,16,100,99,0.99,0.0,1.0,1.0
+2788,Swim or Sink 208,1181,149,OpenSkill μ,16,100,99,0.99,0.0,1.1000000000000085,4.0
+2788,Swim or Sink 208,1181,149,OpenSkill ordinal,16,100,99,0.99,0.0,1.0,5.0
+2788,Swim or Sink 208,1181,149,Bradley–Terry (L2),16,100,98,0.98,0.0,2.0,7.0
+2788,Swim or Sink 208,1181,149,90-day win rate,16,100,98,0.98,2.0,5.0,54.0
+2057,Swim or Sink 195,1065,164,LOOPR,0,100,100,1.0,0.0,1.1000000000000085,5.0
+2057,Swim or Sink 195,1065,164,OpenSkill μ,0,100,98,0.98,1.0,3.0,44.0
+2057,Swim or Sink 195,1065,164,OpenSkill ordinal,0,100,98,0.98,1.0,4.0,32.0
+2057,Swim or Sink 195,1065,164,Bradley–Terry (L2),0,100,99,0.99,1.0,2.0,13.0
+2057,Swim or Sink 195,1065,164,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+2057,Swim or Sink 195,1065,164,LOOPR,8,100,100,1.0,0.0,1.1000000000000085,5.0
+2057,Swim or Sink 195,1065,164,OpenSkill μ,8,100,98,0.98,1.0,3.0,44.0
+2057,Swim or Sink 195,1065,164,OpenSkill ordinal,8,100,98,0.98,1.0,4.0,32.0
+2057,Swim or Sink 195,1065,164,Bradley–Terry (L2),8,100,99,0.99,1.0,2.0,13.0
+2057,Swim or Sink 195,1065,164,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+2057,Swim or Sink 195,1065,164,LOOPR,16,100,100,1.0,0.0,2.0,5.0
+2057,Swim or Sink 195,1065,164,OpenSkill μ,16,100,98,0.98,1.0,3.0,44.0
+2057,Swim or Sink 195,1065,164,OpenSkill ordinal,16,100,98,0.98,1.0,4.0,32.0
+2057,Swim or Sink 195,1065,164,Bradley–Terry (L2),16,100,99,0.99,1.0,2.0,13.0
+2057,Swim or Sink 195,1065,164,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2787,Swim or Sink 207,1054,135,LOOPR,0,100,100,1.0,0.0,1.0,3.0
+2787,Swim or Sink 207,1054,135,OpenSkill μ,0,100,100,1.0,0.0,1.0,5.0
+2787,Swim or Sink 207,1054,135,OpenSkill ordinal,0,100,99,0.99,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,Bradley–Terry (L2),0,100,100,1.0,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,90-day win rate,0,100,96,0.96,1.0,3.0,512.0
+2787,Swim or Sink 207,1054,135,LOOPR,8,100,100,1.0,0.0,1.0,3.0
+2787,Swim or Sink 207,1054,135,OpenSkill μ,8,100,100,1.0,0.0,1.0,5.0
+2787,Swim or Sink 207,1054,135,OpenSkill ordinal,8,100,99,0.99,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,Bradley–Terry (L2),8,100,100,1.0,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,90-day win rate,8,100,96,0.96,1.0,3.0,512.0
+2787,Swim or Sink 207,1054,135,LOOPR,16,100,100,1.0,0.0,1.0,3.0
+2787,Swim or Sink 207,1054,135,OpenSkill μ,16,100,100,1.0,0.0,1.0,5.0
+2787,Swim or Sink 207,1054,135,OpenSkill ordinal,16,100,99,0.99,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,Bradley–Terry (L2),16,100,100,1.0,0.0,1.0,4.0
+2787,Swim or Sink 207,1054,135,90-day win rate,16,100,96,0.96,1.0,4.0,506.0
+2916,Swim or Sink 211,1025,131,LOOPR,0,100,100,1.0,0.0,1.0,3.0
+2916,Swim or Sink 211,1025,131,OpenSkill μ,0,100,100,1.0,0.0,3.0,13.0
+2916,Swim or Sink 211,1025,131,OpenSkill ordinal,0,100,98,0.98,0.0,2.1000000000000085,16.0
+2916,Swim or Sink 211,1025,131,Bradley–Terry (L2),0,100,98,0.98,1.0,2.1000000000000085,23.0
+2916,Swim or Sink 211,1025,131,90-day win rate,0,100,95,0.95,1.0,8.100000000000009,110.0
+2916,Swim or Sink 211,1025,131,LOOPR,8,100,100,1.0,0.0,1.0,3.0
+2916,Swim or Sink 211,1025,131,OpenSkill μ,8,100,100,1.0,0.0,3.0,13.0
+2916,Swim or Sink 211,1025,131,OpenSkill ordinal,8,100,98,0.98,0.0,2.1000000000000085,16.0
+2916,Swim or Sink 211,1025,131,Bradley–Terry (L2),8,100,98,0.98,1.0,2.1000000000000085,23.0
+2916,Swim or Sink 211,1025,131,90-day win rate,8,100,95,0.95,1.0,8.100000000000009,110.0
+2916,Swim or Sink 211,1025,131,LOOPR,16,100,100,1.0,0.0,1.0,3.0
+2916,Swim or Sink 211,1025,131,OpenSkill μ,16,100,100,1.0,0.0,3.0,13.0
+2916,Swim or Sink 211,1025,131,OpenSkill ordinal,16,100,98,0.98,0.0,2.1000000000000085,16.0
+2916,Swim or Sink 211,1025,131,Bradley–Terry (L2),16,100,98,0.98,1.0,2.1000000000000085,23.0
+2916,Swim or Sink 211,1025,131,90-day win rate,16,100,95,0.95,1.0,8.100000000000009,110.0
+3060,Swim or Sink 213,1016,127,LOOPR,0,100,100,1.0,0.0,1.0,14.0
+3060,Swim or Sink 213,1016,127,OpenSkill μ,0,100,98,0.98,1.0,5.0,47.0
+3060,Swim or Sink 213,1016,127,OpenSkill ordinal,0,100,99,0.99,0.0,2.1000000000000085,12.0
+3060,Swim or Sink 213,1016,127,Bradley–Terry (L2),0,100,100,1.0,0.5,2.1000000000000085,14.0
+3060,Swim or Sink 213,1016,127,90-day win rate,0,100,96,0.96,2.0,3.0,676.0
+3060,Swim or Sink 213,1016,127,LOOPR,8,100,100,1.0,0.0,1.0,14.0
+3060,Swim or Sink 213,1016,127,OpenSkill μ,8,100,98,0.98,1.0,5.0,47.0
+3060,Swim or Sink 213,1016,127,OpenSkill ordinal,8,100,99,0.99,0.0,2.1000000000000085,12.0
+3060,Swim or Sink 213,1016,127,Bradley–Terry (L2),8,100,100,1.0,0.5,2.1000000000000085,14.0
+3060,Swim or Sink 213,1016,127,90-day win rate,8,100,96,0.96,2.0,3.0,669.0
+3060,Swim or Sink 213,1016,127,LOOPR,16,100,98,0.98,0.0,1.1000000000000085,14.0
+3060,Swim or Sink 213,1016,127,OpenSkill μ,16,100,98,0.98,1.0,5.0,47.0
+3060,Swim or Sink 213,1016,127,OpenSkill ordinal,16,100,99,0.99,0.0,2.1000000000000085,12.0
+3060,Swim or Sink 213,1016,127,Bradley–Terry (L2),16,100,100,1.0,0.5,2.1000000000000085,14.0
+3060,Swim or Sink 213,1016,127,90-day win rate,16,100,94,0.94,2.0,3.0,654.0
+2914,Swim or Sink 209,989,127,LOOPR,0,100,99,0.99,0.0,1.0,4.0
+2914,Swim or Sink 209,989,127,OpenSkill μ,0,100,99,0.99,1.0,3.0,45.0
+2914,Swim or Sink 209,989,127,OpenSkill ordinal,0,100,100,1.0,0.0,2.0,7.0
+2914,Swim or Sink 209,989,127,Bradley–Terry (L2),0,100,98,0.98,1.0,2.0,23.0
+2914,Swim or Sink 209,989,127,90-day win rate,0,100,97,0.97,2.0,3.0,61.0
+2914,Swim or Sink 209,989,127,LOOPR,8,100,99,0.99,0.0,1.0,4.0
+2914,Swim or Sink 209,989,127,OpenSkill μ,8,100,99,0.99,1.0,3.0,45.0
+2914,Swim or Sink 209,989,127,OpenSkill ordinal,8,100,100,1.0,0.0,2.0,7.0
+2914,Swim or Sink 209,989,127,Bradley–Terry (L2),8,100,98,0.98,1.0,2.0,23.0
+2914,Swim or Sink 209,989,127,90-day win rate,8,100,97,0.97,2.0,3.0,61.0
+2914,Swim or Sink 209,989,127,LOOPR,16,100,99,0.99,0.0,1.0,4.0
+2914,Swim or Sink 209,989,127,OpenSkill μ,16,100,99,0.99,1.0,3.0,45.0
+2914,Swim or Sink 209,989,127,OpenSkill ordinal,16,100,100,1.0,0.0,2.0,7.0
+2914,Swim or Sink 209,989,127,Bradley–Terry (L2),16,100,98,0.98,1.0,2.0,23.0
+2914,Swim or Sink 209,989,127,90-day win rate,16,100,96,0.96,2.0,3.0,61.0
+2056,Swim or Sink 194,965,155,LOOPR,0,100,99,0.99,0.0,1.0,3.0
+2056,Swim or Sink 194,965,155,OpenSkill μ,0,100,98,0.98,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,OpenSkill ordinal,0,100,99,0.99,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,Bradley–Terry (L2),0,100,98,0.98,0.0,2.0,19.0
+2056,Swim or Sink 194,965,155,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+2056,Swim or Sink 194,965,155,LOOPR,8,100,99,0.99,0.0,1.0,3.0
+2056,Swim or Sink 194,965,155,OpenSkill μ,8,100,98,0.98,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,OpenSkill ordinal,8,100,99,0.99,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,Bradley–Terry (L2),8,100,98,0.98,0.0,2.0,19.0
+2056,Swim or Sink 194,965,155,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+2056,Swim or Sink 194,965,155,LOOPR,16,100,99,0.99,0.0,1.0,10.0
+2056,Swim or Sink 194,965,155,OpenSkill μ,16,100,98,0.98,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,OpenSkill ordinal,16,100,99,0.99,1.0,3.0,9.0
+2056,Swim or Sink 194,965,155,Bradley–Terry (L2),16,100,98,0.98,0.0,2.0,19.0
+2056,Swim or Sink 194,965,155,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2341,Swim or Sink 196,932,151,LOOPR,0,100,100,1.0,0.0,1.0,6.0
+2341,Swim or Sink 196,932,151,OpenSkill μ,0,100,98,0.98,1.0,2.0,11.0
+2341,Swim or Sink 196,932,151,OpenSkill ordinal,0,100,97,0.97,1.0,3.0,33.0
+2341,Swim or Sink 196,932,151,Bradley–Terry (L2),0,100,99,0.99,0.0,3.0,12.0
+2341,Swim or Sink 196,932,151,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+2341,Swim or Sink 196,932,151,LOOPR,8,100,100,1.0,0.0,1.0,6.0
+2341,Swim or Sink 196,932,151,OpenSkill μ,8,100,98,0.98,1.0,2.0,11.0
+2341,Swim or Sink 196,932,151,OpenSkill ordinal,8,100,97,0.97,1.0,3.0,33.0
+2341,Swim or Sink 196,932,151,Bradley–Terry (L2),8,100,99,0.99,0.0,3.0,12.0
+2341,Swim or Sink 196,932,151,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+2341,Swim or Sink 196,932,151,LOOPR,16,100,100,1.0,0.0,1.0,6.0
+2341,Swim or Sink 196,932,151,OpenSkill μ,16,100,98,0.98,1.0,2.0,11.0
+2341,Swim or Sink 196,932,151,OpenSkill ordinal,16,100,97,0.97,1.0,3.0,33.0
+2341,Swim or Sink 196,932,151,Bradley–Terry (L2),16,100,99,0.99,0.0,3.0,12.0
+2341,Swim or Sink 196,932,151,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+3061,Swim or Sink 214,920,115,LOOPR,0,100,99,0.99,0.0,2.0,10.0
+3061,Swim or Sink 214,920,115,OpenSkill μ,0,100,97,0.97,1.0,2.0,28.0
+3061,Swim or Sink 214,920,115,OpenSkill ordinal,0,100,100,1.0,1.0,2.0,25.0
+3061,Swim or Sink 214,920,115,Bradley–Terry (L2),0,100,99,0.99,1.0,3.0,8.0
+3061,Swim or Sink 214,920,115,90-day win rate,0,100,95,0.95,1.0,3.0,125.0
+3061,Swim or Sink 214,920,115,LOOPR,8,100,99,0.99,0.0,2.0,10.0
+3061,Swim or Sink 214,920,115,OpenSkill μ,8,100,97,0.97,1.0,2.0,28.0
+3061,Swim or Sink 214,920,115,OpenSkill ordinal,8,100,100,1.0,1.0,2.0,25.0
+3061,Swim or Sink 214,920,115,Bradley–Terry (L2),8,100,99,0.99,1.0,3.0,8.0
+3061,Swim or Sink 214,920,115,90-day win rate,8,100,95,0.95,1.0,3.0,125.0
+3061,Swim or Sink 214,920,115,LOOPR,16,100,99,0.99,0.0,2.0,10.0
+3061,Swim or Sink 214,920,115,OpenSkill μ,16,100,97,0.97,1.0,2.0,28.0
+3061,Swim or Sink 214,920,115,OpenSkill ordinal,16,100,100,1.0,1.0,2.0,25.0
+3061,Swim or Sink 214,920,115,Bradley–Terry (L2),16,100,99,0.99,1.0,3.0,8.0
+3061,Swim or Sink 214,920,115,90-day win rate,16,100,95,0.95,1.0,3.0,122.0
+309,Swim or Sink 157,897,209,LOOPR,0,100,100,1.0,0.0,0.0,3.0
+309,Swim or Sink 157,897,209,OpenSkill μ,0,100,98,0.98,1.0,4.0,6.0
+309,Swim or Sink 157,897,209,OpenSkill ordinal,0,100,99,0.99,1.0,2.0,9.0
+309,Swim or Sink 157,897,209,Bradley–Terry (L2),0,100,99,0.99,0.0,2.0,10.0
+309,Swim or Sink 157,897,209,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+309,Swim or Sink 157,897,209,LOOPR,8,100,100,1.0,0.0,0.0,3.0
+309,Swim or Sink 157,897,209,OpenSkill μ,8,100,98,0.98,1.0,4.0,6.0
+309,Swim or Sink 157,897,209,OpenSkill ordinal,8,100,99,0.99,1.0,2.0,9.0
+309,Swim or Sink 157,897,209,Bradley–Terry (L2),8,100,99,0.99,0.0,2.0,10.0
+309,Swim or Sink 157,897,209,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+309,Swim or Sink 157,897,209,LOOPR,16,100,100,1.0,0.0,0.0,3.0
+309,Swim or Sink 157,897,209,OpenSkill μ,16,100,98,0.98,1.0,4.0,6.0
+309,Swim or Sink 157,897,209,OpenSkill ordinal,16,100,99,0.99,1.0,2.0,9.0
+309,Swim or Sink 157,897,209,Bradley–Terry (L2),16,100,99,0.99,0.0,2.0,10.0
+309,Swim or Sink 157,897,209,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,LOOPR,0,100,100,1.0,0.0,0.0,1.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill μ,0,100,99,0.99,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill ordinal,0,100,100,1.0,0.0,2.0,5.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,Bradley–Terry (L2),0,100,100,1.0,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,LOOPR,8,100,100,1.0,0.0,0.0,1.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill μ,8,100,99,0.99,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill ordinal,8,100,100,1.0,0.0,2.0,5.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,Bradley–Terry (L2),8,100,100,1.0,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,LOOPR,16,100,100,1.0,0.0,0.0,1.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill μ,16,100,99,0.99,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,OpenSkill ordinal,16,100,100,1.0,0.0,2.0,5.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,Bradley–Terry (L2),16,100,100,1.0,0.0,2.0,4.0
+1616,MIKU MIKU BEAM!!! #20 Grand Stage,895,159,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2055,Swim or Sink 193,874,140,LOOPR,0,100,100,1.0,0.0,1.0,3.0
+2055,Swim or Sink 193,874,140,OpenSkill μ,0,100,98,0.98,0.0,3.0,9.0
+2055,Swim or Sink 193,874,140,OpenSkill ordinal,0,100,99,0.99,0.0,2.1000000000000085,7.0
+2055,Swim or Sink 193,874,140,Bradley–Terry (L2),0,100,98,0.98,0.0,2.0,14.0
+2055,Swim or Sink 193,874,140,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+2055,Swim or Sink 193,874,140,LOOPR,8,100,100,1.0,0.0,1.0,3.0
+2055,Swim or Sink 193,874,140,OpenSkill μ,8,100,98,0.98,0.0,3.0,9.0
+2055,Swim or Sink 193,874,140,OpenSkill ordinal,8,100,99,0.99,0.0,2.1000000000000085,7.0
+2055,Swim or Sink 193,874,140,Bradley–Terry (L2),8,100,98,0.98,0.0,2.0,14.0
+2055,Swim or Sink 193,874,140,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+2055,Swim or Sink 193,874,140,LOOPR,16,100,100,1.0,0.0,1.0,3.0
+2055,Swim or Sink 193,874,140,OpenSkill μ,16,100,98,0.98,0.0,3.0,9.0
+2055,Swim or Sink 193,874,140,OpenSkill ordinal,16,100,99,0.99,0.0,2.1000000000000085,7.0
+2055,Swim or Sink 193,874,140,Bradley–Terry (L2),16,100,98,0.98,0.0,2.0,14.0
+2055,Swim or Sink 193,874,140,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2915,Swim or Sink 210,859,110,LOOPR,0,100,100,1.0,0.0,1.0,7.0
+2915,Swim or Sink 210,859,110,OpenSkill μ,0,100,98,0.98,1.0,3.0,15.0
+2915,Swim or Sink 210,859,110,OpenSkill ordinal,0,100,97,0.97,1.0,2.1000000000000085,13.0
+2915,Swim or Sink 210,859,110,Bradley–Terry (L2),0,100,100,1.0,0.0,2.0,10.0
+2915,Swim or Sink 210,859,110,90-day win rate,0,100,98,0.98,1.0,3.0,450.0
+2915,Swim or Sink 210,859,110,LOOPR,8,100,100,1.0,0.0,1.0,7.0
+2915,Swim or Sink 210,859,110,OpenSkill μ,8,100,98,0.98,1.0,3.0,15.0
+2915,Swim or Sink 210,859,110,OpenSkill ordinal,8,100,97,0.97,1.0,2.1000000000000085,13.0
+2915,Swim or Sink 210,859,110,Bradley–Terry (L2),8,100,100,1.0,0.0,2.0,10.0
+2915,Swim or Sink 210,859,110,90-day win rate,8,100,98,0.98,1.0,3.0,450.0
+2915,Swim or Sink 210,859,110,LOOPR,16,100,100,1.0,0.0,1.0,7.0
+2915,Swim or Sink 210,859,110,OpenSkill μ,16,100,98,0.98,1.0,3.0,15.0
+2915,Swim or Sink 210,859,110,OpenSkill ordinal,16,100,97,0.97,1.0,2.1000000000000085,13.0
+2915,Swim or Sink 210,859,110,Bradley–Terry (L2),16,100,100,1.0,0.0,2.0,10.0
+2915,Swim or Sink 210,859,110,90-day win rate,16,100,98,0.98,1.0,3.1000000000000085,444.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,LOOPR,0,100,100,1.0,0.0,0.0,2.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill μ,0,100,98,0.98,1.0,4.0,14.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill ordinal,0,100,99,0.99,1.0,3.0,18.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,Bradley–Terry (L2),0,100,100,1.0,0.0,1.1000000000000085,4.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,LOOPR,8,100,100,1.0,0.0,0.0,2.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill μ,8,100,98,0.98,1.0,4.0,14.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill ordinal,8,100,99,0.99,1.0,3.0,18.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,Bradley–Terry (L2),8,100,100,1.0,0.0,1.1000000000000085,4.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,LOOPR,16,100,100,1.0,0.0,0.0,2.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill μ,16,100,98,0.98,1.0,4.0,14.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,OpenSkill ordinal,16,100,99,0.99,1.0,3.0,18.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,Bradley–Terry (L2),16,100,100,1.0,0.0,1.1000000000000085,4.0
+126,Unnamed Tournament - Last Ditch Effort,855,177,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2786,Swim or Sink 206,831,108,LOOPR,0,100,100,1.0,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,OpenSkill μ,0,100,99,0.99,1.0,2.0,31.0
+2786,Swim or Sink 206,831,108,OpenSkill ordinal,0,100,98,0.98,0.0,2.0,21.0
+2786,Swim or Sink 206,831,108,Bradley–Terry (L2),0,100,100,1.0,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,90-day win rate,0,100,98,0.98,1.0,3.0,89.0
+2786,Swim or Sink 206,831,108,LOOPR,8,100,100,1.0,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,OpenSkill μ,8,100,99,0.99,1.0,2.0,31.0
+2786,Swim or Sink 206,831,108,OpenSkill ordinal,8,100,98,0.98,0.0,2.0,21.0
+2786,Swim or Sink 206,831,108,Bradley–Terry (L2),8,100,100,1.0,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,90-day win rate,8,100,98,0.98,1.0,3.0,89.0
+2786,Swim or Sink 206,831,108,LOOPR,16,100,99,0.99,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,OpenSkill μ,16,100,99,0.99,1.0,2.0,31.0
+2786,Swim or Sink 206,831,108,OpenSkill ordinal,16,100,98,0.98,0.0,2.0,21.0
+2786,Swim or Sink 206,831,108,Bradley–Terry (L2),16,100,100,1.0,0.0,1.0,4.0
+2786,Swim or Sink 206,831,108,90-day win rate,16,100,99,0.99,1.0,3.0,89.0
+1081,Swim or Sink 178,826,173,LOOPR,0,100,100,1.0,0.0,1.0,11.0
+1081,Swim or Sink 178,826,173,OpenSkill μ,0,100,99,0.99,1.0,4.0,16.0
+1081,Swim or Sink 178,826,173,OpenSkill ordinal,0,100,99,0.99,1.0,4.0,6.0
+1081,Swim or Sink 178,826,173,Bradley–Terry (L2),0,100,99,0.99,1.0,2.0,8.0
+1081,Swim or Sink 178,826,173,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1081,Swim or Sink 178,826,173,LOOPR,8,100,100,1.0,0.0,1.0,11.0
+1081,Swim or Sink 178,826,173,OpenSkill μ,8,100,99,0.99,1.0,4.0,16.0
+1081,Swim or Sink 178,826,173,OpenSkill ordinal,8,100,99,0.99,1.0,4.0,6.0
+1081,Swim or Sink 178,826,173,Bradley–Terry (L2),8,100,99,0.99,1.0,2.0,8.0
+1081,Swim or Sink 178,826,173,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1081,Swim or Sink 178,826,173,LOOPR,16,100,100,1.0,0.0,1.0,11.0
+1081,Swim or Sink 178,826,173,OpenSkill μ,16,100,99,0.99,1.0,4.0,16.0
+1081,Swim or Sink 178,826,173,OpenSkill ordinal,16,100,99,0.99,1.0,4.0,6.0
+1081,Swim or Sink 178,826,173,Bradley–Terry (L2),16,100,99,0.99,1.0,2.0,8.0
+1081,Swim or Sink 178,826,173,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+1849,Swim or Sink 190,816,139,LOOPR,0,100,99,0.99,0.0,1.0,2.0
+1849,Swim or Sink 190,816,139,OpenSkill μ,0,100,98,0.98,1.0,3.0,7.0
+1849,Swim or Sink 190,816,139,OpenSkill ordinal,0,100,99,0.99,1.0,2.0,10.0
+1849,Swim or Sink 190,816,139,Bradley–Terry (L2),0,100,99,0.99,0.0,2.0,13.0
+1849,Swim or Sink 190,816,139,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1849,Swim or Sink 190,816,139,LOOPR,8,100,99,0.99,0.0,1.0,2.0
+1849,Swim or Sink 190,816,139,OpenSkill μ,8,100,98,0.98,1.0,3.0,7.0
+1849,Swim or Sink 190,816,139,OpenSkill ordinal,8,100,99,0.99,1.0,2.0,10.0
+1849,Swim or Sink 190,816,139,Bradley–Terry (L2),8,100,99,0.99,0.0,2.0,13.0
+1849,Swim or Sink 190,816,139,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1849,Swim or Sink 190,816,139,LOOPR,16,100,99,0.99,0.0,1.0,2.0
+1849,Swim or Sink 190,816,139,OpenSkill μ,16,100,98,0.98,1.0,3.0,7.0
+1849,Swim or Sink 190,816,139,OpenSkill ordinal,16,100,99,0.99,1.0,2.0,10.0
+1849,Swim or Sink 190,816,139,Bradley–Terry (L2),16,100,99,0.99,0.0,2.0,13.0
+1849,Swim or Sink 190,816,139,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+2054,Swim or Sink 192,815,141,LOOPR,0,100,99,0.99,0.0,1.0,4.0
+2054,Swim or Sink 192,815,141,OpenSkill μ,0,100,99,0.99,1.0,2.0,30.0
+2054,Swim or Sink 192,815,141,OpenSkill ordinal,0,100,99,0.99,0.0,2.0,6.0
+2054,Swim or Sink 192,815,141,Bradley–Terry (L2),0,100,99,0.99,1.0,3.0,10.0
+2054,Swim or Sink 192,815,141,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+2054,Swim or Sink 192,815,141,LOOPR,8,100,99,0.99,0.0,1.0,4.0
+2054,Swim or Sink 192,815,141,OpenSkill μ,8,100,99,0.99,1.0,2.0,30.0
+2054,Swim or Sink 192,815,141,OpenSkill ordinal,8,100,99,0.99,0.0,2.0,6.0
+2054,Swim or Sink 192,815,141,Bradley–Terry (L2),8,100,99,0.99,1.0,3.0,10.0
+2054,Swim or Sink 192,815,141,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+2054,Swim or Sink 192,815,141,LOOPR,16,100,99,0.99,0.0,1.0,2.0
+2054,Swim or Sink 192,815,141,OpenSkill μ,16,100,99,0.99,1.0,2.0,30.0
+2054,Swim or Sink 192,815,141,OpenSkill ordinal,16,100,99,0.99,0.0,2.0,6.0
+2054,Swim or Sink 192,815,141,Bradley–Terry (L2),16,100,99,0.99,1.0,3.0,10.0
+2054,Swim or Sink 192,815,141,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+508,Swim or Sink 163,812,171,LOOPR,0,100,100,1.0,0.0,0.0,2.0
+508,Swim or Sink 163,812,171,OpenSkill μ,0,100,99,0.99,1.0,3.0,14.0
+508,Swim or Sink 163,812,171,OpenSkill ordinal,0,100,99,0.99,1.0,3.0,17.0
+508,Swim or Sink 163,812,171,Bradley–Terry (L2),0,100,99,0.99,1.0,2.1000000000000085,34.0
+508,Swim or Sink 163,812,171,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+508,Swim or Sink 163,812,171,LOOPR,8,100,100,1.0,0.0,0.0,2.0
+508,Swim or Sink 163,812,171,OpenSkill μ,8,100,99,0.99,1.0,3.0,14.0
+508,Swim or Sink 163,812,171,OpenSkill ordinal,8,100,99,0.99,1.0,3.0,17.0
+508,Swim or Sink 163,812,171,Bradley–Terry (L2),8,100,99,0.99,1.0,2.1000000000000085,34.0
+508,Swim or Sink 163,812,171,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+508,Swim or Sink 163,812,171,LOOPR,16,100,99,0.99,0.0,0.10000000000000853,2.0
+508,Swim or Sink 163,812,171,OpenSkill μ,16,100,99,0.99,1.0,3.0,14.0
+508,Swim or Sink 163,812,171,OpenSkill ordinal,16,100,99,0.99,1.0,3.0,17.0
+508,Swim or Sink 163,812,171,Bradley–Terry (L2),16,100,99,0.99,1.0,2.1000000000000085,34.0
+508,Swim or Sink 163,812,171,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+1082,Swim or Sink 179,775,155,LOOPR,0,100,100,1.0,0.0,0.0,2.0
+1082,Swim or Sink 179,775,155,OpenSkill μ,0,100,99,0.99,1.0,2.0,23.0
+1082,Swim or Sink 179,775,155,OpenSkill ordinal,0,100,99,0.99,1.0,3.0,14.0
+1082,Swim or Sink 179,775,155,Bradley–Terry (L2),0,100,99,0.99,0.5,3.0,31.0
+1082,Swim or Sink 179,775,155,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1082,Swim or Sink 179,775,155,LOOPR,8,100,100,1.0,0.0,0.0,2.0
+1082,Swim or Sink 179,775,155,OpenSkill μ,8,100,99,0.99,1.0,2.0,23.0
+1082,Swim or Sink 179,775,155,OpenSkill ordinal,8,100,99,0.99,1.0,3.0,14.0
+1082,Swim or Sink 179,775,155,Bradley–Terry (L2),8,100,99,0.99,0.5,3.0,31.0
+1082,Swim or Sink 179,775,155,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1082,Swim or Sink 179,775,155,LOOPR,16,100,99,0.99,0.0,1.0,2.0
+1082,Swim or Sink 179,775,155,OpenSkill μ,16,100,99,0.99,1.0,2.0,23.0
+1082,Swim or Sink 179,775,155,OpenSkill ordinal,16,100,99,0.99,1.0,3.0,14.0
+1082,Swim or Sink 179,775,155,Bradley–Terry (L2),16,100,99,0.99,0.5,3.0,31.0
+1082,Swim or Sink 179,775,155,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+936,Swim or Sink 175,773,146,LOOPR,0,100,100,1.0,0.0,0.0,2.0
+936,Swim or Sink 175,773,146,OpenSkill μ,0,100,98,0.98,1.0,4.0,18.0
+936,Swim or Sink 175,773,146,OpenSkill ordinal,0,100,99,0.99,1.0,2.0,9.0
+936,Swim or Sink 175,773,146,Bradley–Terry (L2),0,100,99,0.99,0.0,2.0,9.0
+936,Swim or Sink 175,773,146,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+936,Swim or Sink 175,773,146,LOOPR,8,100,100,1.0,0.0,0.0,2.0
+936,Swim or Sink 175,773,146,OpenSkill μ,8,100,98,0.98,1.0,4.0,18.0
+936,Swim or Sink 175,773,146,OpenSkill ordinal,8,100,99,0.99,1.0,2.0,9.0
+936,Swim or Sink 175,773,146,Bradley–Terry (L2),8,100,99,0.99,0.0,2.0,9.0
+936,Swim or Sink 175,773,146,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+936,Swim or Sink 175,773,146,LOOPR,16,100,100,1.0,0.0,0.0,2.0
+936,Swim or Sink 175,773,146,OpenSkill μ,16,100,98,0.98,1.0,4.0,18.0
+936,Swim or Sink 175,773,146,OpenSkill ordinal,16,100,99,0.99,1.0,2.0,9.0
+936,Swim or Sink 175,773,146,Bradley–Terry (L2),16,100,99,0.99,0.0,2.0,9.0
+936,Swim or Sink 175,773,146,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+1851,Swim or Sink 191,766,147,LOOPR,0,100,100,1.0,0.0,1.0,1.0
+1851,Swim or Sink 191,766,147,OpenSkill μ,0,100,99,0.99,0.0,2.0,6.0
+1851,Swim or Sink 191,766,147,OpenSkill ordinal,0,100,99,0.99,0.0,2.0,5.0
+1851,Swim or Sink 191,766,147,Bradley–Terry (L2),0,100,100,1.0,0.0,1.1000000000000085,5.0
+1851,Swim or Sink 191,766,147,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+1851,Swim or Sink 191,766,147,LOOPR,8,100,100,1.0,0.0,1.0,1.0
+1851,Swim or Sink 191,766,147,OpenSkill μ,8,100,99,0.99,0.0,2.0,6.0
+1851,Swim or Sink 191,766,147,OpenSkill ordinal,8,100,99,0.99,0.0,2.0,5.0
+1851,Swim or Sink 191,766,147,Bradley–Terry (L2),8,100,100,1.0,0.0,1.1000000000000085,5.0
+1851,Swim or Sink 191,766,147,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+1851,Swim or Sink 191,766,147,LOOPR,16,100,100,1.0,0.0,1.0,1.0
+1851,Swim or Sink 191,766,147,OpenSkill μ,16,100,99,0.99,0.0,2.0,6.0
+1851,Swim or Sink 191,766,147,OpenSkill ordinal,16,100,99,0.99,0.0,2.0,5.0
+1851,Swim or Sink 191,766,147,Bradley–Terry (L2),16,100,100,1.0,0.0,1.1000000000000085,5.0
+1851,Swim or Sink 191,766,147,90-day win rate,16,100,100,1.0,0.0,0.0,0.0
+386,Swim or Sink 162,763,170,LOOPR,0,100,100,1.0,0.0,0.10000000000000853,1.0
+386,Swim or Sink 162,763,170,OpenSkill μ,0,100,98,0.98,1.0,4.0,17.0
+386,Swim or Sink 162,763,170,OpenSkill ordinal,0,100,99,0.99,0.0,2.0,11.0
+386,Swim or Sink 162,763,170,Bradley–Terry (L2),0,100,98,0.98,0.0,2.0,13.0
+386,Swim or Sink 162,763,170,90-day win rate,0,100,100,1.0,0.0,0.0,0.0
+386,Swim or Sink 162,763,170,LOOPR,8,100,100,1.0,0.0,0.10000000000000853,1.0
+386,Swim or Sink 162,763,170,OpenSkill μ,8,100,98,0.98,1.0,4.0,17.0
+386,Swim or Sink 162,763,170,OpenSkill ordinal,8,100,99,0.99,0.0,2.0,11.0
+386,Swim or Sink 162,763,170,Bradley–Terry (L2),8,100,98,0.98,0.0,2.0,13.0
+386,Swim or Sink 162,763,170,90-day win rate,8,100,100,1.0,0.0,0.0,0.0
+386,Swim or Sink 162,763,170,LOOPR,16,100,100,1.0,0.0,0.10000000000000853,1.0
+386,Swim or Sink 162,763,170,OpenSkill μ,16,100,98,0.98,1.0,4.0,17.0
+386,Swim or Sink 162,763,170,OpenSkill ordinal,16,100,99,0.99,0.0,2.0,11.0
+386,Swim or Sink 162,763,170,Bradley–Terry (L2),16,100,98,0.98,0.0,2.0,13.0
+386,Swim or Sink 162,763,170,90-day win rate,16,100,100,1.0,0.0,0.0,0.0

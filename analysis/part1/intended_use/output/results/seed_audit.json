@@ -1,0 +1,32 @@
+{
+  "automatic_ordinal_equivalent_structurally_eligible": 1,
+  "canonical_tournaments": 2251,
+  "complete_seed_permutations": 1601,
+  "eligible_seed_match_micro_higher_seed_win_rate": 0.7368573079145003,
+  "eligible_seed_matches": 3462,
+  "eligible_seed_tournament_macro_ci": [
+    0.7217066649524163,
+    0.7530442136676477
+  ],
+  "eligible_seed_tournament_macro_higher_seed_win_rate": 0.7379737226870267,
+  "eligible_seed_tournaments_with_matches": 124,
+  "median_abs_relative_seed_change_from_prior_exact_roster": 0.18181818181818182,
+  "median_abs_relative_seed_change_from_prior_persistent_team": 0.18354978354978357,
+  "median_seed_automatic_ordinal_spearman_structurally_eligible": 0.8833333333333333,
+  "median_seed_registration_spearman_structurally_eligible": -0.1392857142857143,
+  "model_seed_comparison_eligible": 104,
+  "prior_exact_roster_comparisons_structurally_eligible": 486,
+  "prior_persistent_team_comparisons_structurally_eligible": 661,
+  "provenance_limit": "team.seed has no repository field identifying manual, random, copied, or automatic assignment",
+  "ranked_protocol_tournaments": 665,
+  "registration_order_equivalent_structurally_eligible": 0,
+  "same_integer_seed_as_prior_exact_roster_fraction": 0.09876543209876543,
+  "same_integer_seed_as_prior_persistent_team_fraction": 0.06354009077155824,
+  "seed_pattern_counts_structurally_eligible": {
+    "automatic-ordinal-equivalent": 1,
+    "non-default-like": 123
+  },
+  "structurally_eligible_seed_comparison": 124,
+  "tournaments_with_any_seed": 1931,
+  "tournaments_with_seed_changes_across_snapshots": 3
+}

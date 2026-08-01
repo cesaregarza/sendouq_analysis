@@ -1,0 +1,5 @@
+method,paired_loss_difference,support_predictor,slope,ci_low,ci_high,matches,tournaments
+OpenSkill μ,method minus LOOPR,log2(1 + minimum participant core),0.013873604016921441,0.007095653154036193,0.020187087121365414,4397,110
+OpenSkill ordinal,method minus LOOPR,log2(1 + minimum participant core),0.029283904214094172,0.01879687243773755,0.03875208471711377,4397,110
+Bradley–Terry (L2),method minus LOOPR,log2(1 + minimum participant core),0.01598932706740654,0.00767339572934787,0.023289333991472223,4397,110
+90-day win rate,method minus LOOPR,log2(1 + minimum participant core),0.007639092178007061,-0.0013065748645147168,0.016547246064569195,4397,110

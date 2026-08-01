@@ -1,0 +1,17 @@
+model,features,candidates,out_of_fold_auc,out_of_fold_log_loss,log_loss_improvement_vs_institution_activity_support,result_type,minimum_player_core,pass,fail,pooled_auc,institutional_macro_tier_auc,incumbents,suggested
+intercept only,fold training pass rate,310,0.48881673881673876,0.6542417217748258,-0.13266322065760405,cross_validated_baseline,,,,,,,
+tier only,"tier_1, tier_2, tier_3",310,0.5555104617604617,0.6390196040206885,-0.11744110290346677,cross_validated_baseline,,,,,,,
+candidate status only,suggested,310,0.693226911976912,0.5322552926747433,-0.010676791557521548,cross_validated_baseline,,,,,,,
+tier + candidate status,"tier_1, tier_2, tier_3, suggested",310,0.7489853896103896,0.518970627429876,0.0026078736873457187,cross_validated_baseline,,,,,,,
+activity only,"log_matches_90d, log_tournaments_90d, days_since_match",310,0.540945165945166,0.657368806049143,-0.13579030493192135,cross_validated_baseline,,,,,,,
+graph support only,"log_prior_matches, log_unique_opponents, log_effective_opponents, core_number, nonbridge_edge_share",310,0.6368145743145743,0.6264491489516274,-0.1048706478344057,cross_validated_baseline,,,,,,,
+institution + activity + support,"tier_1, tier_2, tier_3, suggested, log_matches_90d, log_tournaments_90d, days_since_match, log_prior_matches, log_unique_opponents, log_effective_opponents, core_number, nonbridge_edge_share",310,0.7903138528138528,0.5215785011172217,0.0,cross_validated_baseline,,,,,,,
+institution + activity + support + LOOPR,"tier_1, tier_2, tier_3, suggested, log_matches_90d, log_tournaments_90d, days_since_match, log_prior_matches, log_unique_opponents, log_effective_opponents, core_number, nonbridge_edge_share, loopr_score",310,0.8116883116883117,0.5074756494265311,0.014102851690690588,cross_validated_baseline,,,,,,,
+LOOPR only,loopr_score,310,0.648088023088023,0.6204729096587414,-0.09889440854151965,cross_validated_baseline,,,,,,,
+,,310,,,,support_stratification,0.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,1.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,2.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,4.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,8.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,16.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0
+,,310,,,,support_stratification,32.0,198.0,112.0,0.6509289321789321,0.7767558449089546,217.0,93.0

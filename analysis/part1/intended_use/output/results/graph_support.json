@@ -1,0 +1,13 @@
+{
+  "match_rows": 4397,
+  "player_tournament_rows": 8524,
+  "report_matches": 4397,
+  "supported_thresholds": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+  ]
+}

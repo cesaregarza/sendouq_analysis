@@ -1,0 +1,11 @@
+{
+  "candidate_graph_support": "all 310 evaluated candidates are in at least the pre-vote 32-core, so graph-support stratification is identical to the full candidate set",
+  "null_pooled_exceedance_p": 0.004975124378109453,
+  "null_pooled_mean": 0.5031680645743145,
+  "null_pooled_q025": 0.43140331890331884,
+  "null_pooled_q975": 0.5686462842712844,
+  "null_procedure": "independent fair-coin result reversal for every pre-vote match; participation, teams, tournaments, timestamps, and volume preserved",
+  "observed_pooled_auc": 0.6509289321789321,
+  "repetitions": 200,
+  "seed": 20260731
+}

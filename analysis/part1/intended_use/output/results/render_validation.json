@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "requirements profile has all five systems",
+    "requirements profile has no missing values",
+    "every model is evaluated in graph-support bands",
+    "seed-model comparison contains 23 predeclared eligible events",
+    "attack pool contains 20 predeclared targets",
+    "history thinning has ten replicates per model and fraction",
+    "literal pooled outcome shuffle contains 200 full recomputations",
+    "all evaluated Plus candidates are in the pre-vote 32-core"
+  ],
+  "indexed_artifacts": 61
+}

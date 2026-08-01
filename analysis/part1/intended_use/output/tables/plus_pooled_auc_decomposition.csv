@@ -1,0 +1,5 @@
+pair_type,same_tier,same_status,pairs,share_of_all_passer_failer_pairs,loopr_concordance,contribution_to_pooled_auc
+"same tier, same status",True,True,3500,0.15782828282828282,0.6151428571428571,0.09708694083694083
+"same tier, different status",True,False,4882,0.22014790764790765,0.851495288816059,0.1874549062049062
+"different tier, same status",False,True,5812,0.2620851370851371,0.5110116999311769,0.13392857142857142
+"different tier, different status",False,False,7982,0.35993867243867245,0.6458281132548234,0.2324585137085137

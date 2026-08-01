@@ -1,0 +1,9 @@
+hypothesis,historical_test,testable_now,interpretive_limit
+The ranking puts the teams I would seed highly near the top.,Audited historical team seeds; pair concordance; model-disagreement pairs.,Yes,"Useful institutional convergence, not proof that either ordering is correct."
+"The ordering makes sense among established teams, not just newcomers.",Predeclared opponent-graph k-core strata and dense-core held-out ordering.,Yes,Dense support is defined without scores or winner direction; coverage must be shown.
+A hard schedule is rewarded more than the same record against weak teams.,Equal-record strong-versus-weak intervention for all five systems.,Yes,Strong/weak labels use historical outcomes and only three weak lineups qualify.
+Players cannot climb mainly by grinding easy matches.,Weak-win farming and volume-duplication interventions.,Yes,"Tests specified attacks, not every strategic adaptation available to players."
+The visible top list does not jump around for trivial reasons.,"Monthly membership/order stability, history thinning, and important-event removal.",Yes,"Stability is not accuracy, and activity eligibility can create real churn."
+The ranking agrees with what the community already recognizes.,Plus pooled/tier/status decomposition and outcome-shuffle null.,Partly,Candidate status explains much of the vote; one snapshot is not universal consensus.
+"The ranking is understandable, legitimate, and safe to publish with names.",No historical behavioral or institutional artifact in the repository directly identifies this.,No,Belongs to Part II; measurement results cannot answer legitimacy by proxy.
+The ranking reduces organizer workload or improves bracket quality.,"No saved organizer workflow, edit log, counterfactual bracket, or workload measure.",No,"Seed agreement is the closest artifact, but it does not measure labor saved or bracket quality."
