@@ -1,0 +1,42 @@
+{
+  "appearance_any_matches": 2762,
+  "appearance_both_matches": 2762,
+  "canonical_raw_records": 2251,
+  "date_end": "2026-01-28",
+  "date_start": "2024-05-13",
+  "duplicate_source_audit": {
+    "differing_duplicate_ids": 194,
+    "duplicate_tournament_ids": 365,
+    "extra_record_copies": 435,
+    "identical_duplicate_ids": 171,
+    "json_files": 181,
+    "max_copies_for_one_id": 4,
+    "records_loaded": 2686,
+    "unique_tournament_ids": 2251
+  },
+  "eligible_decided_matches": 28647,
+  "eligible_tournaments": 665,
+  "eligible_unique_players": 5518,
+  "eligible_unique_roster_players": 5622,
+  "lineup_sources": {
+    "appearance_both": 2762,
+    "roster_fallback": 25885
+  },
+  "loser_lineup_size": {
+    "median": 4.0,
+    "q1": 4.0,
+    "q3": 4.0
+  },
+  "roster_fallback_matches": 25885,
+  "timestamp_imputed_matches": 2385,
+  "timestamp_sources": {
+    "last_game_finished_at": 24692,
+    "match_created_at": 1570,
+    "tournament_start_imputed": 2385
+  },
+  "winner_lineup_size": {
+    "median": 4.0,
+    "q1": 4.0,
+    "q3": 4.0
+  }
+}

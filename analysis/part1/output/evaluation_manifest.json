@@ -1,0 +1,221 @@
+{
+  "active_player_definition": "listed on a tournament roster for an eligible event with at least one valid match in the 90 days before the snapshot; chosen so optional appearance-payload coverage does not define activity",
+  "analysis_name": "Building Public Rankings, Part I evaluation",
+  "dataset": {
+    "cutoff_date": "2026-01-28",
+    "duplicate_tournament_records": {
+      "differing_duplicate_ids": 194,
+      "duplicate_tournament_ids": 365,
+      "extra_record_copies": 435,
+      "identical_duplicate_ids": 171,
+      "json_files": 181,
+      "max_copies_for_one_id": 4,
+      "records_loaded": 2686,
+      "unique_tournament_ids": 2251
+    },
+    "eligibility": {
+      "excluded_name_regex": "(?i)test|debug|demo|practice",
+      "minimum_bracket_matches": 10,
+      "minimum_participated_users": 16,
+      "minimum_teams": 4,
+      "settings_is_ranked": true,
+      "valid_outcome": "non-bye with a winner and loser"
+    },
+    "match_date_range": [
+      "2024-05-13",
+      "2026-01-28"
+    ],
+    "matches": 28647,
+    "source_root_at_execution": "/root/dev/sendouq_analysis",
+    "timestamp_treatment": {
+      "imputed_matches": 2385,
+      "priority": [
+        "last_game_finished_at",
+        "match_created_at",
+        "tournament_start_time"
+      ],
+      "reason": "the repository converter otherwise assigns a global/current timestamp to missing match times, which is invalid for temporal evaluation",
+      "source_counts": {
+        "last_game_finished_at": 24692,
+        "match_created_at": 1570,
+        "tournament_start_imputed": 2385
+      }
+    },
+    "tournament_date_range": [
+      "2024-05-13",
+      "2026-01-28"
+    ],
+    "tournaments": 665,
+    "unique_player_definition": "players resolved into at least one valid decided match; roster-only count reported separately",
+    "unique_players": 5518,
+    "unique_roster_players": 5622
+  },
+  "loopr_parameters": {
+    "half_life_days": 180.0,
+    "inactivity_decay_rate": 0.01,
+    "inactivity_delay_days": 180.0,
+    "lambda_mode": "auto",
+    "pagerank_alpha": 0.85,
+    "pagerank_max_iterations": 200,
+    "pagerank_tolerance": 1e-08,
+    "tested_half_lives": [
+      90,
+      120,
+      180,
+      270,
+      365,
+      "no_decay"
+    ],
+    "tick_tock_influence": "log_top_20_sum",
+    "tick_tock_max_ticks": 5,
+    "tick_tock_tolerance": 0.01,
+    "tournament_beta": 1.0,
+    "use_tick_tock_active": true
+  },
+  "other_model_parameters": {
+    "Bradley_Terry": "team-average player effects, L2 logistic regression, C=1.0, no intercept",
+    "OpenSkill": "openskill.models.PlackettLuce defaults; sequential match updates in timestamp order",
+    "win_rate": "prior 90 days; per-player Beta(1,1) smoothing; team mean logit"
+  },
+  "outcome_shuffle": {
+    "procedure": "independent p=.5 reversal of each pre-vote match; recompute full LOOPR including tick-tock",
+    "repetitions": 200
+  },
+  "participation": {
+    "lineup_source_counts": {
+      "appearance_both": 2762,
+      "roster_fallback": 25885
+    },
+    "partial_appearance_treatment": "appearance override is side-specific; the other side falls back to roster",
+    "substitution_limitation": "per-match appearance coverage is incomplete, so unobserved substitutions cannot be recovered",
+    "treatment": "use per-match appearances for a side when present; otherwise use that tournament/team roster"
+  },
+  "plus_vote": {
+    "automatic_sendouq_admissions": "not present; source contains PlusVotingResult peer-vote rows",
+    "candidate_status": "suggested=True is an official newly suggested candidate; False is an incumbent",
+    "counts_by_tier_status_outcome": [
+      {
+        "n": 13,
+        "pass_or_fail": "fail",
+        "suggested": false,
+        "tier": 1
+      },
+      {
+        "n": 64,
+        "pass_or_fail": "pass",
+        "suggested": false,
+        "tier": 1
+      },
+      {
+        "n": 12,
+        "pass_or_fail": "fail",
+        "suggested": true,
+        "tier": 1
+      },
+      {
+        "n": 3,
+        "pass_or_fail": "pass",
+        "suggested": true,
+        "tier": 1
+      },
+      {
+        "n": 35,
+        "pass_or_fail": "fail",
+        "suggested": false,
+        "tier": 2
+      },
+      {
+        "n": 52,
+        "pass_or_fail": "pass",
+        "suggested": false,
+        "tier": 2
+      },
+      {
+        "n": 29,
+        "pass_or_fail": "fail",
+        "suggested": true,
+        "tier": 2
+      },
+      {
+        "n": 6,
+        "pass_or_fail": "pass",
+        "suggested": true,
+        "tier": 2
+      },
+      {
+        "n": 37,
+        "pass_or_fail": "fail",
+        "suggested": false,
+        "tier": 3
+      },
+      {
+        "n": 157,
+        "pass_or_fail": "pass",
+        "suggested": false,
+        "tier": 3
+      },
+      {
+        "n": 40,
+        "pass_or_fail": "fail",
+        "suggested": true,
+        "tier": 3
+      },
+      {
+        "n": 20,
+        "pass_or_fail": "pass",
+        "suggested": true,
+        "tier": 3
+      }
+    ],
+    "date": "2025-11-16",
+    "file": "sendou_plus_voting_results_2025_11_16.csv",
+    "historical_rule": "pass at >=60% approval; database view encoded mean +/-1 vote score >= 0.2",
+    "inclusion": "candidate roster-active in prior 90 days; all methods evaluated on the same candidates, with declared population-neutral values for unseen players",
+    "uncertainty": "candidate bootstrap stratified by tier, status, and outcome; 2,000 repetitions",
+    "vote_percentage": "not exported in available CSVs; continuous analysis omitted"
+  },
+  "prediction": {
+    "calibration": "one positive temperature fit only to raw winner-score differences from earlier out-of-sample tournaments; minimum 200 matches and 5 tournaments",
+    "calibration_warmup_start": "2025-07-15",
+    "low_history_players": "retained and shrunk by each method's native/default prior; no test-set coverage filter",
+    "primary_metric": "match-weighted log loss",
+    "reported_test_start": "2025-08-17",
+    "secondary_metrics": [
+      "tournament-weighted log loss",
+      "Brier score",
+      "accuracy"
+    ],
+    "test_end": "2026-01-28",
+    "training": "all eligible matches with timestamps strictly before the held-out tournament's information cutoff; held-out tournament excluded",
+    "uncertainty": "paired tournament-cluster bootstrap, 5,000 repetitions",
+    "unit": "held-out tournament",
+    "unseen_players": {
+      "90_day_win_rate": "Beta(1,1) prior => logit 0",
+      "Bradley_Terry": 0.0,
+      "LOOPR": 0.0,
+      "OpenSkill_mu": "model population mean",
+      "OpenSkill_ordinal": "model default mu - 3 sigma"
+    },
+    "update": "ratings recomputed before every held-out tournament and frozen within that tournament"
+  },
+  "protocol_status": "revised analysis; historical reproduction is reported separately",
+  "random_seed": 20260731,
+  "versions": {
+    "git_commit": "224beafcbc73ccafcbce84c2a93194a4c433f320",
+    "packages": {
+      "loopr-ranking": "0.0.1",
+      "matplotlib": "3.7.1",
+      "networkx": "3.1",
+      "numpy": "1.24.3",
+      "openskill": "6.2.0",
+      "pandas": "2.0.3",
+      "polars": "1.39.0",
+      "pyarrow": "13.0.0",
+      "scikit-learn": "1.7.2",
+      "scipy": "1.11.2",
+      "statsmodels": "0.14.5"
+    },
+    "platform": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "python": "3.10.12"
+  }
+}

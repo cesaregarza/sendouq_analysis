@@ -1,0 +1,124 @@
+{
+  "mean_retention": 0.8384615384615384,
+  "mean_spearman_retained": 0.9646884358380584,
+  "median_transition_movement": 4.0,
+  "transitions": [
+    {
+      "median_absolute_rank_movement": 5.0,
+      "month_a": "2024-12-31",
+      "month_b": "2025-01-31",
+      "p90_absolute_rank_movement": 12.799999999999997,
+      "spearman_on_retained": 0.9878888375802862,
+      "top100_retained": 83,
+      "top100_retention": 0.83
+    },
+    {
+      "median_absolute_rank_movement": 4.0,
+      "month_a": "2025-01-31",
+      "month_b": "2025-02-28",
+      "p90_absolute_rank_movement": 10.0,
+      "spearman_on_retained": 0.9578527894983592,
+      "top100_retained": 80,
+      "top100_retention": 0.8
+    },
+    {
+      "median_absolute_rank_movement": 10.0,
+      "month_a": "2025-02-28",
+      "month_b": "2025-03-31",
+      "p90_absolute_rank_movement": 23.0,
+      "spearman_on_retained": 0.883362952836637,
+      "top100_retained": 76,
+      "top100_retention": 0.76
+    },
+    {
+      "median_absolute_rank_movement": 4.0,
+      "month_a": "2025-03-31",
+      "month_b": "2025-04-30",
+      "p90_absolute_rank_movement": 14.600000000000009,
+      "spearman_on_retained": 0.9504006253664258,
+      "top100_retained": 85,
+      "top100_retention": 0.85
+    },
+    {
+      "median_absolute_rank_movement": 4.0,
+      "month_a": "2025-04-30",
+      "month_b": "2025-05-31",
+      "p90_absolute_rank_movement": 16.0,
+      "spearman_on_retained": 0.936519185987648,
+      "top100_retained": 84,
+      "top100_retention": 0.84
+    },
+    {
+      "median_absolute_rank_movement": 2.0,
+      "month_a": "2025-05-31",
+      "month_b": "2025-06-30",
+      "p90_absolute_rank_movement": 10.5,
+      "spearman_on_retained": 0.9727889310906132,
+      "top100_retained": 96,
+      "top100_retention": 0.96
+    },
+    {
+      "median_absolute_rank_movement": 3.0,
+      "month_a": "2025-06-30",
+      "month_b": "2025-07-31",
+      "p90_absolute_rank_movement": 12.0,
+      "spearman_on_retained": 0.9539818956711635,
+      "top100_retained": 88,
+      "top100_retention": 0.88
+    },
+    {
+      "median_absolute_rank_movement": 3.0,
+      "month_a": "2025-07-31",
+      "month_b": "2025-08-31",
+      "p90_absolute_rank_movement": 10.299999999999997,
+      "spearman_on_retained": 0.9865450318762988,
+      "top100_retained": 88,
+      "top100_retention": 0.88
+    },
+    {
+      "median_absolute_rank_movement": 2.0,
+      "month_a": "2025-08-31",
+      "month_b": "2025-09-30",
+      "p90_absolute_rank_movement": 2.0,
+      "spearman_on_retained": 0.9999999999999999,
+      "top100_retained": 98,
+      "top100_retention": 0.98
+    },
+    {
+      "median_absolute_rank_movement": 9.0,
+      "month_a": "2025-09-30",
+      "month_b": "2025-10-31",
+      "p90_absolute_rank_movement": 18.0,
+      "spearman_on_retained": 0.9917719659124302,
+      "top100_retained": 82,
+      "top100_retention": 0.82
+    },
+    {
+      "median_absolute_rank_movement": 11.0,
+      "month_a": "2025-10-31",
+      "month_b": "2025-11-30",
+      "p90_absolute_rank_movement": 25.200000000000003,
+      "spearman_on_retained": 0.9793275909974994,
+      "top100_retained": 60,
+      "top100_retention": 0.6
+    },
+    {
+      "median_absolute_rank_movement": 3.0,
+      "month_a": "2025-11-30",
+      "month_b": "2025-12-31",
+      "p90_absolute_rank_movement": 10.0,
+      "spearman_on_retained": 0.9880749091938298,
+      "top100_retained": 86,
+      "top100_retention": 0.86
+    },
+    {
+      "median_absolute_rank_movement": 8.5,
+      "month_a": "2025-12-31",
+      "month_b": "2026-01-28",
+      "p90_absolute_rank_movement": 17.700000000000003,
+      "spearman_on_retained": 0.9524349498835678,
+      "top100_retained": 84,
+      "top100_retention": 0.84
+    }
+  ]
+}

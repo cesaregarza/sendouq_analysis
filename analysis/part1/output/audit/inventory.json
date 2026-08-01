@@ -1,0 +1,159 @@
+{
+  "ablation": [
+    {
+      "bytes": 52550,
+      "exists": true,
+      "path": "codex_scripts/analysis/loopr_ablation_table.py",
+      "sha256": "da2376b3adf42c7b2c079f870341233f2556645280b520847758b6c8949c77ad"
+    },
+    {
+      "bytes": 2376,
+      "exists": true,
+      "path": "docs/loopr_ablation_table.csv",
+      "sha256": "baba5d2adedf35a356055ff1867cb207419f73cd1307e1a4b9aaebd6ca657051"
+    },
+    {
+      "bytes": 1165,
+      "exists": true,
+      "path": "docs/loopr_ablation_table.md",
+      "sha256": "c461fab238ef9317d3ceca17f1b2525d8ff9ee2c96fc5a1566f2a3bfda7b3a59"
+    }
+  ],
+  "drafts": [
+    {
+      "bytes": 23150,
+      "exists": true,
+      "path": "docs/blog_draft.md",
+      "sha256": "c1133125860f578ed9b523e2ec783afc37604017190b698be1991cabda526564"
+    },
+    {
+      "bytes": 7513,
+      "exists": true,
+      "path": "docs/rankings_system_draft.md",
+      "sha256": "2976985fd66a12733b2b8460fd84444cbcca6044698a25070f2e0e5d4b84655b"
+    }
+  ],
+  "implementation": [
+    {
+      "bytes": 19132,
+      "exists": true,
+      "path": "src/rankings/algorithms/exposure_log_odds.py",
+      "sha256": "94568954daf25bbed35d63de5d06b185987c2af233a89f0869175e1cff860cb0"
+    },
+    {
+      "bytes": 12809,
+      "exists": true,
+      "path": "src/rankings/algorithms/tick_tock.py",
+      "sha256": "a4533a267ba1e1409d200f5b52d8f6594be0f4c7e185b0b40f412e0dceb155e6"
+    },
+    {
+      "bytes": 18970,
+      "exists": true,
+      "path": "src/rankings/core/convert.py",
+      "sha256": "e11ca43c831b6942b963da83460614023fd24fe3368a898e21c075e75a649f52"
+    },
+    {
+      "bytes": 11351,
+      "exists": true,
+      "path": "src/rankings/analysis/utils/tournament_filters.py",
+      "sha256": "b943bffff9cdfe87040a52b710bace2e44f15f2fe423083cf422d6ead70bd9a2"
+    },
+    {
+      "bytes": 12825,
+      "exists": true,
+      "path": "src/rankings/analysis/utils/summaries.py",
+      "sha256": "7a5dc8973b9a988848c42984ba2e624cd6d517f822497afbbb2be5afbec7d450"
+    },
+    {
+      "bytes": 8050,
+      "exists": true,
+      "path": "src/rankings/evaluation/cross_validation/simple_splits.py",
+      "sha256": "7f2beec8a823b5e303b68d4a847563e612af6730e6611a276a08adf502f7266c"
+    },
+    {
+      "bytes": 36077,
+      "exists": true,
+      "path": "src/rankings/evaluation/loss.py",
+      "sha256": "17a0287e05f12fe4edcc954013736d60884665c72e1dfea5612b9d9fb1839aa9"
+    }
+  ],
+  "parameters": [
+    {
+      "bytes": 2547,
+      "exists": true,
+      "path": "src/rankings/config.yaml",
+      "sha256": "2806910b6635ac47854558450af0aa0797abcb4470949c7684116385fe689523"
+    },
+    {
+      "bytes": 2030,
+      "exists": true,
+      "path": "pyproject.toml",
+      "sha256": "a660bb1e8ef84fbda5b4169583c402f0b28135ccae781a5ddc02584a49dbd428"
+    },
+    {
+      "bytes": 302022,
+      "exists": true,
+      "path": "poetry.lock",
+      "sha256": "771c39541195ece34ca77a8164a9a7721bbb8478af6de4d6670befea62d2a87c"
+    }
+  ],
+  "plus": [
+    {
+      "bytes": 15192,
+      "exists": true,
+      "path": "sendou_plus_voting_results_2025_11_16.csv",
+      "sha256": "1b9d02db84ec10b4a61cbedd4ace51b9ecad1567cafcb28f2356d0d07522632c"
+    },
+    {
+      "bytes": 12604,
+      "exists": true,
+      "path": "sendou_plus_voting_results_2026_02_15.csv",
+      "sha256": "2786038b3c55baf02580d442a8ebdf7835def3c1206fd5596185698af22b9260"
+    },
+    {
+      "bytes": 66961,
+      "exists": true,
+      "path": "sendou_plus_voting_results_aug_nov_feb_consolidated.csv",
+      "sha256": "d0f6ec25f1cd9b6cc87eec4343ef7d7fba3956d7b98e209c0f9f94d62791e9f9"
+    },
+    {
+      "bytes": 16157,
+      "exists": true,
+      "path": "docs/plus_server_validation.md",
+      "sha256": "841ce50df4610bebc6aedd9ac156b0423eacbed55404da8be8ac3e8496966eda"
+    },
+    {
+      "bytes": 1644,
+      "exists": true,
+      "path": "docs/plus_validation_split_summary_2025_11_17_full.csv",
+      "sha256": "27fc5465a76b95cd26547ffbec71870a427822dde504847c7125596a01b77f25"
+    }
+  ],
+  "prediction": [
+    {
+      "bytes": 24118,
+      "exists": true,
+      "path": "codex_scripts/analysis/plot_match_prediction_harness.py",
+      "sha256": "0631f908a28f547693055c8b48cfac87c577214da25e25c68a669887f93428b7"
+    },
+    {
+      "bytes": 1549,
+      "exists": true,
+      "path": "docs/match_prediction_harness.csv",
+      "sha256": "01dcd42b19fe29c7c0829b0d58154b206e09481eaa73129dc34befe5b24d09e6"
+    },
+    {
+      "bytes": 901,
+      "exists": true,
+      "path": "docs/match_prediction_harness_summary.csv",
+      "sha256": "b84ae580b768334d5a833f6d269d146318c1620f310f597730ade1408ef43098"
+    }
+  ],
+  "raw_data": [
+    {
+      "bytes": 286527542,
+      "json_files": 181,
+      "path": "data/tournaments"
+    }
+  ]
+}

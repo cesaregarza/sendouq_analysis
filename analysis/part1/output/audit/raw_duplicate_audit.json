@@ -1,0 +1,10 @@
+{
+  "differing_duplicate_ids": 194,
+  "duplicate_tournament_ids": 365,
+  "extra_record_copies": 435,
+  "identical_duplicate_ids": 171,
+  "json_files": 181,
+  "max_copies_for_one_id": 4,
+  "records_loaded": 2686,
+  "unique_tournament_ids": 2251
+}

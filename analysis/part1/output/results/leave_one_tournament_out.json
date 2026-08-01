@@ -1,0 +1,21 @@
+{
+  "cutoff_date": "2026-01-28",
+  "eligible_tournaments_removed": 665,
+  "events_changing_rank_eligibility_for_at_least_one_original_top100_player": 18,
+  "largest_observed_shared_player_rank_shift": 63.0,
+  "largest_shared_shift_player_full_matches": 152,
+  "largest_shared_shift_player_id": 21396,
+  "largest_shared_shift_player_low_match_exposure": false,
+  "largest_shared_shift_tournament_id": 3086,
+  "largest_shared_shift_tournament_name": "Baja's Blast #31",
+  "maximum_original_top100_players_made_rank_ineligible": 3,
+  "median_of_median_abs_rank_changes": 0.0,
+  "median_top100_retention": 1.0,
+  "p90_of_all_tournament_p90_rank_changes": 1.0,
+  "rank_eligibility_is_not_rank_movement": "Players absent from the reduced active/ranked population are counted separately, not assigned a fictitious bottom rank; absence can reflect the 90-day activity rule rather than disappearance from the rating graph.",
+  "top100_exposure_q25": 43.38943734140466,
+  "top100_match_count_q25": 104.25,
+  "worst_retention_tournament_id": 2782,
+  "worst_retention_tournament_name": "Crobattle Royale: Mel0's Birthday Edition (28th)",
+  "worst_top100_retention": 0.96
+}

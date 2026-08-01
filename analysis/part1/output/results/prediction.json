@@ -1,0 +1,314 @@
+{
+  "calibration": [
+    {
+      "calibration_bin": 0,
+      "max_probability": 0.3733716471265357,
+      "mean_predicted_probability": 0.2178339002277915,
+      "min_probability": 0.006215755929771416,
+      "n_matches": 880,
+      "observed_win_rate": 0.29545454545454547
+    },
+    {
+      "calibration_bin": 1,
+      "max_probability": 0.5881728475652325,
+      "mean_predicted_probability": 0.4864329246651123,
+      "min_probability": 0.3735796218204577,
+      "n_matches": 879,
+      "observed_win_rate": 0.5267349260523322
+    },
+    {
+      "calibration_bin": 2,
+      "max_probability": 0.7542671343680297,
+      "mean_predicted_probability": 0.6708379115404975,
+      "min_probability": 0.5884047218649773,
+      "n_matches": 879,
+      "observed_win_rate": 0.7053469852104665
+    },
+    {
+      "calibration_bin": 3,
+      "max_probability": 0.8996834948750069,
+      "mean_predicted_probability": 0.8319407402951605,
+      "min_probability": 0.7543125677922136,
+      "n_matches": 879,
+      "observed_win_rate": 0.8418657565415245
+    },
+    {
+      "calibration_bin": 4,
+      "max_probability": 0.999634308704856,
+      "mean_predicted_probability": 0.9494532323341747,
+      "min_probability": 0.8999107460039645,
+      "n_matches": 880,
+      "observed_win_rate": 0.9352272727272727
+    }
+  ],
+  "familiarity": [
+    {
+      "accuracy": 0.7187886279357231,
+      "brier": 0.1833972816605935,
+      "familiarity_group": "familiar",
+      "log_loss": 0.545715577677358,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "90-day win rate",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.6827586206896552,
+      "brier": 0.201262438184631,
+      "familiarity_group": "mixed",
+      "log_loss": 0.5893047209926833,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "90-day win rate",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.5700636942675159,
+      "brier": 0.22907470432217447,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.6526577285001817,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "90-day win rate",
+      "tournaments": 73
+    },
+    {
+      "accuracy": 0.7787391841779975,
+      "brier": 0.1487481094360002,
+      "familiarity_group": "familiar",
+      "log_loss": 0.4545611010996515,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "Bradley\u2013Terry (L2)",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.7411764705882353,
+      "brier": 0.16723763272850053,
+      "familiarity_group": "mixed",
+      "log_loss": 0.5016749148711254,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "Bradley\u2013Terry (L2)",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.6624203821656051,
+      "brier": 0.19941830721943218,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.5706113977401935,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "Bradley\u2013Terry (L2)",
+      "tournaments": 73
+    },
+    {
+      "accuracy": 0.5,
+      "brier": 0.25,
+      "familiarity_group": "familiar",
+      "log_loss": 0.6931471805599453,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "Chance (0.5)",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.5,
+      "brier": 0.25,
+      "familiarity_group": "mixed",
+      "log_loss": 0.6931471805599453,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "Chance (0.5)",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.5,
+      "brier": 0.25,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.6931471805599453,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "Chance (0.5)",
+      "tournaments": 73
+    },
+    {
+      "accuracy": 0.7873918417799752,
+      "brier": 0.14772862900970804,
+      "familiarity_group": "familiar",
+      "log_loss": 0.4524939051560932,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "LOOPR",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.7359026369168357,
+      "brier": 0.17692457848589319,
+      "familiarity_group": "mixed",
+      "log_loss": 0.5302637479650137,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "LOOPR",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.6337579617834395,
+      "brier": 0.23687764753185872,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.6882710123127159,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "LOOPR",
+      "tournaments": 73
+    },
+    {
+      "accuracy": 0.7669962917181706,
+      "brier": 0.154901529045041,
+      "familiarity_group": "familiar",
+      "log_loss": 0.4724078524793558,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "OpenSkill ordinal",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.7525354969574036,
+      "brier": 0.1639112533566478,
+      "familiarity_group": "mixed",
+      "log_loss": 0.4943015940048291,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "OpenSkill ordinal",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.7133757961783439,
+      "brier": 0.16474820778990187,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.49107212401757705,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "OpenSkill ordinal",
+      "tournaments": 73
+    },
+    {
+      "accuracy": 0.7812113720642769,
+      "brier": 0.14824738636739757,
+      "familiarity_group": "familiar",
+      "log_loss": 0.4533840457804691,
+      "matches": 1618,
+      "median_familiarity": 0.8333333333333333,
+      "method": "OpenSkill \u03bc",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.7452332657200811,
+      "brier": 0.1669070275262854,
+      "familiarity_group": "mixed",
+      "log_loss": 0.5015782694566446,
+      "matches": 2465,
+      "median_familiarity": 0.5,
+      "method": "OpenSkill \u03bc",
+      "tournaments": 109
+    },
+    {
+      "accuracy": 0.6751592356687898,
+      "brier": 0.2042326319660093,
+      "familiarity_group": "mostly novel",
+      "log_loss": 0.5880454310795017,
+      "matches": 314,
+      "median_familiarity": 0.08333333333333333,
+      "method": "OpenSkill \u03bc",
+      "tournaments": 73
+    }
+  ],
+  "methods": [
+    {
+      "accuracy": 0.7475551512394815,
+      "brier_score": 0.17046249466236935,
+      "match_micro_log_loss": 0.5129298101302047,
+      "matches": 4397,
+      "median_per_tournament_difference": 0.0,
+      "method": "LOOPR",
+      "paired_difference_ci_high": 0.0,
+      "paired_difference_ci_low": 0.0,
+      "paired_log_loss_difference_vs_loopr": 0.0,
+      "tournament_macro_log_loss": 0.5231656352634224,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 0
+    },
+    {
+      "accuracy": 0.7493745735728906,
+      "brier_score": 0.16273198867639388,
+      "match_micro_log_loss": 0.4892609746706802,
+      "matches": 4397,
+      "median_per_tournament_difference": -0.01096950745946279,
+      "method": "Bradley\u2013Terry (L2)",
+      "paired_difference_ci_high": -0.010370413218680824,
+      "paired_difference_ci_low": -0.03763817309566252,
+      "paired_log_loss_difference_vs_loopr": -0.023668835459524473,
+      "tournament_macro_log_loss": 0.5021999224271184,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 71
+    },
+    {
+      "accuracy": 0.7534682738230611,
+      "brier_score": 0.16270619523130994,
+      "match_micro_log_loss": 0.4900186685563774,
+      "matches": 4397,
+      "median_per_tournament_difference": -0.01997054487967151,
+      "method": "OpenSkill \u03bc",
+      "paired_difference_ci_high": -0.010452041513365058,
+      "paired_difference_ci_low": -0.03497136162034779,
+      "paired_log_loss_difference_vs_loopr": -0.022911141573827298,
+      "tournament_macro_log_loss": 0.503028914622191,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 70
+    },
+    {
+      "accuracy": 0.7550602683647942,
+      "brier_score": 0.16065564038322547,
+      "match_micro_log_loss": 0.486014551165572,
+      "matches": 4397,
+      "median_per_tournament_difference": -0.008588748984591305,
+      "method": "OpenSkill ordinal",
+      "paired_difference_ci_high": -0.008136581327010069,
+      "paired_difference_ci_low": -0.04603559630573026,
+      "paired_log_loss_difference_vs_loopr": -0.026915258964632642,
+      "tournament_macro_log_loss": 0.5075360292526279,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 62
+    },
+    {
+      "accuracy": 0.687969069820332,
+      "brier_score": 0.196674589267482,
+      "match_micro_log_loss": 0.5777890535997241,
+      "matches": 4397,
+      "median_per_tournament_difference": 0.05245548575157727,
+      "method": "90-day win rate",
+      "paired_difference_ci_high": 0.08217672303348265,
+      "paired_difference_ci_low": 0.04715205183571011,
+      "paired_log_loss_difference_vs_loopr": 0.06485924346951931,
+      "tournament_macro_log_loss": 0.5861830613714226,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 23
+    },
+    {
+      "accuracy": 0.5,
+      "brier_score": 0.25,
+      "match_micro_log_loss": 0.6931471805599453,
+      "matches": 4397,
+      "median_per_tournament_difference": 0.19113364275389605,
+      "method": "Chance (0.5)",
+      "paired_difference_ci_high": 0.205791650516913,
+      "paired_difference_ci_low": 0.15047136358408356,
+      "paired_log_loss_difference_vs_loopr": 0.18021737042974056,
+      "tournament_macro_log_loss": 0.6931471805599454,
+      "tournaments": 110,
+      "tournaments_outperforming_loopr": 7
+    }
+  ],
+  "report_end": "2026-01-28",
+  "report_start": "2025-08-17"
+}

@@ -1,0 +1,30 @@
+{
+  "active_90d_candidates": 310,
+  "automatic_sendouq_admissions": "excluded by source: CSV is derived from PlusVotingResult peer-vote rows",
+  "common_evaluation_candidates": 310,
+  "coverage_of_active_candidates": 1.0,
+  "coverage_of_all_candidates": 0.6623931623931624,
+  "fail": 166,
+  "historical_rule": "pass at >=60% approval (mean +/-1 score >=0.2)",
+  "incumbent": 358,
+  "native_score_coverage_before_neutral_fill": {
+    "90-day win rate": 308,
+    "LOOPR": 310,
+    "Matches in prior 90d": 308,
+    "OpenSkill ordinal": 310,
+    "OpenSkill \u03bc": 310,
+    "Tournaments in prior 90d": 308
+  },
+  "pass": 302,
+  "raw_candidates": 468,
+  "suggested": 110,
+  "unseen_candidate_treatment": {
+    "LOOPR": 0.0,
+    "OpenSkill_mu": 25.0,
+    "OpenSkill_ordinal": 0.0,
+    "matches_or_tournaments_90d": 0.0,
+    "winrate_90d": 0.5
+  },
+  "vote_date": "2025-11-16",
+  "vote_percentage_available": false
+}

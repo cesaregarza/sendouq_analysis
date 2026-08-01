@@ -1,0 +1,9 @@
+result,displayed,recomputed,reproduced,protocol,explanation
+LOOPR prediction log loss (January harness),0.5263944544909293,0.5263944544909293,True,3 sampled temporal blocks x 10 tournaments; ratings frozen within each block; match-iid bootstrap,Weighted aggregation of the three saved split results reproduces 0.526394. Raw rebuild is version-sensitive.
+LOOPR + exposure teleport: prediction log loss,0.4966525351982823,0.4966525351982823,True,ablation script's hand-built variant; same 3x10 block structure,"0.497/0.497/0.489 are different model rows, not reruns of the production harness."
+LOOPR + exposure teleport: Plus macro AUC,0.7715931221816407,0.7715931221816407,True,active <=90d; November 2025; unweighted mean of tier AUCs,0.772 is the exposure/smoothing row; 0.779 is the later tick-tock row.
+LOOPR + smoothing: prediction log loss,0.4965399927908446,0.4965399927908446,True,ablation script's hand-built variant; same 3x10 block structure,"0.497/0.497/0.489 are different model rows, not reruns of the production harness."
+LOOPR + smoothing: Plus macro AUC,0.771650455056311,0.771650455056311,True,active <=90d; November 2025; unweighted mean of tier AUCs,0.772 is the exposure/smoothing row; 0.779 is the later tick-tock row.
+LOOPR + tick-tock: prediction log loss,0.4887697611934159,0.4887697611934159,True,ablation script's hand-built variant; same 3x10 block structure,"0.497/0.497/0.489 are different model rows, not reruns of the production harness."
+LOOPR + tick-tock: Plus macro AUC,0.7791599300084915,0.7791599300084915,True,active <=90d; November 2025; unweighted mean of tier AUCs,0.772 is the exposure/smoothing row; 0.779 is the later tick-tock row.
+Draft Plus AUC,0.86,,False,not specified in draft,No saved table or script output in the project identifies a pooled/tiered protocol that yields the draft's 0.86. It must not be retained as an auditable result.

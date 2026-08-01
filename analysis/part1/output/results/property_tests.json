@@ -1,0 +1,123 @@
+{
+  "smoothing": [
+    {
+      "disappeared": 0,
+      "exposure_band": "high",
+      "median_absolute_rank_change": 29.0,
+      "median_absolute_score_change": 0.03569184050805571,
+      "p90_absolute_rank_change": 192.5,
+      "p90_absolute_score_change": 0.05366222296008705,
+      "players": 6,
+      "smoothing": false
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "high",
+      "median_absolute_rank_change": 30.5,
+      "median_absolute_score_change": 0.0353763128647655,
+      "p90_absolute_rank_change": 193.5,
+      "p90_absolute_score_change": 0.05304694459624387,
+      "players": 6,
+      "smoothing": true
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "low",
+      "median_absolute_rank_change": 54.5,
+      "median_absolute_score_change": 0.03211804280088346,
+      "p90_absolute_rank_change": 138.0,
+      "p90_absolute_score_change": 0.11711932045485593,
+      "players": 6,
+      "smoothing": false
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "low",
+      "median_absolute_rank_change": 53.5,
+      "median_absolute_score_change": 0.031899874152782864,
+      "p90_absolute_rank_change": 143.0,
+      "p90_absolute_score_change": 0.11622011669521562,
+      "players": 6,
+      "smoothing": true
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "medium-high",
+      "median_absolute_rank_change": 148.5,
+      "median_absolute_score_change": 0.0952048930827459,
+      "p90_absolute_rank_change": 630.0,
+      "p90_absolute_score_change": 1.2953316616811694,
+      "players": 6,
+      "smoothing": false
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "medium-high",
+      "median_absolute_rank_change": 149.0,
+      "median_absolute_score_change": 0.0942122952393323,
+      "p90_absolute_rank_change": 635.0,
+      "p90_absolute_score_change": 1.2908773282879094,
+      "players": 6,
+      "smoothing": true
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "medium-low",
+      "median_absolute_rank_change": 29.5,
+      "median_absolute_score_change": 0.03050549892670398,
+      "p90_absolute_rank_change": 104.5,
+      "p90_absolute_score_change": 0.07731911027386296,
+      "players": 6,
+      "smoothing": false
+    },
+    {
+      "disappeared": 0,
+      "exposure_band": "medium-low",
+      "median_absolute_rank_change": 29.5,
+      "median_absolute_score_change": 0.030264722635460043,
+      "p90_absolute_rank_change": 101.5,
+      "p90_absolute_score_change": 0.07639806130348903,
+      "players": 6,
+      "smoothing": true
+    }
+  ],
+  "strength_of_schedule": {
+    "matched_pairs": 2793,
+    "matching_rule": "|win-rate difference| <= .03, |log-match difference| <= .25, opponent-score gap >= .25",
+    "median_score_advantage": 0.3037413663942601,
+    "share_rewarded_in_intended_direction": 0.7278911564625851
+  },
+  "tournament_weighting": {
+    "events_per_strength_group": 8,
+    "limitation": "observed event-removal sensitivity; event categories are defined by the model's fitted influence and are not randomized",
+    "median_contribution_per_match": {
+      "unweighted": {
+        "strong": -0.0001711434423057752,
+        "weak": -0.0017530717227138646
+      },
+      "weighted": {
+        "strong": -0.0003086826485356189,
+        "weak": -0.003558066731961868
+      }
+    },
+    "strong_influence_range": [
+      1.992266936875464,
+      2.220535699124516
+    ],
+    "strong_minus_weak_gap": {
+      "unweighted": 0.0015819282804080893,
+      "weighted": 0.0032493840834262495
+    },
+    "weak_influence_range": [
+      0.06415003906429642,
+      0.09500264950600823
+    ]
+  },
+  "volume_resistance": {
+    "controls": "win rate (linear and squared), mean opponent LOOPR (linear and squared)",
+    "interpretation_limit": "observational residual association, not proof of causal or perfect volume cancellation",
+    "partial_r_squared_log_matches": 0.0002457827290109904,
+    "players": 3120,
+    "standardized_log_match_coefficient": -0.009236049938480456
+  }
+}

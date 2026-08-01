@@ -1,0 +1,2 @@
+setting,half_life_days,match_micro_log_loss,tournament_macro_log_loss,mean_monthly_top100_retention,median_monthly_rank_movement,plus_institutional_macro_auc_secondary,plus_like_for_like_auc_secondary
+90d,90.0,0.5107373754287305,0.5219772145166258,0.8416666666666667,5.5,0.7703640581954474,0.6217142857142857

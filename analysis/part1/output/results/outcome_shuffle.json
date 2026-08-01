@@ -1,0 +1,15 @@
+{
+  "null_macro_exceedance_p": 0.004975124378109453,
+  "null_macro_mean": 0.5009434952459834,
+  "null_macro_q025": 0.4032764106143223,
+  "null_macro_q975": 0.5908747071645908,
+  "null_procedure": "independent fair-coin result reversal for every pre-vote match",
+  "null_stratified_exceedance_p": 0.009950248756218905,
+  "null_stratified_mean": 0.5058442857142857,
+  "null_stratified_q025": 0.40159999999999996,
+  "null_stratified_q975": 0.5952285714285716,
+  "observed_macro_auc": 0.7767558449089546,
+  "observed_stratified_auc": 0.6151428571428571,
+  "repetitions": 200,
+  "seed": 20260731
+}

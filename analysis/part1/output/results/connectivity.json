@@ -1,0 +1,42 @@
+{
+  "cutoff_date": "2026-01-28",
+  "distinct_lineups": {
+    "median": 3.0,
+    "q1": 1.0,
+    "q3": 8.0
+  },
+  "eligible_players": 5518,
+  "largest_weak_component_n": 5518,
+  "largest_weak_component_pct": 1.0,
+  "meaningful_component_sizes": [
+    5518
+  ],
+  "meaningful_components_ge4": 1,
+  "most_common_lineup_share": {
+    "median": 0.5384615384615384,
+    "q1": 0.2826086956521739,
+    "q3": 1.0
+  },
+  "near_inseparable_teammate_90pct_n": 1746,
+  "near_inseparable_teammate_90pct_pct": 0.3164189923885466,
+  "persistent_lineup_80pct_n": 841,
+  "persistent_lineup_80pct_pct": 0.15241029358463212,
+  "persistent_threshold_denominator": "players with >=1 match; flags require >=5 matches",
+  "plus_candidates_in_graph_n": 459,
+  "plus_candidates_in_largest_n": 459,
+  "plus_candidates_in_largest_pct_all_candidates": 0.9807692307692307,
+  "plus_candidates_total": 468,
+  "top100_in_largest_n": 100,
+  "top100_in_largest_pct": 1.0,
+  "unique_opponents": {
+    "median": 48.0,
+    "q1": 20.0,
+    "q3": 151.0
+  },
+  "unique_teammates": {
+    "median": 6.0,
+    "q1": 3.0,
+    "q3": 14.0
+  },
+  "weak_components": 1
+}

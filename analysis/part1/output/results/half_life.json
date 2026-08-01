@@ -1,0 +1,62 @@
+[
+  {
+    "half_life_days": 90.0,
+    "match_micro_log_loss": 0.5107373754287305,
+    "mean_monthly_top100_retention": 0.8416666666666667,
+    "median_monthly_rank_movement": 5.5,
+    "plus_institutional_macro_auc_secondary": 0.7703640581954474,
+    "plus_like_for_like_auc_secondary": 0.6217142857142857,
+    "setting": "90d",
+    "tournament_macro_log_loss": 0.5219772145166258
+  },
+  {
+    "half_life_days": 120.0,
+    "match_micro_log_loss": 0.5113853152333822,
+    "mean_monthly_top100_retention": 0.8366666666666668,
+    "median_monthly_rank_movement": 6.5,
+    "plus_institutional_macro_auc_secondary": 0.7778162985472261,
+    "plus_like_for_like_auc_secondary": 0.6222857142857143,
+    "setting": "120d",
+    "tournament_macro_log_loss": 0.5221535992576738
+  },
+  {
+    "half_life_days": 180.0,
+    "match_micro_log_loss": 0.5129298101302535,
+    "mean_monthly_top100_retention": 0.83,
+    "median_monthly_rank_movement": 5.75,
+    "plus_institutional_macro_auc_secondary": 0.7767558449089546,
+    "plus_like_for_like_auc_secondary": 0.6151428571428571,
+    "setting": "180d",
+    "tournament_macro_log_loss": 0.5231656352634447
+  },
+  {
+    "half_life_days": 270.0,
+    "match_micro_log_loss": 0.5145828704389135,
+    "mean_monthly_top100_retention": 0.8316666666666667,
+    "median_monthly_rank_movement": 5.0,
+    "plus_institutional_macro_auc_secondary": 0.7766095942913515,
+    "plus_like_for_like_auc_secondary": 0.6157142857142858,
+    "setting": "270d",
+    "tournament_macro_log_loss": 0.5244243150416997
+  },
+  {
+    "half_life_days": 365.0,
+    "match_micro_log_loss": 0.5156788793249883,
+    "mean_monthly_top100_retention": 0.8300000000000001,
+    "median_monthly_rank_movement": 5.0,
+    "plus_institutional_macro_auc_secondary": 0.7756473321035732,
+    "plus_like_for_like_auc_secondary": 0.614,
+    "setting": "365d",
+    "tournament_macro_log_loss": 0.525299634095789
+  },
+  {
+    "half_life_days": NaN,
+    "match_micro_log_loss": 0.5196936019273527,
+    "mean_monthly_top100_retention": 0.8250000000000001,
+    "median_monthly_rank_movement": 5.5,
+    "plus_institutional_macro_auc_secondary": 0.7749285672204548,
+    "plus_like_for_like_auc_secondary": 0.6117142857142858,
+    "setting": "no_decay",
+    "tournament_macro_log_loss": 0.5286056020856532
+  }
+]

@@ -1,0 +1,775 @@
+{
+  "connectivity": {
+    "cutoff_date": "2026-01-28",
+    "distinct_lineups": {
+      "median": 3.0,
+      "q1": 1.0,
+      "q3": 8.0
+    },
+    "eligible_players": 5518,
+    "largest_weak_component_n": 5518,
+    "largest_weak_component_pct": 1.0,
+    "meaningful_component_sizes": [
+      5518
+    ],
+    "meaningful_components_ge4": 1,
+    "most_common_lineup_share": {
+      "median": 0.5384615384615384,
+      "q1": 0.2826086956521739,
+      "q3": 1.0
+    },
+    "near_inseparable_teammate_90pct_n": 1746,
+    "near_inseparable_teammate_90pct_pct": 0.3164189923885466,
+    "persistent_lineup_80pct_n": 841,
+    "persistent_lineup_80pct_pct": 0.15241029358463212,
+    "persistent_threshold_denominator": "players with >=1 match; flags require >=5 matches",
+    "plus_candidates_in_graph_n": 459,
+    "plus_candidates_in_largest_n": 459,
+    "plus_candidates_in_largest_pct_all_candidates": 0.9807692307692307,
+    "plus_candidates_total": 468,
+    "top100_in_largest_n": 100,
+    "top100_in_largest_pct": 1.0,
+    "unique_opponents": {
+      "median": 48.0,
+      "q1": 20.0,
+      "q3": 151.0
+    },
+    "unique_teammates": {
+      "median": 6.0,
+      "q1": 3.0,
+      "q3": 14.0
+    },
+    "weak_components": 1
+  },
+  "data_audit": {
+    "appearance_any_matches": 2762,
+    "appearance_both_matches": 2762,
+    "canonical_raw_records": 2251,
+    "date_end": "2026-01-28",
+    "date_start": "2024-05-13",
+    "duplicate_source_audit": {
+      "differing_duplicate_ids": 194,
+      "duplicate_tournament_ids": 365,
+      "extra_record_copies": 435,
+      "identical_duplicate_ids": 171,
+      "json_files": 181,
+      "max_copies_for_one_id": 4,
+      "records_loaded": 2686,
+      "unique_tournament_ids": 2251
+    },
+    "eligible_decided_matches": 28647,
+    "eligible_tournaments": 665,
+    "eligible_unique_players": 5518,
+    "eligible_unique_roster_players": 5622,
+    "lineup_sources": {
+      "appearance_both": 2762,
+      "roster_fallback": 25885
+    },
+    "loser_lineup_size": {
+      "median": 4.0,
+      "q1": 4.0,
+      "q3": 4.0
+    },
+    "roster_fallback_matches": 25885,
+    "timestamp_imputed_matches": 2385,
+    "timestamp_sources": {
+      "last_game_finished_at": 24692,
+      "match_created_at": 1570,
+      "tournament_start_imputed": 2385
+    },
+    "winner_lineup_size": {
+      "median": 4.0,
+      "q1": 4.0,
+      "q3": 4.0
+    }
+  },
+  "half_life": [
+    {
+      "half_life_days": 90.0,
+      "match_micro_log_loss": 0.5107373754287305,
+      "mean_monthly_top100_retention": 0.8416666666666667,
+      "median_monthly_rank_movement": 5.5,
+      "plus_institutional_macro_auc_secondary": 0.7703640581954474,
+      "plus_like_for_like_auc_secondary": 0.6217142857142857,
+      "setting": "90d",
+      "tournament_macro_log_loss": 0.5219772145166258
+    },
+    {
+      "half_life_days": 120.0,
+      "match_micro_log_loss": 0.5113853152333822,
+      "mean_monthly_top100_retention": 0.8366666666666668,
+      "median_monthly_rank_movement": 6.5,
+      "plus_institutional_macro_auc_secondary": 0.7778162985472261,
+      "plus_like_for_like_auc_secondary": 0.6222857142857143,
+      "setting": "120d",
+      "tournament_macro_log_loss": 0.5221535992576738
+    },
+    {
+      "half_life_days": 180.0,
+      "match_micro_log_loss": 0.5129298101302535,
+      "mean_monthly_top100_retention": 0.83,
+      "median_monthly_rank_movement": 5.75,
+      "plus_institutional_macro_auc_secondary": 0.7767558449089546,
+      "plus_like_for_like_auc_secondary": 0.6151428571428571,
+      "setting": "180d",
+      "tournament_macro_log_loss": 0.5231656352634447
+    },
+    {
+      "half_life_days": 270.0,
+      "match_micro_log_loss": 0.5145828704389135,
+      "mean_monthly_top100_retention": 0.8316666666666667,
+      "median_monthly_rank_movement": 5.0,
+      "plus_institutional_macro_auc_secondary": 0.7766095942913515,
+      "plus_like_for_like_auc_secondary": 0.6157142857142858,
+      "setting": "270d",
+      "tournament_macro_log_loss": 0.5244243150416997
+    },
+    {
+      "half_life_days": 365.0,
+      "match_micro_log_loss": 0.5156788793249883,
+      "mean_monthly_top100_retention": 0.8300000000000001,
+      "median_monthly_rank_movement": 5.0,
+      "plus_institutional_macro_auc_secondary": 0.7756473321035732,
+      "plus_like_for_like_auc_secondary": 0.614,
+      "setting": "365d",
+      "tournament_macro_log_loss": 0.525299634095789
+    },
+    {
+      "half_life_days": NaN,
+      "match_micro_log_loss": 0.5196936019273527,
+      "mean_monthly_top100_retention": 0.8250000000000001,
+      "median_monthly_rank_movement": 5.5,
+      "plus_institutional_macro_auc_secondary": 0.7749285672204548,
+      "plus_like_for_like_auc_secondary": 0.6117142857142858,
+      "setting": "no_decay",
+      "tournament_macro_log_loss": 0.5286056020856532
+    }
+  ],
+  "leave_one_tournament_out": {
+    "cutoff_date": "2026-01-28",
+    "eligible_tournaments_removed": 665,
+    "events_changing_rank_eligibility_for_at_least_one_original_top100_player": 18,
+    "largest_observed_shared_player_rank_shift": 63.0,
+    "largest_shared_shift_player_full_matches": 152,
+    "largest_shared_shift_player_id": 21396,
+    "largest_shared_shift_player_low_match_exposure": false,
+    "largest_shared_shift_tournament_id": 3086,
+    "largest_shared_shift_tournament_name": "Baja's Blast #31",
+    "maximum_original_top100_players_made_rank_ineligible": 3,
+    "median_of_median_abs_rank_changes": 0.0,
+    "median_top100_retention": 1.0,
+    "p90_of_all_tournament_p90_rank_changes": 1.0,
+    "rank_eligibility_is_not_rank_movement": "Players absent from the reduced active/ranked population are counted separately, not assigned a fictitious bottom rank; absence can reflect the 90-day activity rule rather than disappearance from the rating graph.",
+    "top100_exposure_q25": 43.38943734140466,
+    "top100_match_count_q25": 104.25,
+    "worst_retention_tournament_id": 2782,
+    "worst_retention_tournament_name": "Crobattle Royale: Mel0's Birthday Edition (28th)",
+    "worst_top100_retention": 0.96
+  },
+  "outcome_shuffle": {
+    "null_macro_exceedance_p": 0.004975124378109453,
+    "null_macro_mean": 0.5009434952459834,
+    "null_macro_q025": 0.4032764106143223,
+    "null_macro_q975": 0.5908747071645908,
+    "null_procedure": "independent fair-coin result reversal for every pre-vote match",
+    "null_stratified_exceedance_p": 0.009950248756218905,
+    "null_stratified_mean": 0.5058442857142857,
+    "null_stratified_q025": 0.40159999999999996,
+    "null_stratified_q975": 0.5952285714285716,
+    "observed_macro_auc": 0.7767558449089546,
+    "observed_stratified_auc": 0.6151428571428571,
+    "repetitions": 200,
+    "seed": 20260731
+  },
+  "plus": {
+    "active_90d_candidates": 310,
+    "automatic_sendouq_admissions": "excluded by source: CSV is derived from PlusVotingResult peer-vote rows",
+    "common_evaluation_candidates": 310,
+    "coverage_of_active_candidates": 1.0,
+    "coverage_of_all_candidates": 0.6623931623931624,
+    "fail": 166,
+    "historical_rule": "pass at >=60% approval (mean +/-1 score >=0.2)",
+    "incumbent": 358,
+    "native_score_coverage_before_neutral_fill": {
+      "90-day win rate": 308,
+      "LOOPR": 310,
+      "Matches in prior 90d": 308,
+      "OpenSkill ordinal": 310,
+      "OpenSkill \u03bc": 310,
+      "Tournaments in prior 90d": 308
+    },
+    "pass": 302,
+    "raw_candidates": 468,
+    "suggested": 110,
+    "unseen_candidate_treatment": {
+      "LOOPR": 0.0,
+      "OpenSkill_mu": 25.0,
+      "OpenSkill_ordinal": 0.0,
+      "matches_or_tournaments_90d": 0.0,
+      "winrate_90d": 0.5
+    },
+    "vote_date": "2025-11-16",
+    "vote_percentage_available": false
+  },
+  "prediction": {
+    "calibration": [
+      {
+        "calibration_bin": 0,
+        "max_probability": 0.3733716471265357,
+        "mean_predicted_probability": 0.2178339002277915,
+        "min_probability": 0.006215755929771416,
+        "n_matches": 880,
+        "observed_win_rate": 0.29545454545454547
+      },
+      {
+        "calibration_bin": 1,
+        "max_probability": 0.5881728475652325,
+        "mean_predicted_probability": 0.4864329246651123,
+        "min_probability": 0.3735796218204577,
+        "n_matches": 879,
+        "observed_win_rate": 0.5267349260523322
+      },
+      {
+        "calibration_bin": 2,
+        "max_probability": 0.7542671343680297,
+        "mean_predicted_probability": 0.6708379115404975,
+        "min_probability": 0.5884047218649773,
+        "n_matches": 879,
+        "observed_win_rate": 0.7053469852104665
+      },
+      {
+        "calibration_bin": 3,
+        "max_probability": 0.8996834948750069,
+        "mean_predicted_probability": 0.8319407402951605,
+        "min_probability": 0.7543125677922136,
+        "n_matches": 879,
+        "observed_win_rate": 0.8418657565415245
+      },
+      {
+        "calibration_bin": 4,
+        "max_probability": 0.999634308704856,
+        "mean_predicted_probability": 0.9494532323341747,
+        "min_probability": 0.8999107460039645,
+        "n_matches": 880,
+        "observed_win_rate": 0.9352272727272727
+      }
+    ],
+    "familiarity": [
+      {
+        "accuracy": 0.7187886279357231,
+        "brier": 0.1833972816605935,
+        "familiarity_group": "familiar",
+        "log_loss": 0.545715577677358,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "90-day win rate",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.6827586206896552,
+        "brier": 0.201262438184631,
+        "familiarity_group": "mixed",
+        "log_loss": 0.5893047209926833,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "90-day win rate",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.5700636942675159,
+        "brier": 0.22907470432217447,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.6526577285001817,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "90-day win rate",
+        "tournaments": 73
+      },
+      {
+        "accuracy": 0.7787391841779975,
+        "brier": 0.1487481094360002,
+        "familiarity_group": "familiar",
+        "log_loss": 0.4545611010996515,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "Bradley\u2013Terry (L2)",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.7411764705882353,
+        "brier": 0.16723763272850053,
+        "familiarity_group": "mixed",
+        "log_loss": 0.5016749148711254,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "Bradley\u2013Terry (L2)",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.6624203821656051,
+        "brier": 0.19941830721943218,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.5706113977401935,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "Bradley\u2013Terry (L2)",
+        "tournaments": 73
+      },
+      {
+        "accuracy": 0.5,
+        "brier": 0.25,
+        "familiarity_group": "familiar",
+        "log_loss": 0.6931471805599453,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "Chance (0.5)",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.5,
+        "brier": 0.25,
+        "familiarity_group": "mixed",
+        "log_loss": 0.6931471805599453,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "Chance (0.5)",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.5,
+        "brier": 0.25,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.6931471805599453,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "Chance (0.5)",
+        "tournaments": 73
+      },
+      {
+        "accuracy": 0.7873918417799752,
+        "brier": 0.14772862900970804,
+        "familiarity_group": "familiar",
+        "log_loss": 0.4524939051560932,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "LOOPR",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.7359026369168357,
+        "brier": 0.17692457848589319,
+        "familiarity_group": "mixed",
+        "log_loss": 0.5302637479650137,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "LOOPR",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.6337579617834395,
+        "brier": 0.23687764753185872,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.6882710123127159,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "LOOPR",
+        "tournaments": 73
+      },
+      {
+        "accuracy": 0.7669962917181706,
+        "brier": 0.154901529045041,
+        "familiarity_group": "familiar",
+        "log_loss": 0.4724078524793558,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "OpenSkill ordinal",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.7525354969574036,
+        "brier": 0.1639112533566478,
+        "familiarity_group": "mixed",
+        "log_loss": 0.4943015940048291,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "OpenSkill ordinal",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.7133757961783439,
+        "brier": 0.16474820778990187,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.49107212401757705,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "OpenSkill ordinal",
+        "tournaments": 73
+      },
+      {
+        "accuracy": 0.7812113720642769,
+        "brier": 0.14824738636739757,
+        "familiarity_group": "familiar",
+        "log_loss": 0.4533840457804691,
+        "matches": 1618,
+        "median_familiarity": 0.8333333333333333,
+        "method": "OpenSkill \u03bc",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.7452332657200811,
+        "brier": 0.1669070275262854,
+        "familiarity_group": "mixed",
+        "log_loss": 0.5015782694566446,
+        "matches": 2465,
+        "median_familiarity": 0.5,
+        "method": "OpenSkill \u03bc",
+        "tournaments": 109
+      },
+      {
+        "accuracy": 0.6751592356687898,
+        "brier": 0.2042326319660093,
+        "familiarity_group": "mostly novel",
+        "log_loss": 0.5880454310795017,
+        "matches": 314,
+        "median_familiarity": 0.08333333333333333,
+        "method": "OpenSkill \u03bc",
+        "tournaments": 73
+      }
+    ],
+    "methods": [
+      {
+        "accuracy": 0.7475551512394815,
+        "brier_score": 0.17046249466236935,
+        "match_micro_log_loss": 0.5129298101302047,
+        "matches": 4397,
+        "median_per_tournament_difference": 0.0,
+        "method": "LOOPR",
+        "paired_difference_ci_high": 0.0,
+        "paired_difference_ci_low": 0.0,
+        "paired_log_loss_difference_vs_loopr": 0.0,
+        "tournament_macro_log_loss": 0.5231656352634224,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 0
+      },
+      {
+        "accuracy": 0.7493745735728906,
+        "brier_score": 0.16273198867639388,
+        "match_micro_log_loss": 0.4892609746706802,
+        "matches": 4397,
+        "median_per_tournament_difference": -0.01096950745946279,
+        "method": "Bradley\u2013Terry (L2)",
+        "paired_difference_ci_high": -0.010370413218680824,
+        "paired_difference_ci_low": -0.03763817309566252,
+        "paired_log_loss_difference_vs_loopr": -0.023668835459524473,
+        "tournament_macro_log_loss": 0.5021999224271184,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 71
+      },
+      {
+        "accuracy": 0.7534682738230611,
+        "brier_score": 0.16270619523130994,
+        "match_micro_log_loss": 0.4900186685563774,
+        "matches": 4397,
+        "median_per_tournament_difference": -0.01997054487967151,
+        "method": "OpenSkill \u03bc",
+        "paired_difference_ci_high": -0.010452041513365058,
+        "paired_difference_ci_low": -0.03497136162034779,
+        "paired_log_loss_difference_vs_loopr": -0.022911141573827298,
+        "tournament_macro_log_loss": 0.503028914622191,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 70
+      },
+      {
+        "accuracy": 0.7550602683647942,
+        "brier_score": 0.16065564038322547,
+        "match_micro_log_loss": 0.486014551165572,
+        "matches": 4397,
+        "median_per_tournament_difference": -0.008588748984591305,
+        "method": "OpenSkill ordinal",
+        "paired_difference_ci_high": -0.008136581327010069,
+        "paired_difference_ci_low": -0.04603559630573026,
+        "paired_log_loss_difference_vs_loopr": -0.026915258964632642,
+        "tournament_macro_log_loss": 0.5075360292526279,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 62
+      },
+      {
+        "accuracy": 0.687969069820332,
+        "brier_score": 0.196674589267482,
+        "match_micro_log_loss": 0.5777890535997241,
+        "matches": 4397,
+        "median_per_tournament_difference": 0.05245548575157727,
+        "method": "90-day win rate",
+        "paired_difference_ci_high": 0.08217672303348265,
+        "paired_difference_ci_low": 0.04715205183571011,
+        "paired_log_loss_difference_vs_loopr": 0.06485924346951931,
+        "tournament_macro_log_loss": 0.5861830613714226,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 23
+      },
+      {
+        "accuracy": 0.5,
+        "brier_score": 0.25,
+        "match_micro_log_loss": 0.6931471805599453,
+        "matches": 4397,
+        "median_per_tournament_difference": 0.19113364275389605,
+        "method": "Chance (0.5)",
+        "paired_difference_ci_high": 0.205791650516913,
+        "paired_difference_ci_low": 0.15047136358408356,
+        "paired_log_loss_difference_vs_loopr": 0.18021737042974056,
+        "tournament_macro_log_loss": 0.6931471805599454,
+        "tournaments": 110,
+        "tournaments_outperforming_loopr": 7
+      }
+    ],
+    "report_end": "2026-01-28",
+    "report_start": "2025-08-17"
+  },
+  "property_tests": {
+    "smoothing": [
+      {
+        "disappeared": 0,
+        "exposure_band": "high",
+        "median_absolute_rank_change": 29.0,
+        "median_absolute_score_change": 0.03569184050805571,
+        "p90_absolute_rank_change": 192.5,
+        "p90_absolute_score_change": 0.05366222296008705,
+        "players": 6,
+        "smoothing": false
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "high",
+        "median_absolute_rank_change": 30.5,
+        "median_absolute_score_change": 0.0353763128647655,
+        "p90_absolute_rank_change": 193.5,
+        "p90_absolute_score_change": 0.05304694459624387,
+        "players": 6,
+        "smoothing": true
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "low",
+        "median_absolute_rank_change": 54.5,
+        "median_absolute_score_change": 0.03211804280088346,
+        "p90_absolute_rank_change": 138.0,
+        "p90_absolute_score_change": 0.11711932045485593,
+        "players": 6,
+        "smoothing": false
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "low",
+        "median_absolute_rank_change": 53.5,
+        "median_absolute_score_change": 0.031899874152782864,
+        "p90_absolute_rank_change": 143.0,
+        "p90_absolute_score_change": 0.11622011669521562,
+        "players": 6,
+        "smoothing": true
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "medium-high",
+        "median_absolute_rank_change": 148.5,
+        "median_absolute_score_change": 0.0952048930827459,
+        "p90_absolute_rank_change": 630.0,
+        "p90_absolute_score_change": 1.2953316616811694,
+        "players": 6,
+        "smoothing": false
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "medium-high",
+        "median_absolute_rank_change": 149.0,
+        "median_absolute_score_change": 0.0942122952393323,
+        "p90_absolute_rank_change": 635.0,
+        "p90_absolute_score_change": 1.2908773282879094,
+        "players": 6,
+        "smoothing": true
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "medium-low",
+        "median_absolute_rank_change": 29.5,
+        "median_absolute_score_change": 0.03050549892670398,
+        "p90_absolute_rank_change": 104.5,
+        "p90_absolute_score_change": 0.07731911027386296,
+        "players": 6,
+        "smoothing": false
+      },
+      {
+        "disappeared": 0,
+        "exposure_band": "medium-low",
+        "median_absolute_rank_change": 29.5,
+        "median_absolute_score_change": 0.030264722635460043,
+        "p90_absolute_rank_change": 101.5,
+        "p90_absolute_score_change": 0.07639806130348903,
+        "players": 6,
+        "smoothing": true
+      }
+    ],
+    "strength_of_schedule": {
+      "matched_pairs": 2793,
+      "matching_rule": "|win-rate difference| <= .03, |log-match difference| <= .25, opponent-score gap >= .25",
+      "median_score_advantage": 0.3037413663942601,
+      "share_rewarded_in_intended_direction": 0.7278911564625851
+    },
+    "tournament_weighting": {
+      "events_per_strength_group": 8,
+      "limitation": "observed event-removal sensitivity; event categories are defined by the model's fitted influence and are not randomized",
+      "median_contribution_per_match": {
+        "unweighted": {
+          "strong": -0.0001711434423057752,
+          "weak": -0.0017530717227138646
+        },
+        "weighted": {
+          "strong": -0.0003086826485356189,
+          "weak": -0.003558066731961868
+        }
+      },
+      "strong_influence_range": [
+        1.992266936875464,
+        2.220535699124516
+      ],
+      "strong_minus_weak_gap": {
+        "unweighted": 0.0015819282804080893,
+        "weighted": 0.0032493840834262495
+      },
+      "weak_influence_range": [
+        0.06415003906429642,
+        0.09500264950600823
+      ]
+    },
+    "volume_resistance": {
+      "controls": "win rate (linear and squared), mean opponent LOOPR (linear and squared)",
+      "interpretation_limit": "observational residual association, not proof of causal or perfect volume cancellation",
+      "partial_r_squared_log_matches": 0.0002457827290109904,
+      "players": 3120,
+      "standardized_log_match_coefficient": -0.009236049938480456
+    }
+  },
+  "stability": {
+    "mean_retention": 0.8384615384615384,
+    "mean_spearman_retained": 0.9646884358380584,
+    "median_transition_movement": 4.0,
+    "transitions": [
+      {
+        "median_absolute_rank_movement": 5.0,
+        "month_a": "2024-12-31",
+        "month_b": "2025-01-31",
+        "p90_absolute_rank_movement": 12.799999999999997,
+        "spearman_on_retained": 0.9878888375802862,
+        "top100_retained": 83,
+        "top100_retention": 0.83
+      },
+      {
+        "median_absolute_rank_movement": 4.0,
+        "month_a": "2025-01-31",
+        "month_b": "2025-02-28",
+        "p90_absolute_rank_movement": 10.0,
+        "spearman_on_retained": 0.9578527894983592,
+        "top100_retained": 80,
+        "top100_retention": 0.8
+      },
+      {
+        "median_absolute_rank_movement": 10.0,
+        "month_a": "2025-02-28",
+        "month_b": "2025-03-31",
+        "p90_absolute_rank_movement": 23.0,
+        "spearman_on_retained": 0.883362952836637,
+        "top100_retained": 76,
+        "top100_retention": 0.76
+      },
+      {
+        "median_absolute_rank_movement": 4.0,
+        "month_a": "2025-03-31",
+        "month_b": "2025-04-30",
+        "p90_absolute_rank_movement": 14.600000000000009,
+        "spearman_on_retained": 0.9504006253664258,
+        "top100_retained": 85,
+        "top100_retention": 0.85
+      },
+      {
+        "median_absolute_rank_movement": 4.0,
+        "month_a": "2025-04-30",
+        "month_b": "2025-05-31",
+        "p90_absolute_rank_movement": 16.0,
+        "spearman_on_retained": 0.936519185987648,
+        "top100_retained": 84,
+        "top100_retention": 0.84
+      },
+      {
+        "median_absolute_rank_movement": 2.0,
+        "month_a": "2025-05-31",
+        "month_b": "2025-06-30",
+        "p90_absolute_rank_movement": 10.5,
+        "spearman_on_retained": 0.9727889310906132,
+        "top100_retained": 96,
+        "top100_retention": 0.96
+      },
+      {
+        "median_absolute_rank_movement": 3.0,
+        "month_a": "2025-06-30",
+        "month_b": "2025-07-31",
+        "p90_absolute_rank_movement": 12.0,
+        "spearman_on_retained": 0.9539818956711635,
+        "top100_retained": 88,
+        "top100_retention": 0.88
+      },
+      {
+        "median_absolute_rank_movement": 3.0,
+        "month_a": "2025-07-31",
+        "month_b": "2025-08-31",
+        "p90_absolute_rank_movement": 10.299999999999997,
+        "spearman_on_retained": 0.9865450318762988,
+        "top100_retained": 88,
+        "top100_retention": 0.88
+      },
+      {
+        "median_absolute_rank_movement": 2.0,
+        "month_a": "2025-08-31",
+        "month_b": "2025-09-30",
+        "p90_absolute_rank_movement": 2.0,
+        "spearman_on_retained": 0.9999999999999999,
+        "top100_retained": 98,
+        "top100_retention": 0.98
+      },
+      {
+        "median_absolute_rank_movement": 9.0,
+        "month_a": "2025-09-30",
+        "month_b": "2025-10-31",
+        "p90_absolute_rank_movement": 18.0,
+        "spearman_on_retained": 0.9917719659124302,
+        "top100_retained": 82,
+        "top100_retention": 0.82
+      },
+      {
+        "median_absolute_rank_movement": 11.0,
+        "month_a": "2025-10-31",
+        "month_b": "2025-11-30",
+        "p90_absolute_rank_movement": 25.200000000000003,
+        "spearman_on_retained": 0.9793275909974994,
+        "top100_retained": 60,
+        "top100_retention": 0.6
+      },
+      {
+        "median_absolute_rank_movement": 3.0,
+        "month_a": "2025-11-30",
+        "month_b": "2025-12-31",
+        "p90_absolute_rank_movement": 10.0,
+        "spearman_on_retained": 0.9880749091938298,
+        "top100_retained": 86,
+        "top100_retention": 0.86
+      },
+      {
+        "median_absolute_rank_movement": 8.5,
+        "month_a": "2025-12-31",
+        "month_b": "2026-01-28",
+        "p90_absolute_rank_movement": 17.700000000000003,
+        "spearman_on_retained": 0.9524349498835678,
+        "top100_retained": 84,
+        "top100_retention": 0.84
+      }
+    ]
+  }
+}
