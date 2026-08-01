@@ -24,6 +24,10 @@ python -m analysis.part1.run shuffle --source-root /path/to/sendouq_analysis --s
 python -m analysis.part1.run stability --source-root /path/to/sendouq_analysis
 python -m analysis.part1.run loto --source-root /path/to/sendouq_analysis
 python -m analysis.part1.run properties --source-root /path/to/sendouq_analysis
+python -m analysis.part1.run publication \
+  --source-root /path/to/sendouq_analysis \
+  --intended-output-dir analysis/part1/intended_use/output \
+  --rank-bootstrap-repetitions 200
 ```
 
 The half-life rows can be run independently (and safely in parallel):
@@ -58,8 +62,9 @@ The `collect` stage does not read raw data; `--source-root` remains required by 
 - `stability`: adjacent monthly top-100 membership, ordering, and movement.
 - `loto`: full leave-one-tournament-out sensitivity analysis.
 - `properties`: schedule, residual volume, smoothing perturbation, and event-weighting checks.
+- `publication`: publication-only intervals, N1–N6 tables, and cached rank bootstrap.
 - `run_half_life_one`: one predeclared decay setting under the unified event sequence.
-- `report`: consistency assertions and all reader-facing deliverables.
+- `report`: consistency assertions and all reader-facing deliverables, including dark/light figures.
 
 ## Primary artifacts
 

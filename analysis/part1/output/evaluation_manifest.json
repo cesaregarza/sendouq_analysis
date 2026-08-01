@@ -213,6 +213,175 @@
     "update": "ratings recomputed before every held-out tournament and frozen within that tournament"
   },
   "protocol_status": "revised analysis; historical reproduction is reported separately",
+  "publication_figures": {
+    "N1_rank_bootstrap": {
+      "active_universe": 1919,
+      "cache": "cache/rank_bootstrap_draws.parquet",
+      "displayed_players": 50,
+      "interval": "2.5th to 97.5th percentile of bootstrap rank",
+      "missing_in_resample_score": 0.0,
+      "ranking_cutoff": "2026-01-28",
+      "repetitions": 200,
+      "resampling_procedure": "sample all eligible tournaments with replacement; preserve every sampled event's teams, timestamps, lineups, and outcome directions; recompute the complete production LOOPR pipeline",
+      "resampling_unit": "tournament",
+      "sample_count_cache": "cache/rank_bootstrap_tournament_counts.parquet",
+      "seed": 20260731
+    },
+    "N2_incumbent_autopsy": {
+      "candidates": 310,
+      "display_used": "pre-registered fallback: binary threshold outcome versus LOOPR score, faceted by candidate status and sized by outcome-independent exposure tertile",
+      "exposure_cut_points": {
+        "low_max_prior_matches": 141,
+        "middle_max_prior_matches": 278
+      },
+      "exposure_definition": "tertiles of pre-vote prior match appearances, computed without outcomes or LOOPR scores",
+      "never_stood_for_vote_label_available": false,
+      "preregistered_before_computation_commit": "544984b",
+      "vote_field_audit": {
+        "candidate_level_vote_fields_found": [],
+        "conclusion": "No candidate-level vote percentage or vote-count field exists in the repository's historical Plus exports. Pass/fail is the only preserved vote measure.",
+        "files_checked": [
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results.csv"
+          },
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results_2025_11_16.csv"
+          },
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results_2026_02_15.csv"
+          },
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results_2026_05_15.csv"
+          },
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results_2026_06_01.csv"
+          },
+          {
+            "columns": [
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested"
+            ],
+            "file": "sendou_plus_voting_results_2026_06_18.csv"
+          },
+          {
+            "columns": [
+              "snapshot_date",
+              "snapshot_label",
+              "id",
+              "username",
+              "custom_url",
+              "pass_or_fail",
+              "tier",
+              "suggested",
+              "last_active"
+            ],
+            "file": "sendou_plus_voting_results_aug_nov_feb_consolidated.csv"
+          }
+        ],
+        "vote_percentage_available": false
+      },
+      "voted_out_definition": "incumbent (suggested=False) with fail outcome"
+    },
+    "N3_exposure_auc": {
+      "bands": "tertiles of pre-vote prior match appearances; outcomes and scores not used to define cut points",
+      "estimand": "unweighted macro average of valid within-tier passer-versus-failer AUCs",
+      "repetitions": 2000,
+      "uncertainty": "candidate bootstrap stratified by tier x status x outcome"
+    },
+    "N4_core0": {
+      "repetitions": 5000,
+      "stratum": "held-out matches whose minimum participant pre-event opponent-graph core number is exactly zero",
+      "uncertainty": "tournament-cluster bootstrap"
+    },
+    "N5_event_deletion": {
+      "active_universe": "held fixed at full-data definition",
+      "events": 25,
+      "interpretation": "deterministic sensitivity analysis, not a confidence interval",
+      "selection": "most active 8-core player-match appearances; outcome direction and scores not used"
+    },
+    "N6_ablation_walk": {
+      "displayed_stages": [
+        "Winrate 90d",
+        "+ forward PageRank",
+        "+ log-ratio",
+        "+ time decay",
+        "+ teleport + smoothing",
+        "+ tick-tock"
+      ],
+      "protocol_note": "Historical ablation protocol retained exactly; it is not the unified walk-forward protocol and is displayed as a component walk, not a new model comparison.",
+      "source": "docs/loopr_ablation_table.csv",
+      "source_sha256": "baba5d2adedf35a356055ff1867cb207419f73cd1307e1a4b9aaebd6ca657051"
+    },
+    "calibration_intervals": "95% Wilson score intervals",
+    "color_accessibility_check": "Machado severity-100 deuteranopia transform over adjacent palette entries; all systems retain redundant marker or dashed-line encodings",
+    "entity_colors": {
+      "90-day win rate": "#9aa3b2",
+      "Bradley-Terry (L2)": "#e0a03d",
+      "Chance (0.5)": "#6b7280",
+      "LOOPR": "#ec5fa8",
+      "OpenSkill mu": "#8fc4ec",
+      "OpenSkill ordinal": "#4d9de0"
+    },
+    "familiarity_intervals": {
+      "repetitions": 5000,
+      "unit": "tournament cluster"
+    },
+    "png_width_pixels": 1520,
+    "prediction_individual_intervals": {
+      "repetitions": 5000,
+      "unit": "tournament cluster"
+    },
+    "random_seed": 20260731,
+    "surfaces": [
+      "dark",
+      "light"
+    ],
+    "validation_artifact": "results/figure_validation.json"
+  },
   "random_seed": 20260731,
   "versions": {
     "git_commit": "224beafcbc73ccafcbce84c2a93194a4c433f320",

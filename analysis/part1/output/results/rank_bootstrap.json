@@ -1,0 +1,13 @@
+{
+  "active_universe": 1919,
+  "cache": "cache/rank_bootstrap_draws.parquet",
+  "displayed_players": 50,
+  "interval": "2.5th to 97.5th percentile of bootstrap rank",
+  "missing_in_resample_score": 0.0,
+  "ranking_cutoff": "2026-01-28",
+  "repetitions": 200,
+  "resampling_procedure": "sample all eligible tournaments with replacement; preserve every sampled event's teams, timestamps, lineups, and outcome directions; recompute the complete production LOOPR pipeline",
+  "resampling_unit": "tournament",
+  "sample_count_cache": "cache/rank_bootstrap_tournament_counts.parquet",
+  "seed": 20260731
+}

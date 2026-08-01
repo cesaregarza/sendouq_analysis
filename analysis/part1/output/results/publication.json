@@ -1,0 +1,174 @@
+{
+  "N2_vote_percentage_available": false,
+  "N3_exposure_bands": [
+    {
+      "bootstrap_repetitions": 2000,
+      "bootstrap_strata": "tier x candidate status x outcome",
+      "candidates": 107,
+      "ci_high": 0.8658464105339104,
+      "ci_low": 0.6614815566378067,
+      "exposure_band": "Low exposure",
+      "fail": 33,
+      "institutional_macro_auc": 0.7662518037518037,
+      "maximum_prior_matches": 141,
+      "minimum_prior_matches": 17,
+      "pass": 74
+    },
+    {
+      "bootstrap_repetitions": 2000,
+      "bootstrap_strata": "tier x candidate status x outcome",
+      "candidates": 100,
+      "ci_high": 0.9052743258609486,
+      "ci_low": 0.731570622157245,
+      "exposure_band": "Middle exposure",
+      "fail": 41,
+      "institutional_macro_auc": 0.8245857699805068,
+      "maximum_prior_matches": 278,
+      "minimum_prior_matches": 142,
+      "pass": 59
+    },
+    {
+      "bootstrap_repetitions": 2000,
+      "bootstrap_strata": "tier x candidate status x outcome",
+      "candidates": 103,
+      "ci_high": 0.8210195849901731,
+      "ci_low": 0.5873617722147134,
+      "exposure_band": "High exposure",
+      "fail": 38,
+      "institutional_macro_auc": 0.7103726339020456,
+      "maximum_prior_matches": 803,
+      "minimum_prior_matches": 280,
+      "pass": 65
+    }
+  ],
+  "N4_core0": [
+    {
+      "ci_cluster": "tournament",
+      "ci_high": 0.7688889535410727,
+      "ci_low": 0.5885633223068373,
+      "ci_repetitions": 5000,
+      "diagnostic_interpretation": "OpenSkill ordinal and mu use the same match history; ordinal differs by subtracting 3 sigma. Its core-0 advantage therefore reflects the conservative uncertainty penalty, not additional match information.",
+      "match_micro_log_loss": 0.6805885481515065,
+      "matches": 787,
+      "method": "LOOPR",
+      "ordinal_minus_mu_ci_high": -0.049537921487543456,
+      "ordinal_minus_mu_ci_low": -0.12608014888740293,
+      "ordinal_minus_mu_log_loss": -0.08981163537284294,
+      "tournaments": 85
+    },
+    {
+      "ci_cluster": "tournament",
+      "ci_high": 0.6263853708883057,
+      "ci_low": 0.5095957525122793,
+      "ci_repetitions": 5000,
+      "diagnostic_interpretation": "OpenSkill ordinal and mu use the same match history; ordinal differs by subtracting 3 sigma. Its core-0 advantage therefore reflects the conservative uncertainty penalty, not additional match information.",
+      "match_micro_log_loss": 0.569703072099063,
+      "matches": 787,
+      "method": "OpenSkill \u03bc",
+      "ordinal_minus_mu_ci_high": -0.049537921487543456,
+      "ordinal_minus_mu_ci_low": -0.12608014888740293,
+      "ordinal_minus_mu_log_loss": -0.08981163537284294,
+      "tournaments": 85
+    },
+    {
+      "ci_cluster": "tournament",
+      "ci_high": 0.5398435305268282,
+      "ci_low": 0.4179573350183169,
+      "ci_repetitions": 5000,
+      "diagnostic_interpretation": "OpenSkill ordinal and mu use the same match history; ordinal differs by subtracting 3 sigma. Its core-0 advantage therefore reflects the conservative uncertainty penalty, not additional match information.",
+      "match_micro_log_loss": 0.47989143672622003,
+      "matches": 787,
+      "method": "OpenSkill ordinal",
+      "ordinal_minus_mu_ci_high": -0.049537921487543456,
+      "ordinal_minus_mu_ci_low": -0.12608014888740293,
+      "ordinal_minus_mu_log_loss": -0.08981163537284294,
+      "tournaments": 85
+    }
+  ],
+  "N5_event_deletion": [
+    {
+      "events_removed": 25,
+      "maximum_observed_top100_rank_shift": 14.0,
+      "median_of_event_largest_top100_rank_shift": 3.0,
+      "median_of_event_median_top100_rank_shift": 0.0,
+      "median_top100_retention": 1.0,
+      "method": "LOOPR",
+      "selection": "25 events with most active 8-core player-match appearances",
+      "worst_top100_retention": 0.99
+    },
+    {
+      "events_removed": 25,
+      "maximum_observed_top100_rank_shift": 47.0,
+      "median_of_event_largest_top100_rank_shift": 14.0,
+      "median_of_event_median_top100_rank_shift": 1.0,
+      "median_top100_retention": 0.98,
+      "method": "OpenSkill \u03bc",
+      "selection": "25 events with most active 8-core player-match appearances",
+      "worst_top100_retention": 0.97
+    },
+    {
+      "events_removed": 25,
+      "maximum_observed_top100_rank_shift": 33.0,
+      "median_of_event_largest_top100_rank_shift": 10.0,
+      "median_of_event_median_top100_rank_shift": 1.0,
+      "median_top100_retention": 0.99,
+      "method": "OpenSkill ordinal",
+      "selection": "25 events with most active 8-core player-match appearances",
+      "worst_top100_retention": 0.97
+    },
+    {
+      "events_removed": 25,
+      "maximum_observed_top100_rank_shift": 34.0,
+      "median_of_event_largest_top100_rank_shift": 10.0,
+      "median_of_event_median_top100_rank_shift": 0.0,
+      "median_top100_retention": 0.99,
+      "method": "Bradley\u2013Terry (L2)",
+      "selection": "25 events with most active 8-core player-match appearances",
+      "worst_top100_retention": 0.98
+    },
+    {
+      "events_removed": 25,
+      "maximum_observed_top100_rank_shift": 676.0,
+      "median_of_event_largest_top100_rank_shift": 0.0,
+      "median_of_event_median_top100_rank_shift": 0.0,
+      "median_top100_retention": 1.0,
+      "method": "90-day win rate",
+      "selection": "25 events with most active 8-core player-match appearances",
+      "worst_top100_retention": 0.95
+    }
+  ],
+  "N6_ablation_stages": [
+    "Winrate 90d",
+    "+ forward PageRank",
+    "+ log-ratio",
+    "+ time decay",
+    "+ teleport + smoothing",
+    "+ tick-tock"
+  ],
+  "calibration_bins": 5,
+  "familiarity_rows": 18,
+  "prediction_methods": 6,
+  "rank_bootstrap": {
+    "active_universe": 1919,
+    "cache": "cache/rank_bootstrap_draws.parquet",
+    "displayed_players": 50,
+    "interval": "2.5th to 97.5th percentile of bootstrap rank",
+    "missing_in_resample_score": 0.0,
+    "ranking_cutoff": "2026-01-28",
+    "repetitions": 200,
+    "resampling_procedure": "sample all eligible tournaments with replacement; preserve every sampled event's teams, timestamps, lineups, and outcome directions; recompute the complete production LOOPR pipeline",
+    "resampling_unit": "tournament",
+    "sample_count_cache": "cache/rank_bootstrap_tournament_counts.parquet",
+    "seed": 20260731
+  },
+  "rank_interval_rows": 50,
+  "seed": 20260731,
+  "stability_dip": {
+    "departures_no_longer_active_under_90_day_rule": 39,
+    "departures_still_active_but_displaced": 1,
+    "interpretation": "The 60% retention dip is an activity-eligibility cliff: 39 of 40 departures aged beyond the 90-day roster-activity window, while only one still-active member of the prior top 100 was displaced.",
+    "retained": 60,
+    "top100_departures": 40,
+    "transition": "2025-10-31 to 2025-11-30"
+  }
+}

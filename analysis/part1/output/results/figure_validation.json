@@ -1,0 +1,315 @@
+{
+  "deterministic_export_configuration": {
+    "analysis_seed": 20260731,
+    "svg_hashsalt": "part1-20260731",
+    "svg_metadata_date": "2026-07-31",
+    "verification": "All 52 dark/light PNG/SVG exports were byte-identical across two consecutive complete report rerenders."
+  },
+  "deuteranopia_check": {
+    "adjacent_pairs": [
+      {
+        "deuteranopia_linear_rgb_distance": 0.2409313036768165,
+        "distance_pass": true,
+        "first": "LOOPR",
+        "redundant_encoding": "distinct marker shapes",
+        "second": "OpenSkill ordinal"
+      },
+      {
+        "deuteranopia_linear_rgb_distance": 0.283881046917583,
+        "distance_pass": true,
+        "first": "OpenSkill ordinal",
+        "redundant_encoding": "distinct marker shapes",
+        "second": "OpenSkill \u03bc"
+      },
+      {
+        "deuteranopia_linear_rgb_distance": 0.6926329982368131,
+        "distance_pass": true,
+        "first": "OpenSkill \u03bc",
+        "redundant_encoding": "distinct marker shapes",
+        "second": "Bradley\u2013Terry (L2)"
+      },
+      {
+        "deuteranopia_linear_rgb_distance": 0.4912662906957096,
+        "distance_pass": true,
+        "first": "Bradley\u2013Terry (L2)",
+        "redundant_encoding": "distinct marker shapes",
+        "second": "90-day win rate"
+      },
+      {
+        "deuteranopia_linear_rgb_distance": 0.3317808294200303,
+        "distance_pass": true,
+        "first": "90-day win rate",
+        "redundant_encoding": "marker versus dashed reference line",
+        "second": "Chance (0.5)"
+      }
+    ],
+    "minimum_adjacent_distance": 0.2409313036768165,
+    "simulation": "Machado severity-100 transform",
+    "threshold": 0.2
+  },
+  "figures": 13,
+  "fixed_entity_colors": {
+    "90-day win rate": "#9aa3b2",
+    "Bradley\u2013Terry (L2)": "#e0a03d",
+    "Chance (0.5)": "#6b7280",
+    "LOOPR": "#ec5fa8",
+    "OpenSkill ordinal": "#4d9de0",
+    "OpenSkill \u03bc": "#8fc4ec"
+  },
+  "manual_review": "Both 13-figure surface contact sheets and dense individual panels were inspected at final resolution; redundant marker/line encodings preserve identity where light-surface color contrast is modest.",
+  "mark_to_surface_contrast_ratios": {
+    "dark": {
+      "90-day win rate": 7.442960488122182,
+      "Bradley\u2013Terry (L2)": 8.352994986633933,
+      "Chance (0.5)": 3.9161351005360165,
+      "LOOPR": 6.102479792446964,
+      "OpenSkill ordinal": 6.5044085289446745,
+      "OpenSkill \u03bc": 10.165070662059899
+    },
+    "light": {
+      "90-day win rate": 2.5436808822608303,
+      "Bradley\u2013Terry (L2)": 2.2665542516611166,
+      "Chance (0.5)": 4.834490081424352,
+      "LOOPR": 3.102429986657538,
+      "OpenSkill ordinal": 2.9107206622722526,
+      "OpenSkill \u03bc": 1.8625071020630322
+    }
+  },
+  "status": "pass",
+  "surface_exports": [
+    {
+      "background_pass": true,
+      "figure": "01_future_prediction",
+      "png_height": 836,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "02_loopr_calibration",
+      "png_height": 957,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "03_plus_and_shuffle",
+      "png_height": 1094,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "04_monthly_stability",
+      "png_height": 1368,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "05_leave_one_tournament_out",
+      "png_height": 881,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "A1_half_life_tradeoff",
+      "png_height": 866,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "A2_unfamiliar_lineups",
+      "png_height": 912,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N1_rank_bootstrap_intervals",
+      "png_height": 2280,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N2_incumbent_autopsy",
+      "png_height": 957,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N3_auc_by_exposure_band",
+      "png_height": 820,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N4_core0_diagnostic",
+      "png_height": 790,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N5_cross_system_event_deletion",
+      "png_height": 927,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N6_ablation_walk",
+      "png_height": 1079,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "dark",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "01_future_prediction",
+      "png_height": 836,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "02_loopr_calibration",
+      "png_height": 957,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "03_plus_and_shuffle",
+      "png_height": 1094,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "04_monthly_stability",
+      "png_height": 1368,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "05_leave_one_tournament_out",
+      "png_height": 881,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "A1_half_life_tradeoff",
+      "png_height": 866,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "A2_unfamiliar_lineups",
+      "png_height": 912,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N1_rank_bootstrap_intervals",
+      "png_height": 2280,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N2_incumbent_autopsy",
+      "png_height": 957,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N3_auc_by_exposure_band",
+      "png_height": 820,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N4_core0_diagnostic",
+      "png_height": 790,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N5_cross_system_event_deletion",
+      "png_height": 927,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    },
+    {
+      "background_pass": true,
+      "figure": "N6_ablation_walk",
+      "png_height": 1079,
+      "png_width": 1520,
+      "png_width_pass": true,
+      "surface": "light",
+      "svg_parse_pass": true
+    }
+  ]
+}

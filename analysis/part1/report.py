@@ -21,6 +21,8 @@ import nbformat as nbf
 import numpy as np
 import pandas as pd
 
+from .publication_figures import render_publication_figures
+
 
 SEED = 20_260_731
 BLUE = "#2563EB"
@@ -1402,6 +1404,10 @@ python -m analysis.part1.run shuffle --source-root /path/to/sendouq_analysis --s
 python -m analysis.part1.run stability --source-root /path/to/sendouq_analysis
 python -m analysis.part1.run loto --source-root /path/to/sendouq_analysis
 python -m analysis.part1.run properties --source-root /path/to/sendouq_analysis
+python -m analysis.part1.run publication \\
+  --source-root /path/to/sendouq_analysis \\
+  --intended-output-dir analysis/part1/intended_use/output \\
+  --rank-bootstrap-repetitions 200
 ```
 
 The half-life rows can be run independently (and safely in parallel):
@@ -1436,8 +1442,9 @@ The `collect` stage does not read raw data; `--source-root` remains required by 
 - `stability`: adjacent monthly top-100 membership, ordering, and movement.
 - `loto`: full leave-one-tournament-out sensitivity analysis.
 - `properties`: schedule, residual volume, smoothing perturbation, and event-weighting checks.
+- `publication`: publication-only intervals, N1–N6 tables, and cached rank bootstrap.
 - `run_half_life_one`: one predeclared decay setting under the unified event sequence.
-- `report`: consistency assertions and all reader-facing deliverables.
+- `report`: consistency assertions and all reader-facing deliverables, including dark/light figures.
 
 ## Primary artifacts
 
@@ -1461,11 +1468,7 @@ Large checkpoint files live in `cache/`; auditable analysis intermediates live i
 def artifact_index(output: Path) -> pd.DataFrame:
     rows = []
     for path in sorted(output.rglob("*")):
-        if (
-            not path.is_file()
-            or path.name == "artifact_index.csv"
-            or "cache" in path.parts
-        ):
+        if not path.is_file() or path.name == "artifact_index.csv":
             continue
         digest = sha256(path.read_bytes()).hexdigest()
         rows.append(
@@ -1491,6 +1494,11 @@ def collect_results(output: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--intended-output-dir",
+        type=Path,
+        default=Path("analysis/part1/intended_use/output"),
+    )
     args = parser.parse_args()
     output = args.output_dir.resolve()
     configure_plots()
@@ -1529,13 +1537,7 @@ def main() -> int:
     }
 
     main_tables = build_main_tables(output, data)
-    plot_prediction(output, prediction)
-    plot_calibration(output, data["calibration"])
-    plot_plus(output, plus_methods, data["shuffle_draws"], data["shuffle"])
-    plot_stability(output, data["stability"])
-    plot_loto(output, loto_frame, loto_summary)
-    plot_half_life(output, half_life)
-    plot_lineup_transfer(output, data["familiarity"])
+    render_publication_figures(output, args.intended_output_dir.resolve())
 
     claim_ledger(output)
     revised_evaluation_section(output, data)

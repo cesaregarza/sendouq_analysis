@@ -1,0 +1,8 @@
+{
+  "departures_no_longer_active_under_90_day_rule": 39,
+  "departures_still_active_but_displaced": 1,
+  "interpretation": "The 60% retention dip is an activity-eligibility cliff: 39 of 40 departures aged beyond the 90-day roster-activity window, while only one still-active member of the prior top 100 was displaced.",
+  "retained": 60,
+  "top100_departures": 40,
+  "transition": "2025-10-31 to 2025-11-30"
+}

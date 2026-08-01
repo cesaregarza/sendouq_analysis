@@ -1,0 +1,6 @@
+method,events_removed,selection,median_of_event_median_top100_rank_shift,median_of_event_largest_top100_rank_shift,maximum_observed_top100_rank_shift,median_top100_retention,worst_top100_retention
+LOOPR,25,25 events with most active 8-core player-match appearances,0.0,3.0,14.0,1.0,0.99
+OpenSkill μ,25,25 events with most active 8-core player-match appearances,1.0,14.0,47.0,0.98,0.97
+OpenSkill ordinal,25,25 events with most active 8-core player-match appearances,1.0,10.0,33.0,0.99,0.97
+Bradley–Terry (L2),25,25 events with most active 8-core player-match appearances,0.0,10.0,34.0,0.99,0.98
+90-day win rate,25,25 events with most active 8-core player-match appearances,0.0,0.0,676.0,1.0,0.95

@@ -42,6 +42,10 @@ from .core import (
     production_config,
     utc_date,
 )
+from .publication import (
+    DEFAULT_RANK_BOOTSTRAP_REPETITIONS,
+    run_publication_analyses,
+)
 
 
 def _json_default(value: Any):
@@ -445,6 +449,7 @@ def parse_args() -> argparse.Namespace:
             "loto",
             "half-life",
             "properties",
+            "publication",
             "collect",
             "core",
         ],
@@ -456,6 +461,16 @@ def parse_args() -> argparse.Namespace:
         default=Path("analysis/part1/output"),
     )
     parser.add_argument("--shuffle-repetitions", type=int, default=200)
+    parser.add_argument(
+        "--rank-bootstrap-repetitions",
+        type=int,
+        default=DEFAULT_RANK_BOOTSTRAP_REPETITIONS,
+    )
+    parser.add_argument(
+        "--intended-output-dir",
+        type=Path,
+        default=Path("analysis/part1/intended_use/output"),
+    )
     return parser.parse_args()
 
 
@@ -606,6 +621,15 @@ def main() -> int:
             summary["smoothing"] = smoothing_summary.to_dict("records")
             summary["tournament_weighting"] = weighting_summary
             write_json(results_dir / "property_tests.json", summary)
+
+        elif stage == "publication":
+            run_publication_analyses(
+                data,
+                repository_root=source_root,
+                output=output_dir,
+                intended_output=args.intended_output_dir.resolve(),
+                rank_bootstrap_repetitions=args.rank_bootstrap_repetitions,
+            )
 
     write_json(results_dir / "results.json", collect_results(output_dir))
     return 0

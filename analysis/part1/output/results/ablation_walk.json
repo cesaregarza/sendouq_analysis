@@ -1,0 +1,13 @@
+{
+  "displayed_stages": [
+    "Winrate 90d",
+    "+ forward PageRank",
+    "+ log-ratio",
+    "+ time decay",
+    "+ teleport + smoothing",
+    "+ tick-tock"
+  ],
+  "protocol_note": "Historical ablation protocol retained exactly; it is not the unified walk-forward protocol and is displayed as a component walk, not a new model comparison.",
+  "source": "docs/loopr_ablation_table.csv",
+  "source_sha256": "baba5d2adedf35a356055ff1867cb207419f73cd1307e1a4b9aaebd6ca657051"
+}

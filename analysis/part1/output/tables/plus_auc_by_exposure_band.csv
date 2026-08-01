@@ -1,0 +1,4 @@
+exposure_band,candidates,pass,fail,minimum_prior_matches,maximum_prior_matches,institutional_macro_auc,ci_low,ci_high,bootstrap_repetitions,bootstrap_strata
+Low exposure,107,74,33,17,141,0.7662518037518037,0.6614815566378067,0.8658464105339104,2000,tier x candidate status x outcome
+Middle exposure,100,59,41,142,278,0.8245857699805068,0.731570622157245,0.9052743258609486,2000,tier x candidate status x outcome
+High exposure,103,65,38,280,803,0.7103726339020456,0.5873617722147134,0.8210195849901731,2000,tier x candidate status x outcome
