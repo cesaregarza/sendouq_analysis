@@ -20,6 +20,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+TOURNAMENT_ROUTE_KEY = "features/tournament/routes/to.$id"
+TOURNAMENT_RESULTS_ROUTE_KEY = "features/tournament/routes/to.$id.results"
+TOURNAMENT_BRACKET_ROUTE_KEY = (
+    "features/tournament-bracket/routes/to.$id.brackets"
+)
+
 # Special value constants for turbo-stream format
 # Based on observed values in Sendou.ink responses
 SPECIAL_VALUES: dict[int, Any] = {
@@ -157,7 +163,7 @@ class TurboStreamDecoder:
         decoded = self.decode()
 
         # Try the tournament route key
-        route_key = "features/tournament/routes/to.$id"
+        route_key = TOURNAMENT_ROUTE_KEY
         if route_key in decoded:
             route_data = decoded[route_key]
             if isinstance(route_data, dict) and "data" in route_data:
@@ -172,7 +178,7 @@ class TurboStreamDecoder:
                     return data
 
         # Fallback: try results route
-        results_key = "features/tournament/routes/to.$id.results"
+        results_key = TOURNAMENT_RESULTS_ROUTE_KEY
         if results_key in decoded:
             route_data = decoded[results_key]
             if isinstance(route_data, dict) and "data" in route_data:
@@ -309,3 +315,16 @@ def extract_tournament_data(data: list | str | bytes) -> dict[str, Any] | None:
 
     decoder = TurboStreamDecoder(data)
     return decoder.get_tournament_data()
+
+
+def extract_tournament_bracket_data(
+    data: list | str | bytes,
+) -> dict[str, Any] | None:
+    """Extract one bracket view loader payload from a turbo-stream response."""
+    route_data = extract_route_data(data, TOURNAMENT_BRACKET_ROUTE_KEY)
+    if isinstance(route_data, str):
+        try:
+            route_data = json.loads(route_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return route_data if isinstance(route_data, dict) else None

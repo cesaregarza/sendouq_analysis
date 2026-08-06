@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Core API functions
 from rankings.scraping.api import (
+    build_tournament_bracket_url,
     build_tournament_url,
     extract_tournament_id_from_url,
     scrape_tournament,
@@ -55,6 +56,7 @@ from rankings.scraping.turbo_stream import (
     decode_turbo_stream,
     extract_match_data,
     extract_route_data,
+    extract_tournament_bracket_data,
     extract_tournament_data,
 )
 
@@ -62,6 +64,7 @@ __all__ = [
     # API
     "scrape_tournament",
     "build_tournament_url",
+    "build_tournament_bracket_url",
     "validate_tournament_data",
     "extract_tournament_id_from_url",
     # Discovery
@@ -93,5 +96,6 @@ __all__ = [
     "decode_turbo_stream",
     "extract_match_data",
     "extract_route_data",
+    "extract_tournament_bracket_data",
     "extract_tournament_data",
 ]

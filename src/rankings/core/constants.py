@@ -33,6 +33,7 @@ SECONDS_PER_DAY: float = 86_400.0
 SENDOU_BASE_URL = "https://sendou.ink/to/"
 # New .data endpoint format (React Router Single Fetch / turbo-stream)
 SENDOU_DATA_SUFFIX = "/results.data"
+SENDOU_BRACKETS_DATA_SUFFIX = "/brackets.data"
 # Legacy suffix (deprecated, no longer works)
 SENDOU_DATA_SUFFIX_LEGACY = "?_data=features%2Ftournament%2Froutes%2Fto.%24id"
 CALENDAR_URL = "https://sendou.ink/calendar.ics?tournament=true"

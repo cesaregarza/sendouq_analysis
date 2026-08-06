@@ -26,17 +26,101 @@ from rankings.core.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_TIMEOUT,
     SENDOU_BASE_URL,
+    SENDOU_BRACKETS_DATA_SUFFIX,
     SENDOU_DATA_SUFFIX,
     SENDOU_DATA_SUFFIX_LEGACY,
 )
-from rankings.scraping.turbo_stream import extract_tournament_data
 from rankings.scraping.calendar_api import fetch_tournament_teams
+from rankings.scraping.turbo_stream import (
+    extract_tournament_bracket_data,
+    extract_tournament_data,
+)
+
+BRACKET_DATA_KEYS = ("stage", "group", "round", "match")
 
 
 def build_tournament_url(tournament_id: int, legacy: bool = False) -> str:
     """Build the API URL for a specific tournament ID."""
     suffix = SENDOU_DATA_SUFFIX_LEGACY if legacy else SENDOU_DATA_SUFFIX
     return f"{SENDOU_BASE_URL}{tournament_id}{suffix}"
+
+
+def build_tournament_bracket_url(tournament_id: int, bracket_idx: int) -> str:
+    """Build the bracket-scoped data URL introduced by Sendou in August 2026."""
+    return (
+        f"{SENDOU_BASE_URL}{tournament_id}{SENDOU_BRACKETS_DATA_SUFFIX}"
+        f"?idx={bracket_idx}"
+    )
+
+
+def _normalize_layout_context(tournament_data: dict) -> None:
+    """Add aliases expected by the parser for fields renamed in slim layouts."""
+    tournament = tournament_data.get("tournament", {})
+    ctx = tournament.get("ctx", {})
+    if "startTime" not in ctx and "startsAt" in ctx:
+        ctx["startTime"] = ctx["startsAt"]
+
+
+def _reconstruct_bracket_data(
+    tournament_id: int,
+    tournament_data: dict,
+    session: requests.Session,
+    timeout: float,
+) -> dict:
+    """Hydrate a slim tournament layout with every bracket's match data."""
+    tournament = tournament_data.get("tournament")
+    if not isinstance(tournament, dict):
+        raise ValueError("tournament layout is missing the tournament object")
+
+    _normalize_layout_context(tournament_data)
+    existing_data = tournament.get("data")
+    if isinstance(existing_data, dict) and existing_data:
+        return tournament_data
+
+    brackets_meta = tournament.get("bracketsMeta")
+    if not isinstance(brackets_meta, list) or not brackets_meta:
+        raise ValueError(
+            "tournament layout has no match data or bracket metadata"
+        )
+
+    merged = {key: [] for key in BRACKET_DATA_KEYS}
+    for bracket_idx in range(len(brackets_meta)):
+        url = build_tournament_bracket_url(tournament_id, bracket_idx)
+        response = session.get(url, timeout=timeout)
+        response.raise_for_status()
+
+        route_data = extract_tournament_bracket_data(response.json())
+        actual_idx = route_data.get("bracketIdx") if route_data else None
+        if actual_idx != bracket_idx:
+            raise ValueError(
+                f"bracket response index {actual_idx!r} did not match "
+                f"requested index {bracket_idx}"
+            )
+        bracket = route_data.get("bracket") if route_data else None
+        bracket_data = (
+            bracket.get("data") if isinstance(bracket, dict) else None
+        )
+        if not isinstance(bracket_data, dict):
+            raise ValueError(
+                f"bracket {bracket_idx} response is missing bracket.data"
+            )
+
+        for key in BRACKET_DATA_KEYS:
+            records = bracket_data.get(key)
+            if not isinstance(records, list):
+                raise ValueError(
+                    f"bracket {bracket_idx} response has invalid {key} data"
+                )
+            merged[key].extend(records)
+
+    tournament["data"] = merged
+    logger.info(
+        "Reconstructed tournament %s from %s bracket payloads (%s matches)",
+        tournament_id,
+        len(brackets_meta),
+        len(merged["match"]),
+    )
+    return tournament_data
 
 
 def _try_turbo_stream_endpoint(
@@ -46,20 +130,24 @@ def _try_turbo_stream_endpoint(
 ) -> dict | None:
     """Try fetching from the new turbo-stream .data endpoint."""
     url = build_tournament_url(tournament_id, legacy=False)
-    try:
-        response = session.get(url, timeout=timeout)
-        response.raise_for_status()
+    response = session.get(url, timeout=timeout)
+    response.raise_for_status()
 
-        raw_data = response.json()
-        tournament_data = extract_tournament_data(raw_data)
+    tournament_data = extract_tournament_data(response.json())
+    if not tournament_data:
+        raise ValueError("response did not contain a tournament layout")
 
-        if tournament_data and validate_tournament_data(tournament_data):
-            logger.debug(f"Successfully fetched tournament {tournament_id} via turbo-stream endpoint")
-            return tournament_data
-    except Exception as e:
-        logger.debug(f"Turbo-stream endpoint failed for tournament {tournament_id}: {e}")
+    tournament_data = _reconstruct_bracket_data(
+        tournament_id, tournament_data, session, timeout
+    )
+    if not validate_tournament_data(tournament_data):
+        raise ValueError("tournament layout is missing id, name, or match data")
 
-    return None
+    logger.debug(
+        "Successfully fetched tournament %s via turbo-stream endpoint",
+        tournament_id,
+    )
+    return tournament_data
 
 
 def _try_legacy_endpoint(
@@ -69,19 +157,20 @@ def _try_legacy_endpoint(
 ) -> dict | None:
     """Try fetching from the legacy ?_data endpoint (plain JSON)."""
     url = build_tournament_url(tournament_id, legacy=True)
-    try:
-        response = session.get(url, timeout=timeout)
-        response.raise_for_status()
+    response = session.get(url, timeout=timeout)
+    response.raise_for_status()
 
-        data = response.json()
+    data = response.json()
+    _normalize_layout_context(data)
+    if not data or not validate_tournament_data(data):
+        raise ValueError(
+            "legacy response did not contain complete tournament data"
+        )
 
-        if data and validate_tournament_data(data):
-            logger.debug(f"Successfully fetched tournament {tournament_id} via legacy endpoint")
-            return data
-    except Exception as e:
-        logger.debug(f"Legacy endpoint failed for tournament {tournament_id}: {e}")
-
-    return None
+    logger.debug(
+        "Successfully fetched tournament %s via legacy endpoint", tournament_id
+    )
+    return data
 
 
 def scrape_tournament(
@@ -101,35 +190,45 @@ def scrape_tournament(
     if session is None:
         session = requests.Session()
 
-    last_error = None
+    last_errors: list[str] = []
 
     for attempt in range(max_retries):
-        # Try turbo-stream endpoint first (new format)
-        result = _try_turbo_stream_endpoint(tournament_id, session, timeout)
-        if result is not None:
-            # Enrich with teams API if teams are missing
-            result = _enrich_with_teams_api(result, tournament_id)
-            return result
+        last_errors = []
+        try:
+            result = _try_turbo_stream_endpoint(tournament_id, session, timeout)
+            return _enrich_with_teams_api(result, tournament_id)
+        except Exception as exc:
+            last_errors.append(f"turbo-stream: {exc}")
+            logger.debug(
+                "Turbo-stream endpoint failed for tournament %s",
+                tournament_id,
+                exc_info=True,
+            )
 
-        # Fall back to legacy endpoint
-        result = _try_legacy_endpoint(tournament_id, session, timeout)
-        if result is not None:
-            # Enrich with teams API if teams are missing
-            result = _enrich_with_teams_api(result, tournament_id)
-            return result
+        try:
+            result = _try_legacy_endpoint(tournament_id, session, timeout)
+            return _enrich_with_teams_api(result, tournament_id)
+        except Exception as exc:
+            last_errors.append(f"legacy: {exc}")
+            logger.debug(
+                "Legacy endpoint failed for tournament %s",
+                tournament_id,
+                exc_info=True,
+            )
 
         # Both failed, retry with backoff
         if attempt < max_retries - 1:
-            wait_time = backoff_factor ** attempt
+            wait_time = backoff_factor**attempt
             logger.warning(
                 f"Attempt {attempt + 1} failed for tournament {tournament_id}, "
-                f"retrying in {wait_time:.1f}s"
+                f"retrying in {wait_time:.1f}s ({'; '.join(last_errors)})"
             )
             time.sleep(wait_time)
 
     raise RuntimeError(
         f"Failed to fetch tournament {tournament_id} after {max_retries} attempts "
-        f"(tried both turbo-stream and legacy endpoints)"
+        f"(tried both turbo-stream and legacy endpoints; "
+        f"last errors: {'; '.join(last_errors)})"
     )
 
 
@@ -151,9 +250,7 @@ def validate_tournament_data(tournament_data: dict) -> bool:
         return False
 
 
-def _enrich_with_teams_api(
-    tournament_data: dict, tournament_id: int
-) -> dict:
+def _enrich_with_teams_api(tournament_data: dict, tournament_id: int) -> dict:
     """Enrich tournament data with teams from the public API if missing.
 
     This is a fallback for when turbo-stream or legacy scraping doesn't
@@ -163,20 +260,32 @@ def _enrich_with_teams_api(
     try:
         tournament = tournament_data.get("tournament", {})
         ctx = tournament.get("ctx", {})
-        existing_teams = ctx.get("teams", [])
+        existing_teams = ctx.get("teams", []) or []
 
-        # Only fetch if teams are missing or empty
-        if existing_teams:
+        has_full_rosters = bool(existing_teams) and all(
+            isinstance(team, dict) and isinstance(team.get("members"), list)
+            for team in existing_teams
+        )
+        if has_full_rosters:
             return tournament_data
 
-        logger.info(f"Teams missing for tournament {tournament_id}, fetching from API")
+        logger.info(
+            "Teams missing full rosters for tournament %s, fetching from API",
+            tournament_id,
+        )
         api_teams = fetch_tournament_teams(tournament_id)
 
         if not api_teams:
-            logger.warning(f"No teams returned from API for tournament {tournament_id}")
-            return tournament_data
+            raise ValueError(
+                f"teams API returned no teams for tournament {tournament_id}"
+            )
 
         # Normalize API format to match expected ctx.teams structure
+        existing_by_id = {
+            team.get("id"): team
+            for team in existing_teams
+            if isinstance(team, dict) and team.get("id") is not None
+        }
         normalized_teams = []
         for team in api_teams:
             normalized = {
@@ -196,22 +305,30 @@ def _enrich_with_teams_api(
                 "team": None,
                 "avgSeedingSkillOrdinal": None,
             }
+            normalized.update(existing_by_id.get(team.get("id"), {}))
+            normalized["members"] = []
 
             # Normalize members
             for member in team.get("members", []):
-                normalized["members"].append({
-                    "userId": member.get("userId"),
-                    "username": member.get("name"),
-                    "discordId": member.get("discordId"),
-                    "discordAvatar": member.get("avatarUrl", "").split("/")[-1] if member.get("avatarUrl") else None,
-                    "customUrl": None,
-                    "country": member.get("country"),
-                    "twitch": None,
-                    "plusTier": None,
-                    "isOwner": 1 if member.get("captain") else 0,
-                    "createdAt": None,
-                    "inGameName": member.get("inGameName"),
-                })
+                normalized["members"].append(
+                    {
+                        "userId": member.get("userId"),
+                        "username": member.get("name"),
+                        "discordId": member.get("discordId"),
+                        "discordAvatar": member.get("avatarUrl", "").split("/")[
+                            -1
+                        ]
+                        if member.get("avatarUrl")
+                        else None,
+                        "customUrl": None,
+                        "country": member.get("country"),
+                        "twitch": None,
+                        "plusTier": None,
+                        "isOwner": 1 if member.get("captain") else 0,
+                        "createdAt": None,
+                        "inGameName": member.get("inGameName"),
+                    }
+                )
 
             # Extract seeding skill if available
             seeding = team.get("seedingPower", {})
@@ -222,19 +339,34 @@ def _enrich_with_teams_api(
             # Extract team logo info
             if team.get("teamPageUrl"):
                 normalized["team"] = {
-                    "customUrl": team.get("teamPageUrl", "").split("/")[-1] if team.get("teamPageUrl") else None,
+                    "customUrl": team.get("teamPageUrl", "").split("/")[-1]
+                    if team.get("teamPageUrl")
+                    else None,
                     "logoUrl": team.get("logoUrl"),
                     "deletedAt": None,
                 }
 
             normalized_teams.append(normalized)
 
+        normalized_ids = {team.get("id") for team in normalized_teams}
+        normalized_teams.extend(
+            team
+            for team in existing_teams
+            if team.get("id") not in normalized_ids
+        )
+
         # Update the tournament data with fetched teams
         tournament_data["tournament"]["ctx"]["teams"] = normalized_teams
-        logger.info(f"Enriched tournament {tournament_id} with {len(normalized_teams)} teams from API")
+        logger.info(
+            "Enriched tournament %s with %s teams from API",
+            tournament_id,
+            len(normalized_teams),
+        )
 
-    except Exception as e:
-        logger.warning(f"Failed to enrich teams from API for tournament {tournament_id}: {e}")
+    except Exception as exc:
+        raise RuntimeError(
+            f"failed to enrich team rosters for tournament {tournament_id}: {exc}"
+        ) from exc
 
     return tournament_data
 

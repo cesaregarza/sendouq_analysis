@@ -70,9 +70,7 @@ def _timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
-def _capture_rankings_logger_state() -> tuple[
-    list[logging.Handler], int, bool
-]:
+def _capture_rankings_logger_state() -> tuple[list[logging.Handler], int, bool]:
     logger = logging.getLogger("rankings")
     return list(logger.handlers), logger.level, logger.propagate
 
@@ -311,6 +309,16 @@ def _import_new_payloads(db_url: str | None, json_dir: Path) -> int:
         return total
     finally:
         engine.dispose()
+
+
+def _require_complete_scrape(result: dict[str, Any]) -> None:
+    """Reject partial discovery updates so missing tournaments stay visible."""
+    failed_ids = list(result.get("failed_ids") or [])
+    if failed_ids:
+        raise RuntimeError(
+            "Refusing to publish a partial rankings update; tournament "
+            f"scrapes failed for: {failed_ids}"
+        )
 
 
 def _write_manifest(run_dir: Path, data: dict) -> None:
@@ -973,6 +981,7 @@ def main(argv: list[str] | None = None) -> int:
             res.get("failed"),
             res.get("failed_ids")[:10] if res.get("failed_ids") else [],
         )
+        _require_complete_scrape(res)
         scraped_count = int(res.get("scraped") or 0)
     else:
         if args.skip_discovery:
