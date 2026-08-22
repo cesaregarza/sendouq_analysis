@@ -84,7 +84,19 @@ def _reconstruct_bracket_data(
         )
 
     merged = {key: [] for key in BRACKET_DATA_KEYS}
-    for bracket_idx in range(len(brackets_meta)):
+    reconstructed_brackets = 0
+    for bracket_idx, bracket_meta in enumerate(brackets_meta):
+        is_preview = isinstance(bracket_meta, dict) and (
+            bracket_meta.get("preview") is True or bracket_meta.get("id") == -1
+        )
+        if is_preview:
+            logger.info(
+                "Skipping unmaterialized bracket %s for tournament %s",
+                bracket_idx,
+                tournament_id,
+            )
+            continue
+
         url = build_tournament_bracket_url(tournament_id, bracket_idx)
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
@@ -112,12 +124,16 @@ def _reconstruct_bracket_data(
                     f"bracket {bracket_idx} response has invalid {key} data"
                 )
             merged[key].extend(records)
+        reconstructed_brackets += 1
+
+    if not reconstructed_brackets:
+        raise ValueError("tournament layout has no materialized brackets")
 
     tournament["data"] = merged
     logger.info(
         "Reconstructed tournament %s from %s bracket payloads (%s matches)",
         tournament_id,
-        len(brackets_meta),
+        reconstructed_brackets,
         len(merged["match"]),
     )
     return tournament_data

@@ -189,6 +189,59 @@ def test_scrape_tournament_reconstructs_split_payload_and_full_rosters(
     assert session.urls == [results_url, *bracket_urls]
 
 
+def test_scrape_tournament_skips_unmaterialized_preview_bracket(monkeypatch):
+    tournament_id = 4289
+    layout = {
+        "tournament": {
+            "ctx": {
+                "id": tournament_id,
+                "name": "Moo Moo Cup #8",
+                "teams": [{"id": 1, "members": []}],
+            },
+            "bracketsMeta": [
+                {"id": 6739, "preview": False},
+                {"id": -1, "preview": True},
+            ],
+        }
+    }
+    bracket_payload = {
+        "bracketIdx": 0,
+        "bracket": {
+            "data": {
+                "stage": [{"id": 1}],
+                "group": [{"id": 2}],
+                "round": [{"id": 3}],
+                "match": [{"id": 147887}],
+            }
+        },
+    }
+    results_url = scraping_api.build_tournament_url(tournament_id)
+    bracket_url = scraping_api.build_tournament_bracket_url(tournament_id, 0)
+    session = _Session(
+        {
+            results_url: {"layout": layout},
+            bracket_url: {"route": bracket_payload},
+        }
+    )
+    monkeypatch.setattr(
+        scraping_api,
+        "extract_tournament_data",
+        lambda payload: deepcopy(payload["layout"]),
+    )
+    monkeypatch.setattr(
+        scraping_api,
+        "extract_tournament_bracket_data",
+        lambda payload: payload["route"],
+    )
+
+    result = scraping_api.scrape_tournament(
+        tournament_id, max_retries=1, session=session
+    )
+
+    assert result["tournament"]["data"]["match"] == [{"id": 147887}]
+    assert session.urls == [results_url, bracket_url]
+
+
 def test_scrape_tournament_preserves_legacy_complete_payload(monkeypatch):
     tournament_id = 4000
     full_payload = {
