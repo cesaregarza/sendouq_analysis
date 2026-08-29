@@ -8,6 +8,7 @@ This module contains the advanced analysis capabilities:
 from __future__ import annotations
 
 from rankings.analysis.engine import RatingEngine
+from rankings.analysis.fast_loo_analyzer import FastLOOAnalyzer
 from rankings.analysis.loo_analyzer import LOOAnalyzer
 from rankings.analysis.transforms import bt_prob
 from rankings.analysis.utils import (
@@ -34,6 +35,7 @@ __all__ = [
     # Engine
     "RatingEngine",
     "LOOAnalyzer",
+    "FastLOOAnalyzer",
     # Probability models
     "bt_prob",
     # Utils
