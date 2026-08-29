@@ -37,8 +37,9 @@ on:
           - WARNING
           - ERROR
           - CRITICAL
-  schedule:
-    - cron: '0 2 * * 1'
+  # Weekly schedule disabled 2026-06-16 (manual dispatch only).
+  # schedule:
+  #   - cron: '0 2 * * 1'
 
 jobs:
   run:
